@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+__pycache__/
+*.pyc
+tools/preview/preview.js
+tools/preview/cover-preview.js
+tools/preview/cover-preview.html
+.DS_Store
+rom-store-decky.zip

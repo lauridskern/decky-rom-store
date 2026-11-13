@@ -1,0 +1,40 @@
+name: Build and release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the frontend bundle
+        run: npm run build
+
+      - name: Package the plugin
+        run: |
+          zip -qr rom-store-decky.zip . \
+            -x "node_modules/*" "src/*" ".git/*" ".github/*" \
+               "__pycache__/*" "*.pyc" "dist/*.map" \
+               "tools/preview/preview.js" "tools/preview/cover-preview.js" \
+               "tools/preview/cover-preview.html"
+
+      - name: Attach the package to a release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rom-store-decky.zip
+          generate_release_notes: true
