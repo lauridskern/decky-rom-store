@@ -35,16 +35,41 @@ library, so there is nothing to compile and nothing to install on the Deck.
 
 ## Installation
 
-### From this repository
+### Install from the Deck (easiest)
 
-```bash
-# on the Deck (or over ssh)
-cd ~/homebrew/plugins
-unzip rom-store-decky.zip -d rom-store
+Decky Loader → **Settings → Plugins → Install from URL**, then paste:
+
+```
+https://github.com/lauridskern/decky-rom-store/releases/download/v1.0.1/rom-store-decky.zip
 ```
 
-Restart Decky Loader (or reboot the Deck) and the plugin appears in the plugin
-list.
+Decky handles the root-owned `~/homebrew/plugins` folder for you. Restart Decky
+Loader afterwards and the plugin appears in the plugin list.
+
+### Install manually over SSH
+
+```bash
+# copy the package over first
+scp rom-store-decky.zip deck@<deck-ip>:/home/deck/
+
+# then on the Deck (the plugins folder is root owned, hence sudo)
+sudo bash -c 'rm -rf /home/deck/homebrew/plugins/rom-store && \
+  mkdir -p /home/deck/homebrew/plugins/rom-store && \
+  unzip -o /home/deck/rom-store-decky.zip -d /home/deck/homebrew/plugins/rom-store && \
+  chown -R root:root /home/deck/homebrew/plugins/rom-store'
+```
+
+Use the explicit `/home/deck/...` paths: inside `sudo bash -c` a bare `~`
+expands to `/root` instead.
+
+### Building a release
+
+Every `v*` tag builds the package with GitHub Actions and attaches it to the
+release:
+
+```bash
+git tag -a v1.0.2 -m "v1.0.2" && git push origin v1.0.2
+```
 
 ### Development
 
