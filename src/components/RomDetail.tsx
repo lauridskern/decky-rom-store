@@ -9,7 +9,7 @@ import {
   RomFile,
 } from "../types";
 import { Dropdown } from "@decky/ui";
-import { formatBytes, formatCount, SOURCE_LABELS, systemLabel } from "./common";
+import { formatBytes, formatCount, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 
 interface Props {
@@ -17,10 +17,6 @@ interface Props {
   library: LibraryInfo | null;
   onClose: () => void;
   onStarted: () => void;
-}
-
-function sourceLabel(id: string): string {
-  return SOURCE_LABELS[id] || id;
 }
 
 const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
@@ -125,12 +121,7 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
             <div>
               <h2 className="rs-detail-title">{rom.title}</h2>
               <div className="rs-detail-meta">
-                <span className="rs-pill">{systemLabel(rom.system)}</span>
-                {rom.sources.map((source) => (
-                  <span key={source} className={`rs-pill ${source}`}>
-                    {sourceLabel(source)}
-                  </span>
-                ))}
+                <span className="rs-pill system">{systemLabel(rom.system)}</span>
                 {rom.regions.map((region) => (
                   <span key={region} className="rs-pill region">
                     {region}
@@ -161,13 +152,14 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
               {!loading && variants.length === 0 && <div className="rs-hint">No downloadable variants found.</div>}
 
               {!loading &&
-                variants.map((entry) => (
+                variants
+                  .filter((entry) => entry.files.length > 0 || entry.error)
+                  .map((entry) => (
                   <div key={entry.key} style={{ marginBottom: 14 }}>
-                    <div className="rs-meta" style={{ marginBottom: 6 }}>
-                      <span className={`rs-pill ${entry.source}`}>{sourceLabel(entry.source)}</span>
-                      {entry.error ? <span className="rs-pill region">{entry.error}</span> : null}
-                    </div>
-                    {entry.files.length === 0 && <div className="rs-hint">No files listed for this source.</div>}
+                    {entry.error ? <div className="rs-hint rs-error">{entry.error}</div> : null}
+                    {entry.files.length === 0 && !entry.error ? (
+                      <div className="rs-hint">No files listed for this source.</div>
+                    ) : null}
                     {entry.files.map((file) => (
                       <div className="rs-variant" key={file.id}>
                         <div className="rs-variant-main">

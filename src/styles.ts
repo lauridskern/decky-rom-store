@@ -37,8 +37,9 @@ export const CSS = `
 .rs-search-wrap input { height: 28px !important; padding-top: 2px !important; padding-bottom: 2px !important; font-size: 13px !important; }
 .rs-search-wrap input:focus { border-color: #66c0f4; }
 .rs-search-icon {
-  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
-  color: #8f98a0; pointer-events: none; font-size: 13px; display: flex;
+  flex: 0 0 auto;
+  color: #8f98a0; pointer-events: none; font-size: 14px; display: flex;
+  margin-right: 2px;
 }
 
 .rs-filters {
@@ -87,6 +88,7 @@ export const CSS = `
 }
 
 .rs-card {
+  min-width: 0;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 10px;
@@ -345,10 +347,15 @@ export const CSS = `
 }
 .rs-browse-tile {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 12px 14px; border-radius: 8px; cursor: pointer;
+  padding: 10px 12px; border-radius: 8px; cursor: pointer;
   border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
   color: #e6e8ea; font-size: 13px; text-align: left;
+  /* Without this the grid column grows to the longest label and we end up
+     with fewer tiles per row than intended. */
+  min-width: 0; overflow: hidden;
 }
+.rs-browse-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rs-browse-count { flex: 0 0 auto; }
 .rs-browse-tile:hover { border-color: rgba(102,192,244,0.6); background: rgba(255,255,255,0.08); }
 .rs-browse-name { font-weight: 600; }
 .rs-browse-count { color: #8f98a0; font-size: 12px; }

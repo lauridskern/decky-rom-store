@@ -2,7 +2,7 @@ import { CSSProperties, FC, memo } from "react";
 import { Focusable } from "@decky/ui";
 import { FaGamepad } from "react-icons/fa";
 import { MergedRom } from "../types";
-import { formatBytes, formatCount, SOURCE_LABELS, systemLabel } from "./common";
+import { formatBytes, formatCount, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 
 interface Props {
@@ -27,7 +27,13 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
       }}
       onClick={() => onOpen(rom)}
     >
-      <div className="rs-cover" style={rom.cover ? ({ ["--rs-cover" as string]: `url(${rom.cover})` } as CSSProperties) : undefined}>
+      <div
+        className="rs-cover"
+        style={{
+          aspectRatio: systemAspect(rom.system),
+          ...(rom.cover ? ({ ["--rs-cover" as string]: `url(${rom.cover})` } as CSSProperties) : {}),
+        }}
+      >
         {rom.cover ? (
           <CoverImage url={rom.cover} alt={rom.title} />
         ) : (

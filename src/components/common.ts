@@ -106,3 +106,49 @@ export function formatSpeed(bytesPerSecond: number): string {
   if (!bytesPerSecond || bytesPerSecond <= 0) return "";
   return `${formatBytes(bytesPerSecond)}/s`;
 }
+
+
+/**
+ * Box art shape per console, so a grid of NES games does not look like a
+ * grid of Switch games.
+ */
+export const SYSTEM_ASPECTS: Record<string, string> = {
+  // handheld / portrait boxes
+  switch: "3 / 4",
+  "3ds": "3 / 4",
+  nds: "3 / 4",
+  gba: "3 / 4",
+  gbc: "3 / 4",
+  gb: "3 / 4",
+  psvita: "3 / 4",
+  psp: "4 / 3",
+  // square boxes
+  snes: "1 / 1",
+  nes: "1 / 1",
+  genesis: "1 / 1",
+  mastersystem: "1 / 1",
+  gamegear: "1 / 1",
+  n64: "1 / 1",
+  gc: "1 / 1",
+  psx: "1 / 1",
+  ps2: "1 / 1",
+  ps3: "1 / 1",
+  wii: "1 / 1",
+  wiiu: "1 / 1",
+  "3do": "1 / 1",
+  pcengine: "1 / 1",
+  dreamcast: "1 / 1",
+  saturn: "1 / 1",
+  sega32x: "1 / 1",
+  // landscape
+  arcades: "4 / 3",
+  mame: "4 / 3",
+  neogeo: "4 / 3",
+  dos: "4 / 3",
+  pc: "4 / 3",
+  scummvm: "4 / 3",
+};
+
+export function systemAspect(system: string): string {
+  return SYSTEM_ASPECTS[system] ?? "3 / 4";
+}

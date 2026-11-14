@@ -52,7 +52,6 @@ const Store: FC = () => {
   const [selected, setSelected] = useState<MergedRom | null>(null);
   const [showDownloads, setShowDownloads] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [showBrowse, setShowBrowse] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -124,7 +123,11 @@ const Store: FC = () => {
           );
         }
         if (id !== requestId.current) return;
-        setResults((previous) => (append ? [...previous, ...(payload.results ?? [])] : payload.results ?? []));
+        const incoming = payload.results ?? [];
+        // Safety net: never mix consoles, even if a source ignores the filter.
+        const filtered =
+          systemFilter !== "all" ? incoming.filter((rom) => rom.system === systemFilter) : incoming;
+        setResults((previous) => (append ? [...previous, ...filtered] : filtered));
         setSources(payload.sources ?? []);
         setSystems(payload.systems ?? []);
         setSourceCounts(payload.source_counts ?? {});
@@ -180,16 +183,6 @@ const Store: FC = () => {
     runSearch(query, system, source, sort, page + 1, true);
   };
 
-  const browse = (target: string) => {
-    setShowBrowse(false);
-    setQuery("");
-    setSystem(target);
-    setPage(1);
-    requestId.current += 1;
-    setResults([]);
-    runSearch("", target, "all", sort, 1, false);
-  };
-
   const activeDownloads = useMemo(
     () => jobs.filter((job) => job.status === "downloading" || job.status === "queued" || job.status === "extracting").length,
     [jobs],
@@ -200,7 +193,8 @@ const Store: FC = () => {
     return list.length ? list : sources;
   }, [sources]);
 
-  const browseSystems = useMemo(() => {
+  // Every console we know about, most games first.
+  const consoleOptions = useMemo(() => {
     const keys = new Set<string>(Object.keys(systemCounts));
     systems.forEach((key) => keys.add(key));
     return Array.from(keys).sort((a, b) => (systemCounts[b] ?? 0) - (systemCounts[a] ?? 0));
@@ -211,11 +205,9 @@ const Store: FC = () => {
       <StoreStyles />
       <div className="rs-header">
         <div className="rs-search-wrap">
-          <span className="rs-search-icon">
-            <FaSearch />
-          </span>
+          <FaSearch className="rs-search-icon" />
           <TextField
-            label="Search games"
+            label=""
             value={query}
             placeholder="Games, consoles or regions…"
             onChange={(event) => setQuery(event.target.value)}
@@ -226,7 +218,7 @@ const Store: FC = () => {
           <Dropdown
             rgOptions={[
               { label: "All systems", data: "all" },
-              ...systems.map((key) => ({
+              ...consoleOptions.map((key) => ({
                 label: `${systemLabel(key)}${systemCounts[key] ? ` (${systemCounts[key]})` : ""}`,
                 data: key,
               })),
@@ -255,9 +247,6 @@ const Store: FC = () => {
           />
         </div>
 
-        <button className="rs-icon-btn" onClick={() => setShowBrowse(true)} title="Browse by console">
-          ☰
-        </button>
         <button
           className={`rs-icon-btn${showDownloads ? " active" : ""}`}
           onClick={() => setShowDownloads(true)}
@@ -299,9 +288,6 @@ const Store: FC = () => {
               Type a game title to search Romspedia, DumbRoms and MyAbandonware at once. Duplicate titles are
               merged, and every download lands in the matching EmuDecky ROM folder.
             </p>
-            <button className="rs-btn" onClick={() => setShowBrowse(true)}>
-              Browse by console
-            </button>
           </div>
         ) : null}
 
@@ -348,32 +334,6 @@ const Store: FC = () => {
               <span>{message}</span>
             </div>
           ))}
-        </div>
-      )}
-
-      {showBrowse && (
-        <div className="rs-overlay" onClick={(event) => event.target === event.currentTarget && setShowBrowse(false)}>
-          <div className="rs-panel detail">
-            <div className="rs-panel-head">
-              <h3>Browse by console</h3>
-              <button className="rs-btn ghost" onClick={() => setShowBrowse(false)}>
-                Close
-              </button>
-            </div>
-            <div className="rs-panel-body">
-              <div className="rs-browse-grid">
-                {browseSystems.map((key) => (
-                  <button key={key} className="rs-browse-tile" onClick={() => browse(key)}>
-                    <span className="rs-browse-name">{systemLabel(key)}</span>
-                    <span className="rs-browse-count">{systemCounts[key] ?? "—"}</span>
-                  </button>
-                ))}
-              </div>
-              {!browseSystems.length && (
-                <div className="rs-hint">Console list unavailable — the source could not be reached.</div>
-              )}
-            </div>
-          </div>
         </div>
       )}
 

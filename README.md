@@ -15,7 +15,7 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 | | |
 |---|---|
 | **Search** | One search box queries every enabled source in parallel and merges the hits. |
-| **Browse** | A console picker with live title counts (including Switch), plus *Load more* for deeper result pages. Counts are scraped once and cached on the Deck for a day. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
+| **Browse** | The console dropdown lists every console with live title counts (including Switch) and switching to one browses that catalogue. Counts are scraped once and cached on the Deck for a day. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
 | **Gamepad** | Cards are Steam-focusable — the A button opens a game, the shoulder buttons page through results. |
 | **Artwork** | Cover art is fetched by the backend, cached on the Deck and served locally, so nothing is re-downloaded and the Steam client never has to reach out to a third party. Every card uses the same poster frame with a blurred backdrop, so mixed artwork from different sites still looks uniform. Optionally, add free IGDB credentials in the settings to replace missing artwork with clean, high quality poster art. |
 | **De-duplicate** | Titles are normalised (region tags, serial noise and punctuation are stripped) so the same game from two sites becomes one card with a `2×` badge. |
