@@ -1,6 +1,6 @@
 {
   "name": "rom-store",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "description": "Browse, search and download ROMs straight into your EmuDecky folders",
   "type": "module",
   "scripts": {

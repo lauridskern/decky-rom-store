@@ -25,6 +25,24 @@ jobs:
       - name: Build the frontend bundle
         run: npm run build
 
+      - name: Stamp the version from the tag
+        run: |
+          # Decky shows the version from package.json, so it has to match the
+          # release tag.
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 - "$VERSION" <<'PYEOF'
+          import json, pathlib, sys
+          version = sys.argv[1]
+          for name in ("package.json", "package-lock.json"):
+              path = pathlib.Path(name)
+              data = json.loads(path.read_text())
+              data["version"] = version
+              if name == "package-lock.json" and "" in data.get("packages", {}):
+                  data["packages"][""]["version"] = version
+              path.write_text(json.dumps(data, indent=2) + "\n")
+          PYEOF
+          echo "version stamped: $VERSION"
+
       - name: Package the plugin
         run: |
           # Decky unpacks the zip straight into ~/homebrew/plugins and then
