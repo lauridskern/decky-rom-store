@@ -1,7 +1,7 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
-import { Dropdown, TextField } from "@decky/ui";
-import { FaCog, FaDownload, FaSearch } from "react-icons/fa";
+import { Button, Dropdown, TextField } from "@decky/ui";
+import { FaCog, FaDownload } from "react-icons/fa";
 import {
   browseRoms,
   DownloadJob,
@@ -58,6 +58,7 @@ const Store: FC = () => {
   const [showIssues, setShowIssues] = useState(false);
 
   const requestId = useRef(0);
+  const showDownloadsRef = useRef(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeRef = useChromeInsets(
     settings?.chrome_top_offset ?? 0,
@@ -87,10 +88,15 @@ const Store: FC = () => {
     loadCounts();
     refreshLibrary();
     refreshDownloads();
-    const timer = setInterval(refreshDownloads, 900);
-    const countsTimer = setInterval(loadCounts, 60000);
+    // Poll fast while the download drawer is open, slowly otherwise.
+    const timer = setInterval(() => {
+      if (showDownloadsRef.current) refreshDownloads();
+    }, 1200);
+    const slowTimer = setInterval(refreshDownloads, 5000);
+    const countsTimer = setInterval(loadCounts, 600000);
     return () => {
       clearInterval(timer);
+      clearInterval(slowTimer);
       clearInterval(countsTimer);
     };
   }, [refreshDownloads, refreshLibrary]);
@@ -183,6 +189,10 @@ const Store: FC = () => {
     runSearch(query, system, source, sort, page + 1, true);
   };
 
+  useEffect(() => {
+    showDownloadsRef.current = showDownloads;
+  }, [showDownloads]);
+
   const activeDownloads = useMemo(
     () => jobs.filter((job) => job.status === "downloading" || job.status === "queued" || job.status === "extracting").length,
     [jobs],
@@ -205,7 +215,6 @@ const Store: FC = () => {
       <StoreStyles />
       <div className="rs-header">
         <div className="rs-search-wrap">
-          <FaSearch className="rs-search-icon" />
           <TextField
             label=""
             value={query}
@@ -247,17 +256,18 @@ const Store: FC = () => {
           />
         </div>
 
-        <button
-          className={`rs-icon-btn${showDownloads ? " active" : ""}`}
-          onClick={() => setShowDownloads(true)}
-          title="Downloads"
-        >
-          <FaDownload />
+        <div className="rs-icon-btn-wrap">
+          <Button
+            className={`rs-steam-btn${showDownloads ? " active" : ""}`}
+            onClick={() => setShowDownloads(true)}
+          >
+            <FaDownload />
+          </Button>
           {activeDownloads > 0 && <span className="rs-badge-count">{activeDownloads}</span>}
-        </button>
-        <button className="rs-icon-btn" onClick={() => setShowSettings(true)} title="Settings">
+        </div>
+        <Button className="rs-steam-btn" onClick={() => setShowSettings(true)}>
           <FaCog />
-        </button>
+        </Button>
       </div>
 
       <div
@@ -291,20 +301,24 @@ const Store: FC = () => {
           </div>
         ) : null}
 
-        <div className="rs-grid">
-          {results.map((rom) => (
-            <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} />
-          ))}
-        </div>
+        {results.length > 0 ? (
+          <>
+            <div className="rs-grid">
+              {results.map((rom) => (
+                <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} />
+              ))}
+            </div>
 
-        <div className="rs-bottom-space" />
+            <div className="rs-bottom-space" />
 
-        {hasMore ? (
-          <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 6px" }}>
-            <button className="rs-btn ghost" onClick={loadMore} disabled={loadingMore}>
-              {loadingMore ? "Loading…" : "Load more"}
-            </button>
-          </div>
+            {hasMore ? (
+              <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 6px" }}>
+                <button className="rs-btn ghost" onClick={loadMore} disabled={loadingMore}>
+                  {loadingMore ? "Loading…" : "Load more"}
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
 

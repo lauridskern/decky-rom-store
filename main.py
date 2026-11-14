@@ -102,6 +102,8 @@ class Plugin:
         library = plugin.service.library()
         _log(f"ROM library root: {library['root']} (exists={library['root_exists']})")
         _log(f"TLS trust store: {plugin.service.http.ca_source}")
+        # Find out right away which sources are reachable.
+        await plugin.service.probe_sources()
 
     async def _unload(self) -> None:
         plugin = self._self()

@@ -5,8 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import socket
 import time
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 from .covers import IgdbCovers
 from .dedupe import merge_entries, sort_roms
@@ -89,6 +91,7 @@ class StoreService:
         self._runtime_dir = runtime_dir
         self._COUNTS_TTL = 24 * 60 * 60
         self._browse_cache: Dict[str, tuple] = {}
+        self._unreachable: Dict[str, float] = {}
         self.downloads = DownloadManager(self.http, max_concurrent=int(settings.get("max_concurrent", 2)))
         self.images = ImageCache(self.http, runtime_dir=runtime_dir, plugin_name=plugin_name)
         self.covers = IgdbCovers(
@@ -97,6 +100,24 @@ class StoreService:
             client_secret=settings.get("igdb_client_secret"),
             cache_dir=runtime_dir,
         )
+
+    async def probe_sources(self) -> None:
+        """Check which sources resolve before the first search runs.
+
+        A dead domain can take ten seconds to fail, so we find out up front
+        and keep it out of the search path.
+        """
+        for source in self.build_sources():
+            host = urlparse(source.homepage).hostname
+            if not host:
+                continue
+            try:
+                await asyncio.wait_for(
+                    asyncio.to_thread(socket.getaddrinfo, host, None), timeout=3
+                )
+            except Exception:
+                self._unreachable[source.id] = time.time() + 900
+                self._errors[source.id] = "host not found"
 
     # ------------------------------------------------------------------ sources
     def build_sources(self) -> List[Source]:
@@ -155,6 +176,11 @@ class StoreService:
         page = max(1, int(page or 1))
 
         async def run(source: Source) -> Tuple[str, List[RomEntry]]:
+            blocked_until = self._unreachable.get(source.id, 0.0)
+            if blocked_until > time.time():
+                # We already know this source is down - do not wait for it.
+                self._errors[source.id] = "unreachable"
+                return source.id, []
             try:
                 entries = await source.search(query, limit=per_source, page=page)
                 self._errors.pop(source.id, None)
@@ -163,7 +189,11 @@ class StoreService:
                     self._last_page_count = pages
                 return source.id, entries
             except Exception as exc:
-                self._errors[source.id] = f"{type(exc).__name__}: {exc}"
+                message = f"{type(exc).__name__}: {exc}"
+                self._errors[source.id] = message
+                if "host not found" in message.lower() or "nodename" in message.lower():
+                    # Remember it, so the next search does not wait for DNS.
+                    self._unreachable[source.id] = time.time() + 900
                 return source.id, []
 
         results = await asyncio.gather(*(run(source) for source in sources))
@@ -436,6 +466,11 @@ class StoreService:
         except Exception:
             return
         if not index:
+            # Building it takes a while - do it in the background instead of
+            # stalling the search.
+            self._build_cover_index_in_background()
+            return
+        if not index:
             return
         lookup = {normalize_title(title): url for title, url in index.items()}
         for entry in switch_entries:
@@ -458,8 +493,15 @@ class StoreService:
             )
         return self._nswpedia
 
+    def _build_cover_index_in_background(self) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover - defensive
+            return
+        loop.create_task(self._cover_source().cover_index(refresh=True))
+
     def _prefetch_covers(self, entries: List[RomEntry]) -> None:
-        urls = [entry.cover for entry in entries if entry.cover][:40]
+        urls = [entry.cover for entry in entries if entry.cover][:24]
         if not urls or not self.images.enabled:
             return
         try:

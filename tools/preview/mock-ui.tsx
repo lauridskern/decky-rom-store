@@ -82,4 +82,33 @@ export const TextField: FC<TextFieldProps> = ({ label, value, placeholder, onCha
   </label>
 );
 
+interface ButtonProps {
+  onClick?: () => void;
+  className?: string;
+  children?: ReactNode;
+}
+
+export const Button: FC<ButtonProps> = ({ onClick, className, children }) => (
+  <button
+    type="button"
+    className={className}
+    onClick={onClick}
+    style={{
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "30px",
+      minWidth: "32px",
+      padding: "0 8px",
+      borderRadius: "4px",
+      border: "1px solid rgba(255,255,255,0.15)",
+      background: "rgba(255,255,255,0.06)",
+      color: "#d6d7d8",
+      cursor: "pointer",
+    }}
+  >
+    {children}
+  </button>
+);
+
 export const staticClasses = { Title: "DeckyTitle" } as Record<string, string>;

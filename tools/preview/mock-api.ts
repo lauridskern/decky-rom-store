@@ -179,7 +179,8 @@ const settings: Settings = {
 };
 
 const handlers: Record<string, (...args: any[]) => any> = {
-  search: async () => ({
+  search: async () => {
+    return {
     query: "mario",
     count: roms.length,
     results: roms,
@@ -195,7 +196,8 @@ const handlers: Record<string, (...args: any[]) => any> = {
     has_more: true,
     systems: SYSTEMS,
     errors: {},
-  }),
+    };
+  },
   browse: async () => ({
     query: "",
     count: roms.length,

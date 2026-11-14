@@ -1,31 +1,47 @@
 import { chromium } from "playwright";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const pluginDir = path.resolve(here, "..", "..");
-
+const pluginDir = process.env.PLUGIN_DIR;
+const out = (name) => path.join(pluginDir, "tools/preview", name);
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
-
 const errors = [];
-page.on("console", (msg) => {
-  if (msg.type() === "error") errors.push(msg.text());
+page.on("console", (m) => {
+  if (m.type() === "error") errors.push(m.text());
 });
-page.on("pageerror", (err) => errors.push(String(err)));
-
+page.on("pageerror", (e) => errors.push(String(e)));
 await page.goto(`file://${path.join(pluginDir, "tools/preview/index.html")}`);
-await page.waitForTimeout(2500);
+await page.waitForTimeout(1500);
+await page.locator(".rs-search-wrap input").fill("mario");
+await page.waitForTimeout(4000);
+await page.screenshot({ path: out("store.png") });
 
-await page.screenshot({ path: path.join(pluginDir, "tools/preview/store.png") });
+await page.locator(".rs-header .rs-steam-btn").nth(0).click({ force: true });
+await page.waitForTimeout(700);
+await page.screenshot({ path: out("downloads.png") });
+await page.locator(".rs-panel.drawer .rs-panel-head .rs-btn").last().click({ force: true });
+await page.waitForTimeout(400);
 
-// Open the detail overlay of the first card.
-const card = page.locator(".rs-card").first();
-if (await card.count()) {
-  await card.click();
-  await page.waitForTimeout(1200);
-  await page.screenshot({ path: path.join(pluginDir, "tools/preview/detail.png") });
-}
+await page.locator(".rs-header .rs-steam-btn").nth(1).click({ force: true });
+await page.waitForTimeout(900);
+await page.screenshot({ path: out("settings.png") });
+await page.locator(".rs-panel.settings .rs-panel-head .rs-btn").click({ force: true });
+await page.waitForTimeout(400);
 
+await page.locator(".rs-card").first().click({ force: true });
+await page.waitForTimeout(1500);
+await page.screenshot({ path: out("detail.png") });
+
+const grid = await page.evaluate(() => {
+  const row = document.querySelector(".rs-grid");
+  if (!row) return null;
+  const cards = [...row.children];
+  const top = cards[0]?.getBoundingClientRect().top;
+  return {
+    perRow: cards.filter((c) => Math.round(c.getBoundingClientRect().top) === Math.round(top)).length,
+    total: cards.length,
+  };
+});
+console.log("grid:", JSON.stringify(grid));
 console.log("console errors:", errors.length ? errors : "none");
 await browser.close();

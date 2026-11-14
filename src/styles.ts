@@ -34,13 +34,11 @@ export const CSS = `
 /* Steam's TextField carries a floating label - shrink it for the header. */
 .rs-search-wrap > * { margin: 0 !important; }
 .rs-search-wrap label { font-size: 8.5px !important; line-height: 1 !important; margin-bottom: 1px !important; }
-.rs-search-wrap input { height: 28px !important; padding-top: 2px !important; padding-bottom: 2px !important; font-size: 13px !important; }
-.rs-search-wrap input:focus { border-color: #66c0f4; }
-.rs-search-icon {
-  flex: 0 0 auto;
-  color: #8f98a0; pointer-events: none; font-size: 14px; display: flex;
-  margin-right: 2px;
+.rs-search-wrap input {
+  height: 30px !important; padding-top: 2px !important; padding-bottom: 2px !important;
+  font-size: 13px !important; border-radius: 4px !important;
 }
+.rs-search-wrap input:focus { border-color: #66c0f4; }
 
 .rs-filters {
   display: flex;
@@ -52,15 +50,16 @@ export const CSS = `
 }
 .rs-filters > * { min-width: 0; }
 
-.rs-icon-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-width: 38px; height: 36px; padding: 0 10px;
-  border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.05); color: #d6d7d8;
-  cursor: pointer; font-size: 13px; position: relative;
+.rs-steam-btn {
+  min-width: 32px !important;
+  height: 30px !important;
+  padding: 0 8px !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
 }
-.rs-icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
-.rs-icon-btn.active { border-color: #66c0f4; color: #66c0f4; }
+.rs-steam-btn.active { color: #66c0f4 !important; }
+.rs-icon-btn-wrap { position: relative; display: inline-flex; }
 .rs-badge-count {
   position: absolute; top: -6px; right: -6px;
   min-width: 18px; height: 18px; padding: 0 5px;

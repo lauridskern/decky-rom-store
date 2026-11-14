@@ -67,7 +67,7 @@ export function useChromeInsets(manualTop = 0, manualBottom = 0): RefObject<HTML
       window.setTimeout(measure, 2000),
     ];
     window.addEventListener("resize", measure);
-    const interval = window.setInterval(measure, 3000);
+    const interval = window.setInterval(measure, 6000);
 
     return () => {
       timers.forEach(window.clearTimeout);

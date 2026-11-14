@@ -113,15 +113,16 @@ export function formatSpeed(bytesPerSecond: number): string {
  * grid of Switch games.
  */
 export const SYSTEM_ASPECTS: Record<string, string> = {
-  // handheld / portrait boxes
+  // portrait boxes
   switch: "3 / 4",
-  "3ds": "3 / 4",
-  nds: "3 / 4",
-  gba: "3 / 4",
+  psp: "3 / 4",
+  psvita: "3 / 4",
   gbc: "3 / 4",
   gb: "3 / 4",
-  psvita: "3 / 4",
-  psp: "4 / 3",
+  // square-ish boxes
+  "3ds": "1 / 1",
+  nds: "1 / 1",
+  gba: "1 / 1",
   // square boxes
   snes: "1 / 1",
   nes: "1 / 1",

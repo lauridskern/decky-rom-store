@@ -67,6 +67,18 @@ class Response:
         return 200 <= self.status < 400
 
 
+def _is_dns_failure(reason: object) -> bool:
+    """True when the host simply does not exist (no point in retrying)."""
+    text = str(reason).lower()
+    return (
+        "name or service not known" in text
+        or "nodename nor servname" in text
+        or "temporary failure in name resolution" in text
+        or "no address associated with hostname" in text
+        or "getaddrinfo failed" in text
+    )
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Stops urllib from silently following redirects."""
 
