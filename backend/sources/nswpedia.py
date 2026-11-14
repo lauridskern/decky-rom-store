@@ -212,14 +212,20 @@ class NswpediaSource(Source):
         shots: List[Dict[str, str]] = []
         if entry.cover:
             shots.append({"kind": "image", "thumb": entry.cover, "full": entry.cover})
-        for match in re.finditer(r'src="(https?://[^"]+/wp-content/uploads/[^"]+)"', html):
+        # Only the images of the game itself.
+        body = html
+        start = html.find('class="entry-content"')
+        if start != -1:
+            end = html.find("</article>", start)
+            body = html[start: end if end != -1 else len(html)]
+        for match in re.finditer(r'src="(https?://[^"]+/wp-content/uploads/[^"]+)"', body):
             url = match.group(1).split("?")[0]
             if "logo" in url.lower() or "cropped-" in url.lower():
                 continue
             if any(shot["full"] == url for shot in shots):
                 continue
             shots.append({"kind": "image", "thumb": url, "full": url})
-            if len(shots) >= 8:
+            if len(shots) >= 5:
                 break
         if not shots:
             return None

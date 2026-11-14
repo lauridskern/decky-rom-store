@@ -227,6 +227,8 @@ class IgdbCovers:
                     continue
             if game.get("screenshots") or game.get("cover"):
                 score += 0.25
+            if game.get("videos"):
+                score += 0.5
             # Prefer the entry whose name is closest to the query - the base
             # game, not the bundle or the DLC.
             score -= min(len(name) - len(wanted), 40) / 1000.0

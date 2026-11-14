@@ -236,7 +236,9 @@ Cover art is downloaded by the backend, cached in
 Steam client uses (so the content policy allows it) and under the plugin *name*
 Decky keys its file routes by. Games without artwork (or with artwork the source does not publish) show a
 plain placeholder instead of a broken image, and the gallery shows the five
-most relevant screenshots plus the trailer. If artwork still does not show up,
+most relevant screenshots plus the trailer. Screenshots are fetched in a small
+size (about 30 kB) for the strip and only the full resolution is pulled in
+when you open one. If artwork still does not show up,
 open **Settings → Diagnostics → Test image pipeline**; it prints the plugin
 folder, the resolved local URL and the cache folder.
 

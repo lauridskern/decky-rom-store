@@ -58,6 +58,10 @@ def best_variant(url: Optional[str], kind: str = "card") -> Optional[str]:
     # Romspedia: <base>-cover.webp -> <base>-cover-280x398.webp
     if "static.romspedia.com" in url and url.endswith("-cover.webp"):
         return url[: -len("-cover.webp")] + "-cover-280x398.webp"
+    # IGDB screenshots: the full 1920x1080 file is ~500 kB, the medium one
+    # is around 50 kB and plenty for a thumbnail.
+    if "images.igdb.com" in url and "/screenshot_huge/" in url:
+        return url.replace("/screenshot_huge/", "/t_screenshot_med/")
     return url
 
 

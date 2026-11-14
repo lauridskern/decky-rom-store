@@ -192,17 +192,36 @@ class SwitchRomsSource(Source):
         except Exception:
             return None
         urls: List[str] = []
-        for match in re.finditer(r'src="(https?://[^"]+/wp-content/uploads/[^"]+)"', html):
+        # Only the images of the game itself - the page also links the
+        # artwork of related and popular games.
+        body = self._own_content(html)
+        for match in re.finditer(r'src="(https?://[^"]+/wp-content/uploads/[^"]+)"', body):
             url = match.group(1).split("?")[0]
             if "logo" in url.lower() or url in urls:
                 continue
             urls.append(url)
-            if len(urls) >= 8:
+            if len(urls) >= 5:
                 break
         if not urls:
             return None
         shots = [{"kind": "image", "thumb": url, "full": url} for url in urls]
         return {"shots": shots, "caption": entry.title}
+
+    @staticmethod
+    def _own_content(html: str) -> str:
+        """The part of the page that belongs to the game itself."""
+        for marker in ('class="entry-content"', 'class="post-content"', 'id="the-content"'):
+            start = html.find(marker)
+            if start == -1:
+                continue
+            end = html.find("</article>", start)
+            return html[start: end if end != -1 else len(html)]
+        # Fall back to the main article block.
+        start = html.find("<article")
+        end = html.find("</article>", start)
+        if start != -1 and end != -1:
+            return html[start:end]
+        return html
 
     async def resolve(self, entry: RomEntry) -> List[RomFile]:
         html = await self._page(entry.url)

@@ -508,6 +508,16 @@ class StoreService:
                 if info.get("released"):
                     media["released"] = info["released"]
 
+        # Last resort: look the trailer up on YouTube. Only used when IGDB did
+        # not have one, and only when the video title really matches.
+        if not media.get("trailer"):
+            try:
+                trailer = await self.media.youtube_trailer(entry.title)
+            except Exception:
+                trailer = None
+            if trailer:
+                media["trailer"] = trailer
+
         if not media.get("shots") and not media.get("trailer") and not media.get("cover"):
             return None
         media.setdefault("caption", entry.title)
