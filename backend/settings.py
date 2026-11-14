@@ -22,6 +22,7 @@ DEFAULTS: Dict[str, Any] = {
     "romsdl_base_url": "https://romsdl.com",
     "myabandonware_base_url": "https://www.myabandonware.com",
     "show_nsfw": False,
+    "chrome_top_offset": 0,
 }
 
 

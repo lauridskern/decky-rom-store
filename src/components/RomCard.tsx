@@ -35,7 +35,6 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
             <FaGamepad />
           </div>
         )}
-        <div className="rs-system-tag">{systemLabel(rom.system)}</div>
         {rom.variants > 1 && <div className="rs-dup">{rom.variants}×</div>}
       </div>
       <div className="rs-card-body">
@@ -43,6 +42,7 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
           {rom.title}
         </div>
         <div className="rs-meta">
+          <span className="rs-pill system">{systemLabel(rom.system)}</span>
           {rom.sources.map((source) => (
             <span key={source} className={`rs-pill ${source}`}>
               {SOURCE_LABELS[source] ?? source}

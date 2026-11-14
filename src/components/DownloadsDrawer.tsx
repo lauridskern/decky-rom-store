@@ -1,5 +1,5 @@
 import { FC } from "react";
-import { cancelDownload, clearDownloads, DownloadJob, openFolder } from "../types";
+import { cancelDownload, clearDownloads, DownloadJob } from "../types";
 import { formatBytes, formatSpeed } from "./common";
 
 interface Props {
@@ -47,15 +47,6 @@ const DownloadsDrawer: FC<Props> = ({ jobs, onClose, onRefresh }) => {
               Cancel
             </button>
           ) : null}
-          {job.status === "done" && job.path ? (
-            <button
-              className="rs-btn ghost"
-              onClick={() => openFolder(job.destination)}
-              title={job.path}
-            >
-              Open folder
-            </button>
-          ) : null}
           {job.status === "error" ? <span className="rs-pill region">{job.error}</span> : null}
         </div>
         {(job.status === "downloading" || job.status === "extracting") && (
@@ -72,7 +63,7 @@ const DownloadsDrawer: FC<Props> = ({ jobs, onClose, onRefresh }) => {
         </div>
         {job.status === "done" && job.path ? (
           <div className="rs-dl-sub">
-            <span className="rs-path" style={{ fontSize: 10, opacity: 0.75 }}>
+            <span className="rs-path" style={{ fontSize: 10, opacity: 0.75 }} title={job.path}>
               {job.path}
             </span>
           </div>

@@ -1,14 +1,13 @@
 /** Styles for the ROM Store, injected at runtime (Decky does not load CSS files). */
 export const CSS = `
 .rs-store {
-  /* Normal flow on purpose: the Steam route container has no intrinsic
-     height, so an absolutely positioned store collapses to nothing. */
-  position: relative;
-  --rs-chrome-top: 0px;
-  --rs-chrome-bottom: 0px;
-  padding-top: var(--rs-chrome-top);
-  padding-bottom: var(--rs-chrome-bottom);
-  min-height: calc(100vh - var(--rs-chrome-top) - var(--rs-chrome-bottom));
+  /* The Steam client draws a header bar over the top of the window, so the
+     store lives between the two chrome bars and scrolls on its own. */
+  position: fixed;
+  top: var(--rs-chrome-top, var(--basicui-header-height, 40px));
+  bottom: var(--rs-chrome-bottom, 0px);
+  left: 0;
+  right: 0;
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #16191d 0%, #0f1114 100%);
@@ -19,8 +18,7 @@ export const CSS = `
 }
 
 .rs-header {
-  position: sticky;
-  top: var(--rs-chrome-top, 0px);
+  flex: 0 0 auto;
   z-index: 5;
   display: flex;
   align-items: center;
@@ -88,7 +86,17 @@ export const CSS = `
   font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
 }
 
-.rs-main { flex: 1 1 auto; overflow: visible; padding: 16px 18px 28px; }
+.rs-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 18px 28px;
+}
+.rs-main::-webkit-scrollbar { width: 10px; }
+.rs-main::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); }
+.rs-main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 5px; }
+.rs-main::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 
 .rs-grid {
   display: grid;
@@ -128,10 +136,11 @@ export const CSS = `
   transform: translateZ(0); backface-visibility: hidden;
 }
 .rs-cover .rs-placeholder { font-size: 34px; color: rgba(255,255,255,0.14); display: flex; }
-.rs-cover .rs-system-tag {
-  position: absolute; left: 6px; top: 6px;
-  background: rgba(0,0,0,0.72); color: #66c0f4;
-  border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700; letter-spacing: .3px;
+.rs-pill.system {
+  background: rgba(102, 192, 244, 0.16);
+  color: #66c0f4;
+  font-weight: 700;
+  letter-spacing: 0.3px;
 }
 .rs-cover .rs-dup {
   position: absolute; right: 6px; top: 6px;
@@ -139,7 +148,7 @@ export const CSS = `
   border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;
 }
 
-.rs-card-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.rs-card-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow: hidden; }
 .rs-title {
   font-size: 13px; font-weight: 600; color: #f2f3f3; line-height: 1.25;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -256,14 +265,21 @@ export const CSS = `
 
 .rs-dl-row {
   border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; margin-bottom: 9px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.03); max-width: 100%; overflow: hidden;
 }
-.rs-dl-top { display: flex; align-items: center; gap: 10px; }
-.rs-dl-name { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #e6e8ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rs-dl-status { font-size: 11px; font-weight: 600; }
+.rs-dl-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rs-dl-name {
+  flex: 1 1 0; min-width: 0; font-size: 13px; color: #e6e8ea;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rs-dl-status { font-size: 11px; font-weight: 600; flex: 0 0 auto; white-space: nowrap; }
 .rs-progress { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); overflow: hidden; margin-top: 8px; }
 .rs-progress > div { height: 100%; background: linear-gradient(90deg, #66c0f4, #a4d007); transition: width 200ms linear; }
-.rs-dl-sub { display: flex; justify-content: space-between; font-size: 11px; color: #8b949d; margin-top: 5px; }
+.rs-dl-sub {
+  display: flex; justify-content: space-between; gap: 10px; font-size: 11px; color: #8b949d;
+  margin-top: 5px; min-width: 0;
+}
+.rs-dl-sub > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .rs-form-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
 .rs-form-row label { flex: 0 0 190px; font-size: 13px; color: #c9ced3; }

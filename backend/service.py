@@ -234,13 +234,24 @@ class StoreService:
             source = sources.get(entry.source)
             if source is None:
                 return
-            try:
-                files = await source.resolve(entry)
-                entry.files = files
-                if files and not entry.size:
-                    entry.size = next((f.size for f in files if f.size), None)
-            except Exception as exc:
-                entry.extra["error"] = f"{type(exc).__name__}: {exc}"
+            # The sites occasionally drop a request, so give it a few tries
+            # before telling the user that the link could not be resolved.
+            last_error = ""
+            for attempt in range(3):
+                try:
+                    files = await source.resolve(entry)
+                    if files:
+                        entry.files = files
+                        if not entry.size:
+                            entry.size = next((f.size for f in files if f.size), None)
+                        entry.extra.pop("error", None)
+                        return
+                    last_error = "no download link found"
+                except Exception as exc:
+                    last_error = f"{type(exc).__name__}: {exc}"
+                if attempt < 2:
+                    await asyncio.sleep(0.7 * (attempt + 1))
+            entry.extra["error"] = last_error or "could not resolve the download link"
 
         await asyncio.gather(*(resolve(entry) for entry in rom.entries))
         return rom.to_dict()
@@ -268,10 +279,14 @@ class StoreService:
         headers: Dict[str, str] = {}
         url = rom_file.url
         if source is not None and hasattr(source, "resolve_download"):
-            try:
-                url = await source.resolve_download(rom_file)
-            except Exception:
-                url = rom_file.url
+            for attempt in range(3):
+                try:
+                    url = await source.resolve_download(rom_file)
+                    break
+                except Exception:
+                    url = rom_file.url
+                    if attempt < 2:
+                        await asyncio.sleep(0.7 * (attempt + 1))
         elif rom_file.url.rstrip("/").endswith("/download"):
             url = rom_file.url
 

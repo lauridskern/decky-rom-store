@@ -122,6 +122,7 @@ export interface Settings {
   romsdl_base_url: string;
   myabandonware_base_url: string;
   show_nsfw: boolean;
+  chrome_top_offset: number;
 }
 
 export interface StatusPayload {

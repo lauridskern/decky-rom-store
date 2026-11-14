@@ -194,19 +194,31 @@ class HttpClient:
     # --------------------------------------------------------------- public API
     async def request(self, url: str, method: str = "GET", data: Optional[bytes] = None,
                       headers: Optional[Dict[str, str]] = None, allow_redirects: bool = True,
-                      max_bytes: int = 8 * 1024 * 1024) -> Response:
-        try:
-            resp = await asyncio.wait_for(
-                asyncio.to_thread(self._open, url, method, data, headers, allow_redirects),
-                timeout=max(self._timeout * 2, 45),
-            )
-        except asyncio.TimeoutError as exc:
-            raise HttpError(f"Request timed out: {url}", url=url) from exc
-        if resp.status >= 400:
-            raise HttpError(f"HTTP {resp.status} for {url}", resp.status, url)
-        if len(resp.body) > max_bytes:
-            resp.body = resp.body[:max_bytes]
-        return resp
+                      max_bytes: int = 8 * 1024 * 1024, retries: int = 2) -> Response:
+        """Fetch a URL, retrying transient failures."""
+        last_error: Optional[HttpError] = None
+        for attempt in range(retries + 1):
+            try:
+                resp = await asyncio.wait_for(
+                    asyncio.to_thread(self._open, url, method, data, headers, allow_redirects),
+                    timeout=max(self._timeout * 2, 45),
+                )
+            except asyncio.TimeoutError as exc:
+                last_error = HttpError(f"Request timed out: {url}", url=url)
+            except HttpError as exc:
+                last_error = exc
+            else:
+                if resp.status >= 500 and resp.status not in (501, 505):
+                    last_error = HttpError(f"HTTP {resp.status} for {url}", resp.status, url)
+                elif resp.status >= 400:
+                    raise HttpError(f"HTTP {resp.status} for {url}", resp.status, url)
+                else:
+                    if len(resp.body) > max_bytes:
+                        resp.body = resp.body[:max_bytes]
+                    return resp
+            if attempt < retries:
+                await asyncio.sleep(0.8 * (attempt + 1))
+        raise last_error or HttpError(f"Request failed: {url}", url=url)
 
     async def get_text(self, url: str, headers: Optional[Dict[str, str]] = None,
                        max_bytes: int = 8 * 1024 * 1024) -> str:

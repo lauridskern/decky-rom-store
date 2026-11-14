@@ -60,6 +60,12 @@ const Store: FC = () => {
   const requestId = useRef(0);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeRef = useChromeInsets();
+  const manualOffset = settings?.chrome_top_offset ?? 0;
+
+  useEffect(() => {
+    if (!manualOffset || !storeRef.current) return;
+    storeRef.current.style.setProperty("--rs-chrome-top", `${manualOffset}px`);
+  }, [manualOffset, storeRef]);
 
   const refreshDownloads = useCallback(() => {
     getDownloads()

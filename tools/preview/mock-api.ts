@@ -172,6 +172,7 @@ const settings: Settings = {
   romsdl_base_url: "https://romsdl.com",
   myabandonware_base_url: "https://www.myabandonware.com",
   show_nsfw: false,
+  chrome_top_offset: 0,
 };
 
 const handlers: Record<string, (...args: any[]) => any> = {

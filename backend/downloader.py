@@ -174,9 +174,23 @@ class DownloadManager:
                         last = now
                         last_bytes = received
 
-                await self._http.download(
-                    job.url, temp_path, headers=job.headers, on_progress=progress, cancel=cancel
-                )
+                last_error: Optional[str] = None
+                for attempt in range(3):
+                    try:
+                        await self._http.download(
+                            job.url, temp_path, headers=job.headers, on_progress=progress, cancel=cancel
+                        )
+                        last_error = None
+                        break
+                    except HttpError as exc:
+                        last_error = str(exc)
+                        self._remove(temp_path)
+                        if cancel.is_set():
+                            raise
+                        if attempt < 2:
+                            await asyncio.sleep(1.0 * (attempt + 1))
+                if last_error:
+                    raise HttpError(last_error)
 
                 if cancel.is_set():
                     self._remove(temp_path)
