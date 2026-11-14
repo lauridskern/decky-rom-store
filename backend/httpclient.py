@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import socket
 import ssl
 import threading
 import time
@@ -100,6 +101,8 @@ class HttpClient:
         self._context, self._ca_source = ssl_context()
         self._relaxed = relaxed_context()
         self._relaxed_hosts: Set[str] = set()
+        self._known_hosts: Set[str] = set()
+        self._dead_hosts: Set[str] = set()
         self._opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self._jar),
             urllib.request.HTTPSHandler(context=self._context),
@@ -141,6 +144,22 @@ class HttpClient:
         except Exception:
             return body
         return body
+
+    async def _host_alive(self, url: str) -> bool:
+        """Resolve the host first so a dead domain fails in seconds, not ten."""
+        host = urllib.request.Request(url).host
+        if not host or host in self._known_hosts:
+            return True
+        if host in self._dead_hosts:
+            # We already know this host does not exist.
+            return False
+        try:
+            await asyncio.wait_for(asyncio.to_thread(socket.getaddrinfo, host, None), timeout=3)
+        except Exception:
+            self._dead_hosts.add(host)
+            return False
+        self._known_hosts.add(host)
+        return True
 
     def _build_request(self, url: str, method: str, data: Optional[bytes], headers: Dict[str, str]):
         hdrs = {
@@ -209,6 +228,9 @@ class HttpClient:
                       max_bytes: int = 8 * 1024 * 1024, retries: int = 2) -> Response:
         """Fetch a URL, retrying transient failures."""
         last_error: Optional[HttpError] = None
+        if not await self._host_alive(url):
+            # The host does not exist - do not waste time on retries.
+            raise HttpError(f"Host not found: {url}", url=url)
         for attempt in range(retries + 1):
             try:
                 resp = await asyncio.wait_for(

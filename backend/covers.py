@@ -14,10 +14,17 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import time
 from typing import Any, Dict, List, Optional
 
 from .httpclient import HttpClient, HttpError
+
+
+def _clean(title: str) -> str:
+    """Normalise a title so "Super Mario Bros. Wonder" and
+    "Super Mario Bros Wonder" are the same game."""
+    return re.sub(r"[^a-z0-9]+", " ", (title or "").lower()).strip()
 
 IGDB_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 IGDB_API_URL = "https://api.igdb.com/v4/games"
@@ -39,7 +46,8 @@ class IgdbCovers:
         self._cache_dir = cache_dir
         self._token: Optional[str] = None
         self._token_expiry: float = 0.0
-        self._memory: Dict[str, Optional[str]] = {}
+        self._memory: Dict[str, Optional[Dict[str, Any]]] = {}
+        self._cache_loaded = False
 
     @property
     def enabled(self) -> bool:
@@ -51,15 +59,21 @@ class IgdbCovers:
             return None
         return os.path.join(self._cache_dir, "igdb_covers.json")
 
-    def _load_cache(self) -> Dict[str, Optional[str]]:
+    def _load_cache(self) -> Dict[str, Any]:
+        if self._cache_loaded:
+            return {}
+        self._cache_loaded = True
         path = self._cache_path()
         if not path or not os.path.isfile(path):
             return {}
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                return json.load(fh)
+                data = json.load(fh) or {}
         except (OSError, ValueError):
             return {}
+        for key, value in data.items():
+            self._memory.setdefault(key, value)
+        return data
 
     def _save_cache(self) -> None:
         path = self._cache_path()
@@ -90,6 +104,16 @@ class IgdbCovers:
         return self._token
 
     # ------------------------------------------------------------------ lookup
+    def cached(self, title: str) -> Optional[Dict[str, Any]]:
+        """What we already know about a title, without any network call."""
+        key = _clean(title)
+        if not key:
+            return None
+        if key in self._memory:
+            return self._memory[key]
+        self._load_cache()
+        return self._memory.get(key)
+
     async def lookup(self, title: str) -> Optional[Dict[str, Any]]:
         """Return the IGDB art and rating for a game title, if known."""
         if not self.enabled or not title:
@@ -102,19 +126,20 @@ class IgdbCovers:
             self._memory[key] = cache[key]
             return cache[key]
 
-        query_title = title.strip()
+        query_title = _clean(title)
         for noise in _NOISE:
-            if query_title.lower().startswith(noise):
-                query_title = query_title[len(noise):]
+            if query_title.startswith(noise.strip()):
+                query_title = query_title[len(noise.strip()):]
                 break
         if len(query_title) < 3:
             self._memory[key] = None
             return None
 
         body = (
-            f'search "{query_title}"; fields name,cover.image_id,total_rating,rating_count,'
-            f"screenshots.image_id,videos.video_id; "
-            f"where name ~ *\"{query_title}\"*; limit 5;"
+            f'search "{title.strip()}"; fields name,cover.image_id,screenshots.image_id,'
+            f"videos.video_id,rating,aggregated_rating,rating_count,total_rating,summary,"
+            f"first_release_date,genres.name,platforms.name,involved_companies.company.name; "
+            f"limit 6;"
         ).encode()
         try:
             token = await self._access_token()
@@ -127,45 +152,88 @@ class IgdbCovers:
             self._memory[key] = None
             return None
 
-        url = None
-        rating = None
-        rating_count = None
-        shots: List[Dict[str, str]] = []
-        trailer = None
-        wanted = query_title.lower()
-        for game in games:
-            name = (game.get("name") or "").lower()
-            cover = (game.get("cover") or {}).get("image_id")
-            if not cover:
-                continue
-            if name.startswith(wanted) or wanted in name:
-                url = f"{IGDB_IMAGE_BASE}{cover}.jpg"
-                rating = game.get("total_rating")
-                rating_count = game.get("rating_count")
-                shots = self._shots(game)
-                trailer = self._trailer(game)
-                break
-        if url is None and games:
-            cover = (games[0].get("cover") or {}).get("image_id")
-            if cover:
-                url = f"{IGDB_IMAGE_BASE}{cover}.jpg"
-                rating = games[0].get("total_rating")
-                rating_count = games[0].get("rating_count")
-                shots = self._shots(games[0])
-                trailer = self._trailer(games[0])
+        best = self._best_game(games, query_title)
+        if not best:
+            self._memory[key] = None
+            return None
 
+        cover = (best.get("cover") or {}).get("image_id")
+        url = f"{IGDB_IMAGE_BASE}{cover}.jpg" if cover else None
+        rating = self._rating(best)
         result: Optional[Dict[str, Any]] = None
-        if url or rating or shots:
+        if url or rating or self._shots(best):
             result = {
                 "cover": url,
                 "rating": rating,
-                "rating_count": rating_count,
-                "shots": shots,
-                "trailer": trailer,
+                "rating_count": best.get("rating_count"),
+                "shots": self._shots(best),
+                "trailer": self._trailer(best),
+                "summary": (best.get("summary") or "")[:600] or None,
+                "genres": [g.get("name") for g in (best.get("genres") or []) if g.get("name")][:4],
+                "platforms": [p.get("name") for p in (best.get("platforms") or []) if p.get("name")][:4],
+                "developers": [
+                    c.get("company", {}).get("name")
+                    for c in (best.get("involved_companies") or [])
+                    if (c.get("company") or {}).get("name")
+                ][:2],
+                "released": best.get("first_release_date"),
             }
         self._memory[key] = result
         self._save_cache()
         return result
+
+    @staticmethod
+    def _rating(game: Dict[str, Any]) -> Optional[float]:
+        """IGDB stores the community score out of 100, we show 0-5."""
+        for field in ("rating", "total_rating", "aggregated_rating"):
+            value = game.get(field)
+            if value is None:
+                continue
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            if field == "aggregated_rating":
+                return round(value / 2.0, 1)
+            return round(value / 20.0, 1)
+        return None
+
+    @staticmethod
+    def _best_game(games: List[Dict[str, Any]], query_title: str) -> Optional[Dict[str, Any]]:
+        """Pick the entry that really is the game we are looking for."""
+        wanted = _clean(query_title)
+        best = None
+        best_score = 0.0
+        for game in games:
+            name = _clean(game.get("name") or "")
+            if not name:
+                continue
+            if name == wanted:
+                return game
+            if name.startswith(wanted):
+                score = 3.0
+            elif wanted in name:
+                score = 2.0
+            elif name in wanted:
+                score = 1.5
+            else:
+                # Fall back to a word overlap.
+                words = set(wanted.split())
+                overlap = len(words & set(name.split()))
+                if not overlap or len(words) < 2:
+                    continue
+                score = overlap / len(words)
+                if score < 0.75:
+                    continue
+            if game.get("screenshots") or game.get("cover"):
+                score += 0.25
+            # Prefer the entry whose name is closest to the query - the base
+            # game, not the bundle or the DLC.
+            score -= min(len(name) - len(wanted), 40) / 1000.0
+            if score > best_score:
+                best_score = score
+                best = game
+        return best
 
     @staticmethod
     def _shots(game: Dict[str, Any]) -> List[Dict[str, str]]:
@@ -198,7 +266,7 @@ class IgdbCovers:
             }
         return None
 
-    async def lookup_many(self, titles: List[str]) -> Dict[str, Optional[Dict[str, Any]]]:
+    async def lookup_many(self, titles: List[str], limit: int = 12) -> Dict[str, Optional[Dict[str, Any]]]:
         """Look several titles up in parallel (bounded)."""
         unique: List[str] = []
         for title in titles:

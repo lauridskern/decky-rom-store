@@ -49,6 +49,11 @@ export interface Media {
   trailer?: MediaShot | null;
   capsule?: string;
   header?: string;
+  summary?: string | null;
+  genres?: string[];
+  platforms?: string[];
+  developers?: string[];
+  released?: number | null;
 }
 
 export interface MergedRom {

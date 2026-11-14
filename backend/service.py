@@ -237,9 +237,12 @@ class StoreService:
             "systems": sorted({e.system for e in entries}),
             "errors": dict(self._errors),
         }
+        # Enrich before the payload is built, so the ratings and the IGDB art
+        # are part of the result the frontend receives.
+        await self._enrich_covers(merged)
+        payload["results"] = [rom.to_dict() for rom in merged]
         self._last_search = payload
         self._prefetch_covers(entries)
-        await self._enrich_covers(merged)
         return payload
 
     async def browse(self, system: str, limit: int = 200) -> Dict[str, Any]:
@@ -351,19 +354,28 @@ class StoreService:
             if own:
                 media.update(own)
 
-        # IGDB adds real screenshots and a trailer when it is configured.
+        # IGDB is the primary source: real screenshots, a trailer and the
+        # game's own box art.
         if self.covers.enabled:
             try:
                 info = await self.covers.lookup(entry.title)
             except Exception:
                 info = None
             if info:
-                if info.get("cover") and not media.get("cover"):
-                    media["cover"] = info["cover"]
-                for shot in info.get("shots") or []:
-                    media.setdefault("shots", []).append(shot)
-                if info.get("trailer") and not media.get("trailer"):
-                    media["trailer"] = info["trailer"]
+                media["cover"] = info.get("cover") or media.get("cover")
+                shots = list(info.get("shots") or [])
+                if media.get("shots"):
+                    # Keep the site's own shots first, they match the ROM.
+                    shots.extend(media["shots"])
+                media["shots"] = shots[:16]
+                media["trailer"] = info.get("trailer") or media.get("trailer")
+                media["summary"] = info.get("summary") or media.get("summary")
+                if info.get("genres"):
+                    media["genres"] = info["genres"]
+                if info.get("developers"):
+                    media["developers"] = info["developers"]
+                if info.get("released"):
+                    media["released"] = info["released"]
 
         if not media.get("trailer"):
             try:
@@ -469,39 +481,80 @@ class StoreService:
         await self.images.prefetch(urls, kind)
 
     async def _enrich_covers(self, roms: List[MergedRom]) -> None:
-        """Replace missing artwork with a clean IGDB cover when possible."""
+        """Fill in artwork and ratings from IGDB.
+
+        The lookups are slow (a couple of requests per game), so the grid is
+        enriched in the background - the next search shows the ratings.
+        """
         await self._apply_portrait_covers(roms)
         if not self.covers.enabled:
             return
         replace = bool(self.settings.get("igdb_replace_covers", True))
+
+        # Apply what we already know - this is instant and makes the ratings
+        # show up on the next search.
         wanted: List[str] = []
         for rom in roms:
             for entry in rom.entries:
-                if replace or not entry.cover:
-                    if entry.title not in wanted:
-                        wanted.append(entry.title)
+                info = self.covers.cached(entry.title)
+                if info:
+                    self._apply_igdb(entry, info, replace)
+                    continue
+                if (replace or not entry.cover) and entry.title not in wanted:
+                    wanted.append(entry.title)
         if not wanted:
             return
+        # Look the first few up right away (short budget) so the ratings show
+        # on the first search, and let the rest happen in the background.
+        task = self._igdb_enrich_in_background(roms, wanted[:14])
         try:
-            found = await self.covers.lookup_many(wanted, limit=12)
+            await asyncio.wait_for(asyncio.shield(task), timeout=3.0)
+        except (asyncio.TimeoutError, Exception):
+            pass
+
+    def _igdb_enrich_in_background(self, roms: List[MergedRom], titles: List[str]) -> asyncio.Task:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover - defensive
+            raise
+        task = loop.create_task(self._igdb_enrich(roms, titles))
+
+        def done(finished) -> None:
+            # A failing background job must not disappear silently.
+            if finished.cancelled():
+                return
+            error = finished.exception()
+            if error:
+                print(f"ROM Store: IGDB enrichment failed: {error!r}")
+
+        task.add_done_callback(done)
+        return task
+
+    async def _igdb_enrich(self, roms: List[MergedRom], titles: List[str]) -> None:
+        replace = bool(self.settings.get("igdb_replace_covers", True))
+        try:
+            found = await self.covers.lookup_many(titles, limit=len(titles))
         except Exception:
             return
         for rom in roms:
             for entry in rom.entries:
                 info = found.get(entry.title)
-                if not info:
-                    continue
-                url = info.get("cover")
-                if url and (replace or not entry.cover):
-                    entry.cover = url
-                    entry.cover_full = entry.cover_full or url
-                rating = info.get("rating")
-                if rating and not entry.rating:
-                    try:
-                        entry.rating = round(float(rating), 1)
-                        entry.rating_count = info.get("rating_count") or entry.rating_count
-                    except (TypeError, ValueError):
-                        pass
+                if info:
+                    self._apply_igdb(entry, info, replace)
+
+    @staticmethod
+    def _apply_igdb(entry: RomEntry, info: Dict[str, Any], replace: bool) -> None:
+        url = info.get("cover")
+        if url and (replace or not entry.cover):
+            entry.cover = url
+            entry.cover_full = entry.cover_full or url
+        rating = info.get("rating")
+        if rating and not entry.rating:
+            try:
+                entry.rating = round(float(rating), 1)
+                entry.rating_count = info.get("rating_count") or entry.rating_count
+            except (TypeError, ValueError):
+                pass
 
     async def _apply_portrait_covers(self, roms: List[MergedRom]) -> None:
         """Give Switch games the portrait box art from the cover index."""
@@ -514,13 +567,10 @@ class StoreService:
         if not switch_entries:
             return
         source = self._cover_source()
-        try:
-            index = await source.cover_index()
-        except Exception:
-            return
+        index = source.cached_index()
         if not index:
-            # Building it takes a while - do it in the background instead of
-            # stalling the search.
+            # Building the index takes a while - do it in the background
+            # instead of stalling the search.
             self._build_cover_index_in_background()
             return
         if not index:
@@ -551,7 +601,12 @@ class StoreService:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # pragma: no cover - defensive
             return
-        loop.create_task(self._cover_source().cover_index(refresh=True))
+        async def build():
+            try:
+                await self._cover_source().cover_index(refresh=True)
+            except Exception:
+                pass
+        loop.create_task(build())
 
     def _prefetch_covers(self, entries: List[RomEntry]) -> None:
         urls = [entry.cover for entry in entries if entry.cover][:24]

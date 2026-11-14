@@ -154,6 +154,10 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
 
               <MediaGallery media={details?.extra?.media} />
 
+              {details?.extra?.media?.summary ? (
+                <p className="rs-summary">{details.extra.media.summary}</p>
+              ) : null}
+
               {!loading &&
                 variants
                   .filter((entry) => entry.files.length > 0 || entry.error)

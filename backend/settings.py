@@ -27,8 +27,8 @@ DEFAULTS: Dict[str, Any] = {
     "chrome_top_offset": 0,
     "chrome_bottom_offset": 0,
     "igdb_replace_covers": True,
-    "igdb_client_id": "",
-    "igdb_client_secret": "",
+    "igdb_client_id": "g5l93pm0saj4mnqpya3xujmmmcsna1",
+    "igdb_client_secret": "v2qtz1potmdvx2blhcvg75ccc3ver7",
 }
 
 

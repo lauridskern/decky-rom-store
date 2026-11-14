@@ -325,6 +325,11 @@ export const CSS = `
   word-break: break-word; margin: 0 0 16px; max-height: 40vh; overflow: auto;
 }
 
+.rs-summary {
+  margin: 0 0 12px; font-size: 12px; line-height: 1.55; color: #9aa4ad;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+
 .rs-gallery {
   display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden;
   padding: 2px 0 8px; margin-bottom: 10px;

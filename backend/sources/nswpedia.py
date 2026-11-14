@@ -51,8 +51,10 @@ class NswpediaSource(Source):
 
     # ------------------------------------------------------------------ search
     async def search(self, query: str, limit: int = 40, page: int = 1) -> List[RomEntry]:
-        # No server side search - fall back to matching the cover index.
-        index = await self.cover_index()
+        # No server side search - fall back to matching the cover index. Only
+        # the cached index is used here: building it takes seconds and must not
+        # hold up a search.
+        index = self.cached_index()
         wanted = normalize_title(query)
         if not wanted:
             return []
@@ -135,6 +137,15 @@ class NswpediaSource(Source):
         return found
 
     # ------------------------------------------------------------------ covers
+    def cached_index(self) -> Dict[str, str]:
+        """The index we already have, without any network call."""
+        if self._cover_index is not None:
+            return self._cover_index
+        cached = self._read_cache()
+        if cached:
+            self._cover_index = cached
+        return cached
+
     async def cover_index(self, refresh: bool = False) -> Dict[str, str]:
         """Title -> portrait cover url for every game we know.
 
