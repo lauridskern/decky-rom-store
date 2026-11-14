@@ -122,9 +122,12 @@ class ImageCache:
                 return url
             if not os.path.exists(path):
                 return url
+            # The download may have written a different extension - the url we
+            # hand out has to match the file that is actually on disk.
+            actual = os.path.splitext(path)[1].lstrip(".") or ext
             self._known.add(key)
             self._prune()
-            return self._local_url(key, ext)
+            return self._local_url(key, actual)
 
     async def prefetch(self, urls: List[Optional[str]], kind: str = "card") -> None:
         """Warm the cache in the background."""

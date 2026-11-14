@@ -239,7 +239,17 @@ export const CSS = `
   border: 1px solid rgba(255,255,255,0.08);
 }
 .rs-detail-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.rs-detail-title { font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 8px; }
+.rs-detail-titlebar {
+  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px;
+}
+.rs-detail-title { font-size: 20px; font-weight: 700; color: #fff; margin: 0; flex: 1 1 auto; }
+.rs-close {
+  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
+  color: #d6d7d8; font-size: 14px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.rs-close:hover { background: rgba(255,255,255,0.16); color: #fff; }
 
 .rs-variant {
   display: flex; align-items: center; gap: 10px;
@@ -341,8 +351,8 @@ export const CSS = `
   contain: layout paint;
   overscroll-behavior-x: contain;
 }
-.rs-gallery::-webkit-scrollbar { height: 6px; }
-.rs-gallery::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
+.rs-gallery::-webkit-scrollbar { height: 0; width: 0; display: none; }
+.rs-gallery { scrollbar-width: none; }
 .rs-shot {
   position: relative; flex: 0 0 168px; width: 168px; height: 96px; padding: 0;
   border-radius: 6px; overflow: hidden; cursor: pointer;

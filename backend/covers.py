@@ -253,18 +253,26 @@ class IgdbCovers:
 
     @staticmethod
     def _trailer(game: Dict[str, Any]) -> Optional[Dict[str, str]]:
-        for video in game.get("videos") or []:
-            video_id = video.get("video_id")
-            if not video_id:
-                continue
-            return {
-                "kind": "video",
-                "thumb": f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
-                "full": f"https://www.youtube.com/embed/{video_id}?autoplay=1&rel=0",
-                "watch": f"https://www.youtube.com/watch?v={video_id}",
-                "name": "Trailer",
-            }
-        return None
+        """The game's trailer. IGDB knows which video is the trailer."""
+        videos = [v for v in (game.get("videos") or []) if v.get("video_id")]
+        if not videos:
+            return None
+        trailer = None
+        for video in videos:
+            name = (video.get("name") or "").lower()
+            if "trailer" in name:
+                trailer = video
+                break
+        if trailer is None:
+            trailer = videos[0]
+        video_id = trailer["video_id"]
+        return {
+            "kind": "video",
+            "thumb": f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
+            "full": f"https://www.youtube.com/embed/{video_id}?autoplay=1&rel=0",
+            "watch": f"https://www.youtube.com/watch?v={video_id}",
+            "name": trailer.get("name") or "Trailer",
+        }
 
     async def lookup_many(self, titles: List[str], limit: int = 12) -> Dict[str, Optional[Dict[str, Any]]]:
         """Look several titles up in parallel (bounded)."""
@@ -275,10 +283,11 @@ class IgdbCovers:
         unique = unique[:limit]
         if not unique:
             return {}
-        semaphore = asyncio.Semaphore(4)
+        semaphore = asyncio.Semaphore(2)
 
         async def one(title: str):
             async with semaphore:
+                await asyncio.sleep(0.12)  # stay inside the IGDB rate limit
                 return title, await self.lookup(title)
 
         results = await asyncio.gather(*(one(title) for title in unique), return_exceptions=True)

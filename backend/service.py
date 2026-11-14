@@ -377,13 +377,6 @@ class StoreService:
                 if info.get("released"):
                     media["released"] = info["released"]
 
-        if not media.get("trailer"):
-            try:
-                trailer = await self.media.youtube_trailer(entry.title)
-            except Exception:
-                trailer = None
-            if trailer:
-                media["trailer"] = trailer
         if not media.get("shots") and not media.get("trailer") and not media.get("cover"):
             return None
         media.setdefault("caption", entry.title)

@@ -21,12 +21,18 @@ const ProxiedImage: FC<Props> = ({ url, alt = "", className }) => {
     setFailed(false);
     setSrc(null);
     if (!url) return;
+    const fallback = () => {
+      // The local copy is the fast path; the remote url is the fallback.
+      if (!cancelled) setSrc(url);
+    };
     getCover(url, "card")
       .then((resolved) => {
-        if (!cancelled) setSrc(resolved ?? null);
+        if (cancelled) return;
+        if (resolved && resolved !== url) setSrc(resolved);
+        else fallback();
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!cancelled) fallback();
       });
     return () => {
       cancelled = true;

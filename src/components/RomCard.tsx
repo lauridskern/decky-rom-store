@@ -8,14 +8,16 @@ import CoverImage from "./CoverImage";
 interface Props {
   rom: MergedRom;
   onOpen: (rom: MergedRom) => void;
+  rowIndex?: number;
 }
 
-const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
+const RomCard: FC<Props> = memo(({ rom, onOpen, rowIndex }) => {
   const rating = rom.rating ? rom.rating.toFixed(1) : null;
   const downloads = formatCount(rom.downloads);
 
   return (
     <Focusable
+      data-row={rowIndex}
       className="rs-card"
       focusClassName="rs-card--focus"
       onActivate={() => onOpen(rom)}

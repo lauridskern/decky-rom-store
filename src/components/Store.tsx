@@ -20,6 +20,7 @@ import StoreStyles from "./StoreStyles";
 import { useChromeInsets } from "./useChromeInsets";
 import { searchState } from "../state";
 import RomCard from "./RomCard";
+import VirtualGrid from "./VirtualGrid";
 import RomDetail from "./RomDetail";
 import DownloadsDrawer from "./DownloadsDrawer";
 import SettingsModal from "./SettingsModal";
@@ -64,6 +65,7 @@ const Store: FC = () => {
     settings?.chrome_top_offset ?? 0,
     settings?.chrome_bottom_offset ?? 0,
   );
+  const mainRef = useRef<HTMLDivElement | null>(null);
 
   const refreshDownloads = useCallback(() => {
     getDownloads()
@@ -124,7 +126,7 @@ const Store: FC = () => {
             sourceList,
             systemFilter === "all" ? null : systemFilter,
             sortBy,
-            60,
+            40,
             pageNumber,
           );
         }
@@ -271,6 +273,7 @@ const Store: FC = () => {
       </div>
 
       <div
+        ref={mainRef}
         className={`rs-main${loading && results.length === 0 ? " is-loading" : ""}${
           !loading && results.length === 0 ? " is-empty" : ""
         }`}
@@ -303,11 +306,13 @@ const Store: FC = () => {
 
         {results.length > 0 ? (
           <>
-            <div className="rs-grid">
-              {results.map((rom) => (
-                <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} />
-              ))}
-            </div>
+            <VirtualGrid
+              items={results}
+              scrollRef={mainRef}
+              renderItem={(rom, _index, rowIndex) => (
+                <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} rowIndex={rowIndex} />
+              )}
+            />
 
             <div className="rs-bottom-space" />
 

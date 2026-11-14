@@ -44,7 +44,10 @@ const TITLES = [
 
 const SYSTEMS = ["n64", "wii", "3ds", "switch", "snes", "dos", "nes", "gc"];
 
-const roms: MergedRom[] = TITLES.map((title, index) => {
+const MANY = Number((globalThis as any).__ROM_COUNT ?? 0);
+const ALL_TITLES = [...TITLES, ...Array.from({ length: 48 }, (_, i) => `Test Game ${i + 1}`)];
+
+const roms: MergedRom[] = (MANY ? ALL_TITLES : TITLES).map((title, index) => {
   const system = SYSTEMS[index % SYSTEMS.length];
   const sources =
     index % 3 === 0

@@ -84,12 +84,6 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
   return (
     <div className="rs-overlay" onClick={(event) => event.target === event.currentTarget && onClose()}>
       <div className="rs-panel detail">
-        <div className="rs-panel-head">
-          <h3>{rom.title}</h3>
-          <button className="rs-btn ghost" onClick={onClose}>
-            Close
-          </button>
-        </div>
         <div className="rs-panel-body">
           <div className="rs-detail-grid">
             <div>
@@ -120,7 +114,12 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
             </div>
 
             <div>
-              <h2 className="rs-detail-title">{rom.title}</h2>
+              <div className="rs-detail-titlebar">
+                <h2 className="rs-detail-title">{rom.title}</h2>
+                <button className="rs-close" onClick={onClose} title="Close">
+                  ✕
+                </button>
+              </div>
               <div className="rs-detail-meta">
                 <span className="rs-pill system">{systemLabel(rom.system)}</span>
                 {rom.regions.map((region) => (
