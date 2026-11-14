@@ -1,7 +1,7 @@
 import { FC, useEffect, useState } from "react";
 import { Dropdown, TextField } from "@decky/ui";
 import { useBackGuard } from "./useBackGuard";
-import { getImageDiagnostics, ImageDiagnostics } from "../types";
+import { CacheStats, clearCache, getCacheStats, getImageDiagnostics, ImageDiagnostics } from "../types";
 import { toaster } from "@decky/api";
 import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
 import { SOURCE_LABELS } from "./common";
@@ -35,6 +35,13 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
   const [library, setLibrary] = useState<LibraryInfo | null>(null);
   const [customRoot, setCustomRoot] = useState("");
   const [diagnostics, setDiagnostics] = useState<ImageDiagnostics | null>(null);
+  const [cache, setCache] = useState<CacheStats | null>(null);
+
+  useEffect(() => {
+    getCacheStats()
+      .then(setCache)
+      .catch(() => undefined);
+  }, []);
   // The Steam back button closes the settings instead of leaving the plugin.
   useBackGuard(true, onClose);
 
@@ -252,6 +259,36 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               value={String(settings.max_concurrent)}
               onChange={(event) => update({ max_concurrent: Number(event.target.value) || 1 })}
             />
+          </div>
+
+          <div className="rs-section-title">Offline cache</div>
+          <div className="rs-form-row">
+            <label>Keep results for</label>
+            <TextField
+              label="Hours"
+              value={String(settings.search_cache_hours ?? 72)}
+              onChange={(event) => update({ search_cache_hours: Number(event.target.value) || 72 })}
+            />
+          </div>
+          <div className="rs-form-row">
+            <label>Cached searches</label>
+            <button
+              className="rs-btn ghost"
+              onClick={() =>
+                clearCache()
+                  .then(() => getCacheStats())
+                  .then(setCache)
+                  .catch(() => undefined)
+              }
+            >
+              Clear cache ({cache?.entries ?? 0})
+            </button>
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              Search results are stored on the Deck, so repeating a search is instant even after a
+              restart. {cache ? `${cache.entries} entries, ${Math.round((cache.bytes ?? 0) / 1024)} kB.` : ""}
+            </div>
           </div>
 
           <div className="rs-section-title">Diagnostics</div>

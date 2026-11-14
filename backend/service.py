@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import socket
@@ -121,6 +122,84 @@ class StoreService:
                 self._unreachable[source.id] = time.time() + 900
                 self._errors[source.id] = "host not found"
 
+    # ------------------------------------------------------------------ cache
+    def _cache_path(self) -> Optional[str]:
+        if not self._runtime_dir:
+            return None
+        return os.path.join(self._runtime_dir, "search_cache.json")
+
+    def _cache_key(self, query: str, system: Optional[str], sources: Optional[List[str]], sort: str) -> str:
+        raw = f"{query.strip().lower()}|{system or 'all'}|{','.join(sorted(sources or [])) or 'all'}|{sort}"
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
+
+    def _read_cache(self) -> Dict[str, Any]:
+        path = self._cache_path()
+        if not path or not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                return json.load(fh) or {}
+        except (OSError, ValueError):
+            return {}
+
+    def _write_cache(self, data: Dict[str, Any]) -> None:
+        path = self._cache_path()
+        if not path:
+            return
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            # Keep the cache from growing without bound.
+            if len(data) > 400:
+                for key in list(data)[: len(data) - 400]:
+                    data.pop(key, None)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _entry_from_dict(data: Dict[str, Any]) -> RomEntry:
+        return RomEntry(
+            source=data.get("source", ""),
+            source_id=data.get("source_id", ""),
+            title=data.get("title", ""),
+            system=data.get("system", "unknown"),
+            url=data.get("url", ""),
+            cover=data.get("cover"),
+            cover_full=data.get("cover_full"),
+            summary=data.get("summary"),
+            rating=data.get("rating"),
+            rating_count=data.get("rating_count"),
+            downloads=data.get("downloads"),
+            year=data.get("year"),
+            size=data.get("size"),
+            region=data.get("region"),
+            developer=data.get("developer"),
+            publisher=data.get("publisher"),
+            genres=data.get("genres") or [],
+            files=[RomFile(**file) for file in (data.get("files") or [])],
+            extra=data.get("extra") or {},
+        )
+
+    def _restore(self, cached: Dict[str, Any]) -> None:
+        """Put cached entries back so the detail view still works offline."""
+        merged: List[MergedRom] = []
+        for rom in cached.get("roms") or []:
+            entries = [self._entry_from_dict(entry) for entry in rom.get("entries") or []]
+            merged.append(
+                MergedRom(
+                    id=rom.get("id", ""),
+                    title=rom.get("title", ""),
+                    system=rom.get("system", "unknown"),
+                    entries=entries,
+                )
+            )
+        self._roms = {rom.id: rom for rom in merged}
+        self._entries = {}
+        for rom in merged:
+            for entry in rom.entries:
+                self._entries[entry.key] = entry
+
     # ------------------------------------------------------------------ sources
     def build_sources(self) -> List[Source]:
         enabled = self.settings.get("enabled_sources") or []
@@ -176,6 +255,20 @@ class StoreService:
         per_source = int(self.settings.get("results_per_source", 30))
         self._errors = {}
         page = max(1, int(page or 1))
+
+        # Long lived cache: the catalogues barely change, so a query that was
+        # made a few days ago is served straight from disk.
+        ttl = float(self.settings.get("search_cache_hours", 72)) * 3600
+        cache_key = self._cache_key(query, system, source_ids, sort)
+        cache = self._read_cache()
+        cached = cache.get(cache_key)
+        if cached and (time.time() - float(cached.get("at", 0))) < ttl:
+            self._restore(cached)
+            payload = dict(cached.get("payload") or {})
+            payload["cached"] = True
+            payload["cache_age_hours"] = round((time.time() - float(cached.get("at", 0))) / 3600, 1)
+            self._last_search = payload
+            return payload
 
         async def run(source: Source) -> Tuple[str, List[RomEntry]]:
             blocked_until = self._unreachable.get(source.id, 0.0)
@@ -241,13 +334,32 @@ class StoreService:
         # are part of the result the frontend receives.
         await self._enrich_covers(merged)
         payload["results"] = [rom.to_dict() for rom in merged]
+        payload["cached"] = False
         self._last_search = payload
         self._prefetch_covers(entries)
+
+        # Remember it for the next few days.
+        cache = self._read_cache()
+        cache[cache_key] = {
+            "at": time.time(),
+            "payload": payload,
+            "roms": [
+                {
+                    "id": rom.id,
+                    "title": rom.title,
+                    "system": rom.system,
+                    "entries": [entry.to_dict() for entry in rom.entries],
+                }
+                for rom in merged
+            ],
+        }
+        self._write_cache(cache)
         return payload
 
     async def browse(self, system: str, limit: int = 200) -> Dict[str, Any]:
+        ttl = float(self.settings.get("search_cache_hours", 72)) * 3600
         cached = self._browse_cache.get(system)
-        if cached and time.time() - cached[0] < 3600 and len(cached[1]) >= min(limit, len(cached[1])):
+        if cached and time.time() - cached[0] < ttl and len(cached[1]) >= min(limit, len(cached[1])):
             entries = cached[1][:limit]
             return self._browse_payload(system, entries)
         entries: List[RomEntry] = []
@@ -461,6 +573,35 @@ class StoreService:
         }
 
     # ------------------------------------------------------------------ images
+    def clear_cache(self) -> Dict[str, Any]:
+        """Throw away the cached searches."""
+        path = self._cache_path()
+        removed = 0
+        if path and os.path.isfile(path):
+            try:
+                removed = len(self._read_cache())
+                os.remove(path)
+            except OSError:
+                removed = 0
+        self._browse_cache = {}
+        return {"ok": True, "removed": removed}
+
+    def cache_stats(self) -> Dict[str, Any]:
+        path = self._cache_path()
+        data = self._read_cache()
+        size = 0
+        if path and os.path.isfile(path):
+            try:
+                size = os.path.getsize(path)
+            except OSError:
+                size = 0
+        return {
+            "entries": len(data),
+            "bytes": size,
+            "path": path or "",
+            "ttl_hours": float(self.settings.get("search_cache_hours", 72)),
+        }
+
     async def image_diagnostics(self, url: Optional[str] = None) -> Dict[str, Any]:
         """Tell us exactly where an image gets stuck."""
         plugin = os.path.basename(self.images._plugin_name or "")

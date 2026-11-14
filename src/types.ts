@@ -88,6 +88,8 @@ export interface SearchPayload {
   count: number;
   page: number;
   has_more: boolean;
+  cached?: boolean;
+  cache_age_hours?: number;
   source_counts?: Record<string, number>;
   results: MergedRom[];
   sources: SourceInfo[];
@@ -146,6 +148,7 @@ export interface Settings {
   switchroms_base_url: string;
   myabandonware_base_url: string;
   show_nsfw: boolean;
+  search_cache_hours: number;
   chrome_top_offset: number;
   chrome_bottom_offset: number;
   igdb_replace_covers: boolean;
@@ -158,6 +161,13 @@ export interface StatusPayload {
   sources: SourceInfo[];
   library: LibraryInfo;
   downloads: DownloadJob[];
+}
+
+export interface CacheStats {
+  entries: number;
+  bytes: number;
+  path: string;
+  ttl_hours: number;
 }
 
 export interface ImageDiagnostics {
@@ -200,3 +210,5 @@ export const prefetchCovers = callable<[string[], string], void>("prefetch_cover
 export const getSystemCounts = callable<[], Record<string, number>>("get_system_counts");
 export const getStatus = callable<[], StatusPayload>("get_status");
 export const getImageDiagnostics = callable<[string | null], ImageDiagnostics>("image_diagnostics");
+export const getCacheStats = callable<[], CacheStats>("cache_stats");
+export const clearCache = callable<[], { ok: boolean; removed: number }>("clear_cache");

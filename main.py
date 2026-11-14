@@ -130,6 +130,12 @@ class Plugin:
         """Resolve a remote cover image to a locally cached URL."""
         return await self._self().service.get_cover(url, kind)
 
+    def clear_cache(self) -> Dict[str, Any]:
+        return self._self().service.clear_cache()
+
+    def cache_stats(self) -> Dict[str, Any]:
+        return self._self().service.cache_stats()
+
     async def image_diagnostics(self, url: Optional[str] = None) -> Dict[str, Any]:
         return await self._self().service.image_diagnostics(url)
 

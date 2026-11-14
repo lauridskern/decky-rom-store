@@ -217,6 +217,17 @@ Each source reports its own status in the status bar (click the warning chip
 for the full error). The DumbRoms adapter needs the correct address in
 *Settings → Sources*.
 
+## Caching
+
+Search and browse results are cached on the Deck in
+`~/homebrew/data/rom-store-decky/search_cache.json` and stay valid for
+**72 hours** by default (*Settings → Offline cache → Keep results for*).
+
+Repeating a search is therefore instant, even after a restart, and the cached
+entry already contains the resolved download links, so a game you looked at
+before can be downloaded without touching the network again. The footer shows
+`cached ·` when a result came from the cache.
+
 ## Artwork
 
 Cover art is downloaded by the backend, cached in

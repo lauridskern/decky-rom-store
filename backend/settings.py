@@ -24,6 +24,7 @@ DEFAULTS: Dict[str, Any] = {
     "nswpedia_base_url": "https://nswpedia.io",
     "myabandonware_base_url": "https://www.myabandonware.com",
     "show_nsfw": False,
+    "search_cache_hours": 72,
     "chrome_top_offset": 0,
     "chrome_bottom_offset": 0,
     "igdb_replace_covers": True,

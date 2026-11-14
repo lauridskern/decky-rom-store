@@ -55,6 +55,7 @@ const Store: FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [cached, setCached] = useState(false);
   const [searched, setSearched] = useState(false);
   const [showIssues, setShowIssues] = useState(false);
 
@@ -141,6 +142,7 @@ const Store: FC = () => {
         setSourceCounts(payload.source_counts ?? {});
         setErrors(payload.errors ?? {});
         setHasMore(!!payload.has_more);
+        setCached(!!payload.cached);
         setPage(payload.page ?? 1);
         setSearched(true);
       } catch (error) {
@@ -329,6 +331,7 @@ const Store: FC = () => {
 
       <div className="rs-footer">
         <span className="rs-count">
+          {cached ? "cached · " : ""}
           {results.length} titles
           {Object.entries(sourceCounts)
             .map(([id, count]) => ` · ${SOURCE_LABELS[id] ?? id} ${count}`)
