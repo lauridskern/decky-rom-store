@@ -175,6 +175,10 @@ export const CSS = `
 }
 .rs-footer .rs-path { font-family: monospace; }
 .rs-error { color: #ff8f6b; }
+.rs-focus-ring { display: block; width: 100%; }
+.rs-foot-hint { color: #79838c; }
+.rs-foot-hint b { color: #c9ced3; font-weight: 600; }
+
 .rs-hintbar {
   display: flex; gap: 14px; align-items: center; justify-content: flex-end;
   font-size: 11px; color: #79838c; padding: 6px 2px 0;

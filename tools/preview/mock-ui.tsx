@@ -111,4 +111,10 @@ export const Button: FC<ButtonProps> = ({ onClick, className, children }) => (
   </button>
 );
 
+export const FocusRing: FC<{ className?: string; children?: ReactNode }> = ({ className, children }) => (
+  <div className={className} style={{ display: "block", width: "100%" }}>
+    {children}
+  </div>
+);
+
 export const staticClasses = { Title: "DeckyTitle" } as Record<string, string>;

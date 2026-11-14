@@ -604,7 +604,7 @@ class StoreService:
 
     async def image_diagnostics(self, url: Optional[str] = None) -> Dict[str, Any]:
         """Tell us exactly where an image gets stuck."""
-        plugin = os.path.basename(self.images._plugin_name or "")
+        plugin = self.images._plugin_name or ""
         sample = url or "https://static.romspedia.com/webp/roms/super-mario-64-cover.webp"
         local = None
         error = None

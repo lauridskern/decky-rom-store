@@ -77,9 +77,16 @@ class Plugin:
 
     def __init__(self) -> None:
         self.settings = Settings(os.path.join(SETTINGS_DIR, "rom-store.json"))
+        # Decky serves plugin files under the plugin *name* (from
+        # plugin.json), not the folder it happens to live in.
+        plugin_name = (
+            getattr(decky, "DECKY_PLUGIN_NAME", None)
+            or os.path.basename(PLUGIN_ROOT)
+            or "rom-store"
+        )
         self.service = StoreService(
             self.settings,
-            plugin_name=os.path.basename(PLUGIN_ROOT),
+            plugin_name=plugin_name,
             runtime_dir=RUNTIME_DIR,
         )
         Plugin._instance = self

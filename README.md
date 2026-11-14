@@ -232,8 +232,9 @@ before can be downloaded without touching the network again. The footer shows
 
 Cover art is downloaded by the backend, cached in
 `~/homebrew/data/rom-store-decky/covers/` and served to the UI from
-`http://localhost:1337` - the same origin the Steam client uses, so the Steam
-content policy always allows it. If artwork still does not show up, open
+`http://localhost:1337/plugins/ROM-Store/data/covers/...` - the same origin the
+Steam client uses (so the content policy allows it) and under the plugin *name*
+Decky keys its file routes by. If artwork still does not show up, open
 **Settings → Diagnostics → Test image pipeline**; it prints the plugin folder,
 the resolved local URL and the cache folder.
 
