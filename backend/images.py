@@ -20,6 +20,8 @@ import re
 import time
 from typing import Dict, List, Optional, Set, Tuple
 
+from urllib.parse import quote
+
 from .httpclient import HttpClient, HttpError
 
 DEFAULT_BASE_URL = "http://127.0.0.1:1337"
@@ -71,6 +73,8 @@ class ImageCache:
         self._locks: Dict[str, asyncio.Lock] = {}
         self._known: Set[str] = set()
         self._last_prune = 0.0
+        # Do not hammer the Deck with dozens of parallel image downloads.
+        self._semaphore: Optional[asyncio.Semaphore] = None
 
     # ------------------------------------------------------------------ paths
     @property
@@ -82,7 +86,8 @@ class ImageCache:
         return os.path.join(self._runtime_dir or "", "covers")
 
     def _local_url(self, key: str, ext: str) -> str:
-        return f"{self._base_url}/plugins/{self._plugin_name}/data/covers/{key}.{ext}"
+        plugin = quote(self._plugin_name or "", safe="")
+        return f"{self._base_url}/plugins/{plugin}/data/covers/{key}.{ext}"
 
     def _key(self, url: str) -> str:
         return hashlib.sha1(url.encode("utf-8", errors="ignore")).hexdigest()[:20]
@@ -108,8 +113,11 @@ class ImageCache:
         async with lock:
             if os.path.exists(path) and os.path.getsize(path) > 0:
                 return self._local_url(key, ext)
+            if self._semaphore is None:
+                self._semaphore = asyncio.Semaphore(4)
             try:
-                await self._download(target, path)
+                async with self._semaphore:
+                    await self._download(target, path)
             except Exception:
                 return url
             if not os.path.exists(path):

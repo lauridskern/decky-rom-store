@@ -72,7 +72,7 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, eager 
         setSrc(value);
       })
       .catch(() => {
-        if (!cancelled) setSrc(url);
+        if (!cancelled) setSrc(null);
       });
     return () => {
       cancelled = true;
@@ -81,17 +81,8 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, eager 
 
   return (
     <div ref={holder} className={className} style={{ width: "100%", height: "100%" }}>
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-          onError={() => {
-            // Fall back to the remote image, then to the placeholder.
-            if (src !== url && url) setSrc(url);
-            else setFailed(true);
-          }}
-          style={{ opacity: failed ? 0 : 1 }}
-        />
+      {src && !failed ? (
+        <img src={src} alt={alt} onError={() => setFailed(true)} />
       ) : null}
     </div>
   );

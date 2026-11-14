@@ -209,7 +209,9 @@ export const CSS = `
 }
 .rs-panel.detail { width: min(1020px, 100%); }
 .rs-panel.settings { width: min(720px, 100%); }
-.rs-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.rs-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; min-width: 0; }
+.rs-detail-grid { min-width: 0; }
+.rs-detail-grid > div { min-width: 0; }
 .rs-panel.drawer {
   position: absolute; right: 0; top: 0; bottom: 0;
   width: min(460px, 92%);
@@ -331,19 +333,30 @@ export const CSS = `
 }
 
 .rs-gallery {
-  display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden;
+  display: flex; gap: 8px;
+  overflow-x: auto; overflow-y: hidden;
+  max-width: 100%; min-width: 0;
   padding: 2px 0 8px; margin-bottom: 10px;
   scrollbar-width: thin; scroll-snap-type: x proximity;
+  contain: layout paint;
+  overscroll-behavior-x: contain;
 }
 .rs-gallery::-webkit-scrollbar { height: 6px; }
 .rs-gallery::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
 .rs-shot {
-  position: relative; flex: 0 0 auto; width: 168px; height: 96px; padding: 0;
+  position: relative; flex: 0 0 168px; width: 168px; height: 96px; padding: 0;
   border-radius: 6px; overflow: hidden; cursor: pointer;
   border: 1px solid rgba(255,255,255,0.12); background: #05070a;
-  scroll-snap-align: start;
+  scroll-snap-align: start; contain: paint;
 }
-.rs-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rs-shot > img,
+.rs-shot > div {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.rs-shot-empty {
+  width: 100%; height: 100%;
+  background: linear-gradient(135deg, #10151b, #0a0d11);
+}
 .rs-gallery, .rs-shot { contain: paint; }
 .rs-shot:hover { border-color: rgba(102,192,244,0.7); }
 .rs-play {

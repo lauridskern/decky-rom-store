@@ -1,6 +1,7 @@
 import { FC, useEffect, useState } from "react";
 import { FaExpand, FaPlay } from "react-icons/fa";
 import { getCover } from "../types";
+import ProxiedImage from "./ProxiedImage";
 
 export interface MediaShot {
   kind: "image" | "video";
@@ -64,13 +65,13 @@ const MediaGallery: FC<Props> = ({ media }) => {
       <div className="rs-gallery">
         {media.capsule ? (
           <button className="rs-shot" onClick={() => open({ kind: "image", thumb: media.capsule!, full: media.capsule! })}>
-            <img src={media.capsule} alt={media.caption || "cover"} loading="lazy" />
+            <ProxiedImage url={media.capsule} alt={media.caption || "cover"} />
           </button>
         ) : null}
 
         {trailer ? (
           <button className="rs-shot rs-shot-video" onClick={() => open(trailer)}>
-            <img src={trailer.thumb} alt={trailer.name || "Trailer"} loading="lazy" />
+            <ProxiedImage url={trailer.thumb} alt={trailer.name || "Trailer"} />
             <span className="rs-play">
               <FaPlay />
             </span>
@@ -79,7 +80,7 @@ const MediaGallery: FC<Props> = ({ media }) => {
 
         {shots.map((shot, index) => (
           <button className="rs-shot" key={`${shot.thumb}-${index}`} onClick={() => open(shot)}>
-            <img src={shot.thumb} alt={`Screenshot ${index + 1}`} loading="lazy" />
+            <ProxiedImage url={shot.thumb} alt={`Screenshot ${index + 1}`} />
           </button>
         ))}
       </div>

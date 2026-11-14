@@ -367,7 +367,7 @@ class StoreService:
                 if media.get("shots"):
                     # Keep the site's own shots first, they match the ROM.
                     shots.extend(media["shots"])
-                media["shots"] = shots[:16]
+                media["shots"] = shots[:8]
                 media["trailer"] = info.get("trailer") or media.get("trailer")
                 media["summary"] = info.get("summary") or media.get("summary")
                 if info.get("genres"):
