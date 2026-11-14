@@ -8,6 +8,7 @@ import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from .covers import IgdbCovers
 from .dedupe import merge_entries, sort_roms
 from .downloader import DownloadManager
 from .emudeck import detect_rom_roots, list_folders, resolve_folder, system_folders
@@ -80,8 +81,15 @@ class StoreService:
         self._last_page_count = 1
         self._runtime_dir = runtime_dir
         self._COUNTS_TTL = 24 * 60 * 60
+        self._browse_cache: Dict[str, tuple] = {}
         self.downloads = DownloadManager(self.http, max_concurrent=int(settings.get("max_concurrent", 2)))
         self.images = ImageCache(self.http, runtime_dir=runtime_dir, plugin_name=plugin_name)
+        self.covers = IgdbCovers(
+            self.http,
+            client_id=settings.get("igdb_client_id"),
+            client_secret=settings.get("igdb_client_secret"),
+            cache_dir=runtime_dir,
+        )
 
     # ------------------------------------------------------------------ sources
     def build_sources(self) -> List[Source]:
@@ -192,9 +200,14 @@ class StoreService:
         }
         self._last_search = payload
         self._prefetch_covers(entries)
+        await self._enrich_covers(merged)
         return payload
 
-    async def browse(self, system: str, limit: int = 60) -> Dict[str, Any]:
+    async def browse(self, system: str, limit: int = 200) -> Dict[str, Any]:
+        cached = self._browse_cache.get(system)
+        if cached and time.time() - cached[0] < 3600 and len(cached[1]) >= min(limit, len(cached[1])):
+            entries = cached[1][:limit]
+            return self._browse_payload(system, entries)
         entries: List[RomEntry] = []
         self._errors = {}
         for source in self.build_sources():
@@ -216,6 +229,17 @@ class StoreService:
             for entry in rom.entries:
                 self._entries[entry.key] = entry
         self._prefetch_covers(entries)
+        self._browse_cache[system] = (time.time(), entries)
+        return self._browse_payload(system, entries)
+
+    def _browse_payload(self, system: str, entries: List[RomEntry]) -> Dict[str, Any]:
+        merged = merge_entries(entries, self.settings.get("source_priority"))[:200]
+        for index, rom in enumerate(merged):
+            rom.id = f"rom-browse-{system}-{index}".replace(" ", "-")[:80]
+        self._roms.update({rom.id: rom for rom in merged})
+        for rom in merged:
+            for entry in rom.entries:
+                self._entries[entry.key] = entry
         return {
             "query": "",
             "system": system,
@@ -353,6 +377,30 @@ class StoreService:
 
     async def prefetch_covers(self, urls: List[Optional[str]], kind: str = "card") -> None:
         await self.images.prefetch(urls, kind)
+
+    async def _enrich_covers(self, roms: List[MergedRom]) -> None:
+        """Replace missing artwork with a clean IGDB cover when possible."""
+        if not self.covers.enabled:
+            return
+        missing: List[str] = []
+        for rom in roms:
+            for entry in rom.entries:
+                if not entry.cover and entry.title not in missing:
+                    missing.append(entry.title)
+        if not missing:
+            return
+        try:
+            found = await self.covers.lookup_many(missing, limit=12)
+        except Exception:
+            return
+        for rom in roms:
+            for entry in rom.entries:
+                if entry.cover:
+                    continue
+                url = found.get(entry.title)
+                if url:
+                    entry.cover = url
+                    entry.cover_full = entry.cover_full or url
 
     def _prefetch_covers(self, entries: List[RomEntry]) -> None:
         urls = [entry.cover for entry in entries if entry.cover][:40]

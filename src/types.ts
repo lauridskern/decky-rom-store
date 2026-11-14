@@ -124,6 +124,8 @@ export interface Settings {
   myabandonware_base_url: string;
   show_nsfw: boolean;
   chrome_top_offset: number;
+  igdb_client_id: string;
+  igdb_client_secret: string;
 }
 
 export interface StatusPayload {

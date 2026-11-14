@@ -59,6 +59,7 @@ const Store: FC = () => {
   const [showIssues, setShowIssues] = useState(false);
 
   const requestId = useRef(0);
+  const searchInput = useRef<HTMLInputElement | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeRef = useChromeInsets();
   const manualOffset = settings?.chrome_top_offset ?? 0;
@@ -114,7 +115,7 @@ const Store: FC = () => {
       try {
         let payload;
         if (!term.trim() && systemFilter !== "all") {
-          payload = await browseRoms(systemFilter, 60);
+          payload = await browseRoms(systemFilter, 200);
         } else {
           const sourceList = sourceFilter === "all" ? null : [sourceFilter];
           payload = await searchRoms(
@@ -216,11 +217,14 @@ const Store: FC = () => {
             <FaSearch />
           </span>
           <input
+            ref={searchInput}
             type="text"
             value={query}
             placeholder="Search games, consoles or regions…"
             onChange={(event) => setQuery(event.target.value)}
             autoFocus
+            onClick={() => searchInput.current?.focus()}
+            onMouseDown={() => searchInput.current?.focus()}
           />
         </div>
 

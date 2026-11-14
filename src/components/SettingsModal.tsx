@@ -165,6 +165,32 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
             </div>
           ))}
 
+          <div className="rs-section-title">Cover art</div>
+          <div className="rs-form-row">
+            <label>IGDB client ID</label>
+            <input
+              type="text"
+              value={settings.igdb_client_id ?? ""}
+              onChange={(event) => update({ igdb_client_id: event.target.value })}
+              placeholder="optional"
+            />
+          </div>
+          <div className="rs-form-row">
+            <label>IGDB client secret</label>
+            <input
+              type="text"
+              value={settings.igdb_client_secret ?? ""}
+              onChange={(event) => update({ igdb_client_secret: event.target.value })}
+              placeholder="optional"
+            />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              Create a free application at twitch.tv/developers to get both values. With them the store
+              replaces missing artwork with clean, high quality poster art from the IGDB database.
+            </div>
+          </div>
+
           <div className="rs-section-title">Steam overlay</div>
           <div className="rs-form-row">
             <label>Header offset</label>

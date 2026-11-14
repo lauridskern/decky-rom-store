@@ -112,15 +112,27 @@ export const CSS = `
 
 .rs-cover {
   position: relative;
-  aspect-ratio: 4 / 3;
-  background: #05070a center/cover no-repeat;
+  aspect-ratio: 3 / 4;
+  background: #05070a;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
 }
-.rs-cover > div { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+/* Blurred copy of the artwork as a backdrop so every source looks the same
+   no matter what aspect ratio its images have. */
+.rs-cover::before {
+  content: "";
+  position: absolute; inset: -12%;
+  background-image: var(--rs-cover, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(20px) saturate(1.25) brightness(0.75);
+  opacity: 0.75;
+  transform: translateZ(0);
+}
+.rs-cover > div { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .rs-cover img {
+  position: relative;
   width: 100%; height: 100%; object-fit: contain;
-  transform: translateZ(0); backface-visibility: hidden;
 }
 .rs-cover .rs-placeholder { font-size: 34px; color: rgba(255,255,255,0.14); display: flex; }
 .rs-pill.system {
@@ -129,10 +141,10 @@ export const CSS = `
   font-weight: 700;
   letter-spacing: 0.3px;
 }
-.rs-cover .rs-dup {
-  position: absolute; right: 6px; top: 6px;
-  background: rgba(102,192,244,0.9); color: #06121a;
-  border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 700;
+.rs-pill.variants {
+  background: rgba(102, 192, 244, 0.16);
+  color: #66c0f4;
+  font-weight: 700;
 }
 
 .rs-card-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow: hidden; }
@@ -193,21 +205,22 @@ export const CSS = `
   position: absolute; inset: 0; z-index: 40;
   background: rgba(0, 0, 0, 0.68);
   display: flex; align-items: center; justify-content: center;
-  padding: 18px;
+  padding: 14px;
   box-sizing: border-box;
   overflow: hidden;
 }
 .rs-panel {
   background: #1b1f24; border: 1px solid rgba(255,255,255,0.1);
   border-radius: 12px; box-shadow: 0 18px 50px rgba(0,0,0,0.6);
-  max-height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  max-height: 100%; max-width: 100%;
+  display: flex; flex-direction: column; overflow: hidden;
+  box-sizing: border-box;
 }
 .rs-panel.detail { width: min(1020px, 100%); }
 .rs-panel.settings { width: min(720px, 100%); }
-.rs-panel { max-height: 100%; }
-.rs-panel-body { min-height: 0; overflow-y: auto; }
+.rs-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .rs-panel.drawer {
-  position: fixed; right: 0; top: var(--rs-chrome-top, 0px); bottom: var(--rs-chrome-bottom, 0px);
+  position: absolute; right: 0; top: 0; bottom: 0;
   width: min(460px, 92%);
   border-radius: 12px 0 0 12px; max-height: 100%;
 }
@@ -220,11 +233,20 @@ export const CSS = `
 
 .rs-detail-grid { display: grid; grid-template-columns: 240px 1fr; gap: 18px; }
 .rs-detail-cover {
+  position: relative;
   aspect-ratio: 3/4; width: 100%; background: #05070a;
   border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
   overflow: hidden; display: flex; align-items: center; justify-content: center;
 }
-.rs-detail-cover img { width: 100%; height: 100%; object-fit: contain; }
+.rs-detail-cover::before {
+  content: "";
+  position: absolute; inset: -10%;
+  background-image: var(--rs-cover, none);
+  background-size: cover; background-position: center;
+  filter: blur(24px) saturate(1.2) brightness(0.7);
+  opacity: 0.7;
+}
+.rs-detail-cover img { position: relative; width: 100%; height: 100%; object-fit: contain; }
 .rs-detail-cover-placeholder {
   aspect-ratio: 3/4; width: 100%; background: #05070a; border-radius: 8px;
   display: flex; align-items: center; justify-content: center; font-size: 48px; color: rgba(255,255,255,0.1); font-weight: 800;
@@ -237,15 +259,21 @@ export const CSS = `
   display: flex; align-items: center; gap: 10px;
   padding: 9px 11px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
   background: rgba(255,255,255,0.03); margin-bottom: 8px;
+  max-width: 100%; overflow: hidden; box-sizing: border-box;
 }
 .rs-variant:hover { border-color: rgba(102,192,244,0.5); }
-.rs-variant-main { flex: 1 1 auto; min-width: 0; }
-.rs-variant-name { font-size: 13px; color: #e6e8ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-variant-main { flex: 1 1 0; min-width: 0; overflow: hidden; }
+.rs-variant .rs-btn { flex: 0 0 auto; }
+.rs-variant-name {
+  font-size: 13px; color: #e6e8ea; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; display: block; max-width: 100%;
+}
 .rs-variant-sub { font-size: 11px; color: #8b949d; margin-top: 2px; }
 
 .rs-btn {
   border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600;
   background: #66c0f4; color: #0a1a24; cursor: pointer; white-space: nowrap;
+  flex: 0 0 auto;
 }
 .rs-btn:hover { background: #7fcbf8; }
 .rs-btn:disabled { opacity: .45; cursor: default; }

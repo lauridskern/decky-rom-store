@@ -1,4 +1,4 @@
-import { FC, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FC, useEffect, useMemo, useState } from "react";
 import { toaster } from "@decky/api";
 import {
   getDetails,
@@ -96,7 +96,14 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
           <div className="rs-detail-grid">
             <div>
               {primary?.cover_full || rom.cover ? (
-                <div className="rs-detail-cover">
+                <div
+                  className="rs-detail-cover"
+                  style={
+                    (primary?.cover_full ?? rom.cover)
+                      ? ({ ["--rs-cover" as string]: `url(${primary?.cover_full ?? rom.cover})` } as CSSProperties)
+                      : undefined
+                  }
+                >
                   <CoverImage url={primary?.cover_full ?? rom.cover} kind="detail" alt={rom.title} eager />
                 </div>
               ) : (

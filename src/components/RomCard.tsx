@@ -1,4 +1,4 @@
-import { FC, memo } from "react";
+import { CSSProperties, FC, memo } from "react";
 import { Focusable } from "@decky/ui";
 import { FaGamepad } from "react-icons/fa";
 import { MergedRom } from "../types";
@@ -27,7 +27,7 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
       }}
       onClick={() => onOpen(rom)}
     >
-      <div className="rs-cover">
+      <div className="rs-cover" style={rom.cover ? ({ ["--rs-cover" as string]: `url(${rom.cover})` } as CSSProperties) : undefined}>
         {rom.cover ? (
           <CoverImage url={rom.cover} alt={rom.title} />
         ) : (
@@ -35,7 +35,6 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
             <FaGamepad />
           </div>
         )}
-        {rom.variants > 1 && <div className="rs-dup">{rom.variants}×</div>}
       </div>
       <div className="rs-card-body">
         <div className="rs-title" title={rom.title}>
@@ -43,6 +42,7 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
         </div>
         <div className="rs-meta">
           <span className="rs-pill system">{systemLabel(rom.system)}</span>
+          {rom.variants > 1 && <span className="rs-pill variants">{rom.variants} versions</span>}
           {rom.sources.map((source) => (
             <span key={source} className={`rs-pill ${source}`}>
               {SOURCE_LABELS[source] ?? source}

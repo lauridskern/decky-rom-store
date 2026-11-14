@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { definePlugin, routerHook } from "@decky/api";
 import { ButtonItem, Navigation, PanelSection, PanelSectionRow, staticClasses } from "@decky/ui";
 import { FaStore } from "react-icons/fa";
@@ -19,6 +19,7 @@ const StoreRoute = () => (
 function PanelContent() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const queryInput = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<Awaited<ReturnType<typeof getStatus>> | null>(null);
 
   useEffect(() => {
@@ -62,9 +63,12 @@ function PanelContent() {
         <PanelSectionRow>
           <div style={{ display: "flex", gap: "8px", width: "100%", alignItems: "center" }}>
             <input
+              ref={queryInput}
               type="text"
               value={query}
               placeholder="Search games…"
+              onClick={() => queryInput.current?.focus()}
+              onMouseDown={() => queryInput.current?.focus()}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") open();

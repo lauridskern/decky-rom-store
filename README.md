@@ -15,9 +15,9 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 | | |
 |---|---|
 | **Search** | One search box queries every enabled source in parallel and merges the hits. |
-| **Browse** | A console picker with live title counts (including Switch), plus *Load more* for deeper result pages. Counts are scraped once and cached on the Deck for a day. |
+| **Browse** | A console picker with live title counts (including Switch), plus *Load more* for deeper result pages. Counts are scraped once and cached on the Deck for a day. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
 | **Gamepad** | Cards are Steam-focusable — the A button opens a game, the shoulder buttons page through results. |
-| **Artwork** | Cover art is fetched by the backend, cached on the Deck and served locally, so nothing is re-downloaded and the Steam client never has to reach out to a third party. |
+| **Artwork** | Cover art is fetched by the backend, cached on the Deck and served locally, so nothing is re-downloaded and the Steam client never has to reach out to a third party. Every card uses the same poster frame with a blurred backdrop, so mixed artwork from different sites still looks uniform. Optionally, add free IGDB credentials in the settings to replace missing artwork with clean, high quality poster art. |
 | **De-duplicate** | Titles are normalised (region tags, serial noise and punctuation are stripped) so the same game from two sites becomes one card with a `2×` badge. |
 | **Region variants** | Every source entry is kept as a variant, so the USA / Europe / Japan builds of a title can be picked individually. |
 | **One click download** | Press *Download*, the file is fetched in the background and written to the right system folder. |
@@ -170,6 +170,10 @@ Existing files are never overwritten silently — the new file is written as
 
 * **EmuDecky ROM folder** — override the detected root.
 * **Sources** — enable/disable each site, and repoint the DumbRoms adapter.
+* **IGDB client ID / secret** — optional. Create a free application at
+  twitch.tv/developers and the store fills in missing artwork with clean
+  poster art from the IGDB database.
+
 * **Extract .zip archives** — unzip the download into the system folder.
 * **Keep the archive too** — keep the zip next to the extracted files.
 * **Results per source** / **Parallel downloads**.

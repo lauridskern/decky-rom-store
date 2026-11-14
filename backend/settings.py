@@ -24,6 +24,8 @@ DEFAULTS: Dict[str, Any] = {
     "myabandonware_base_url": "https://www.myabandonware.com",
     "show_nsfw": False,
     "chrome_top_offset": 0,
+    "igdb_client_id": "",
+    "igdb_client_secret": "",
 }
 
 

@@ -1,0 +1,11 @@
+{
+  "name": "ROM Store",
+  "author": "ROM Store contributors",
+  "flags": ["debug"],
+  "api_version": 1,
+  "publish": {
+    "tags": ["roms", "emudeck", "store", "downloader"],
+    "description": "Search Romspedia, DumbRoms and MyAbandonware in one place and download straight into your EmuDecky ROM folders.",
+    "image": "https://raw.githubusercontent.com/SteamDeckHomebrew/decky-plugin-database/main/plugins/rom-store/logo.png"
+  }
+}

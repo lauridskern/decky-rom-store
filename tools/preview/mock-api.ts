@@ -173,6 +173,8 @@ const settings: Settings = {
   myabandonware_base_url: "https://www.myabandonware.com",
   show_nsfw: false,
   chrome_top_offset: 0,
+  igdb_client_id: "",
+  igdb_client_secret: "",
 };
 
 const handlers: Record<string, (...args: any[]) => any> = {

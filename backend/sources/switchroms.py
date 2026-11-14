@@ -46,16 +46,35 @@ class SwitchRomsSource(Source):
     async def search(self, query: str, limit: int = 40, page: int = 1) -> List[RomEntry]:
         from urllib.parse import quote_plus
 
-        url = f"{self.base}/?s={quote_plus(query)}"
-        if page > 1:
-            url = f"{self.base}/page/{page}/?s={quote_plus(query)}"
+        term = quote_plus(query)
+        url = f"{self.base}/?s={term}" if page <= 1 else f"{self.base}/page/{page}/?s={term}"
         html = await self.http.get_text(url)
         return self._parse_results(html)[:limit]
 
-    async def browse(self, system: str, limit: int = 40) -> List[RomEntry]:
-        """The catalogue page lists the newest games."""
-        html = await self.http.get_text(f"{self.base}/")
-        return self._parse_cards(html)[:limit]
+    async def browse(self, system: str, limit: int = 200) -> List[RomEntry]:
+        """Walk the catalogue pages so the browse view shows the whole library."""
+        entries: List[RomEntry] = []
+        seen = set()
+        for page in range(1, 13):
+            url = f"{self.base}/" if page == 1 else f"{self.base}/page/{page}/"
+            try:
+                html = await self.http.get_text(url)
+            except Exception:
+                break
+            found = self._parse_cards(html)
+            if not found:
+                break
+            added = 0
+            for entry in found:
+                if entry.url in seen:
+                    continue
+                seen.add(entry.url)
+                entry.rank = len(entries)
+                entries.append(entry)
+                added += 1
+            if added == 0 or len(entries) >= limit:
+                break
+        return entries[:limit]
 
     def _parse_cards(self, html: str) -> List[RomEntry]:
         """Parse the card grid used on the catalogue page."""
@@ -115,8 +134,12 @@ class SwitchRomsSource(Source):
     def _clean_title(title: str) -> str:
         title = re.sub(r"^Download\s*[-–|]\s*", "", title, flags=re.I)
         title = re.sub(r"\s*[-–|]\s*Download\s*$", "", title, flags=re.I)
-        title = re.sub(r"\s+Switch\s+(?:ROMs?|NSP/XCI|NSP|XCI)\s*$", "", title, flags=re.I)
-        title = re.sub(r"\s+ROM\s*$", "", title, flags=re.I)
+        # "Fire Emblem Warriors Switch NSP XCI Plus ROMs Free Download"
+        title = re.sub(r"\s+Plus\s+ROMs?\s+Free\s+Download\s*$", "", title, flags=re.I)
+        title = re.sub(r"\s+Free\s+Download\s*$", "", title, flags=re.I)
+        title = re.sub(r"\s+Switch\s+(?:ROMs?\s+)?(?:NSP\s*/?\s*XCI|NSP|XCI)\b", " ", title, flags=re.I)
+        title = re.sub(r"\s+ROMs?\s*$", "", title, flags=re.I)
+        title = re.sub(r"\s{2,}", " ", title)
         return title.strip()
 
     # ------------------------------------------------------------------ parsing
