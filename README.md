@@ -24,6 +24,15 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 | **EmuDecky aware** | The ROM root is auto-detected (`~/EmuDecky/roms`, `~/Emulation/roms`, SD cards, …) and the system folder is matched against the folders that actually exist on your Deck. |
 | **Progress** | Live progress, speed, cancel button and *Open folder* for finished downloads. |
 
+## User interface
+
+The plugin is built on `@decky/ui` and `@decky/api` — the maintained
+successors to the older `decky-frontend-lib` package that the current official
+Decky plugin template uses. That means the UI is built from the same React
+components the Steam client itself uses, so the console picker, the dropdowns
+and the buttons behave exactly like the rest of the Deck interface (and are
+gamepad navigable).
+
 ## Requirements
 
 * SteamOS with [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) (v3.1 or newer, `api_version: 1`).
@@ -106,6 +115,7 @@ real ROM library.
 
 | Source | Notes |
 |---|---|
+| **Switch ROMs** | `https://nintendo-switch-roms.com` — a Switch specific catalogue with hundreds of NSP/XCI titles. The game pages link straight to the file (no captcha, no countdown), so the downloads are direct. The base URL is a setting, so a mirror of the same site works too. |
 | **Romspedia** | `https://www.romspedia.com` — server rendered search, region specific builds, direct file links on `downloads.romspedia.com`. The only source with a **Nintendo Switch** section. |
 | **Retrostic** | `https://www.retrostic.com` — large classic catalogue, 46 consoles, direct zip downloads. |
 | **RomsDL** | `https://romsdl.com` — the same engine as Retrostic with a different catalogue; good for extra region builds. |

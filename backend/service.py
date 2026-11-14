@@ -20,10 +20,17 @@ from .systems import canonical_system
 from .sources.dumbroms import DumbRomsSource
 from .sources.myabandonware import MyAbandonwareSource
 from .sources.retrostic import RetrosticSource
+from .sources.switchroms import SwitchRomsSource
 from .sources.romspedia import CONSOLE_MAP, RomspediaSource
 
 # id -> (class, label, homepage, default base url)
 SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
+    "switchroms": {
+        "cls": SwitchRomsSource,
+        "label": "Switch ROMs",
+        "homepage": "https://nintendo-switch-roms.com",
+        "base_key": "switchroms_base_url",
+    },
     "romspedia": {
         "cls": RomspediaSource,
         "label": "Romspedia",

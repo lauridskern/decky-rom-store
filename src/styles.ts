@@ -29,19 +29,7 @@ export const CSS = `
   flex: 0 0 auto;
 }
 
-.rs-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  color: #fff;
-  white-space: nowrap;
-}
-.rs-brand small { font-size: 11px; font-weight: 400; color: #8f98a0; letter-spacing: 0; }
-
-.rs-search-wrap { flex: 1 1 auto; min-width: 180px; position: relative; }
+.rs-search-wrap { flex: 1 1 200px; min-width: 140px; position: relative; }
 .rs-search-wrap input {
   width: 100%;
   box-sizing: border-box;
@@ -59,16 +47,15 @@ export const CSS = `
   color: #8f98a0; pointer-events: none; font-size: 13px; display: flex;
 }
 
-.rs-header select {
-  background: rgba(0, 0, 0, 0.35);
-  color: #d6d7d8;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 13px;
-  outline: none;
-  max-width: 190px;
+.rs-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
 }
+.rs-filters > * { min-width: 0; }
 
 .rs-icon-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
@@ -163,6 +150,7 @@ export const CSS = `
 .rs-pill.dumbroms { background: rgba(153,204,255,0.14); color: #99ccff; }
 .rs-pill.myabandonware { background: rgba(255,153,85,0.16); color: #ff9955; }
 .rs-pill.retrostic { background: rgba(168,120,255,0.16); color: #a878ff; }
+.rs-pill.switchroms { background: rgba(255,95,95,0.16); color: #ff7b7b; }
 .rs-pill.romsdl { background: rgba(255,120,180,0.14); color: #ff78b4; }
 .rs-pill.region { background: rgba(178,255,102,0.14); color: #b2ff66; }
 .rs-pill.rating { background: rgba(255,215,102,0.14); color: #ffd766; }
@@ -202,12 +190,12 @@ export const CSS = `
 
 /* ---------------------------------------------------------------- overlay */
 .rs-overlay {
-  position: fixed; inset: 0; z-index: 40;
+  position: absolute; inset: 0; z-index: 40;
   background: rgba(0, 0, 0, 0.68);
   display: flex; align-items: center; justify-content: center;
-  padding: 26px;
-  padding-top: calc(var(--rs-chrome-top, 0px) + 26px);
-  padding-bottom: calc(var(--rs-chrome-bottom, 0px) + 26px);
+  padding: 18px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 .rs-panel {
   background: #1b1f24; border: 1px solid rgba(255,255,255,0.1);
@@ -216,6 +204,8 @@ export const CSS = `
 }
 .rs-panel.detail { width: min(1020px, 100%); }
 .rs-panel.settings { width: min(720px, 100%); }
+.rs-panel { max-height: 100%; }
+.rs-panel-body { min-height: 0; overflow-y: auto; }
 .rs-panel.drawer {
   position: fixed; right: 0; top: var(--rs-chrome-top, 0px); bottom: var(--rs-chrome-bottom, 0px);
   width: min(460px, 92%);

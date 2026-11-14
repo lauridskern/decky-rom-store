@@ -9,7 +9,6 @@ import { requestSearch } from "./state";
 import { getDownloads, getStatus } from "./types";
 import StoreStyles from "./components/StoreStyles";
 import ErrorBoundary from "./components/ErrorBoundary";
-import logo from "virtual:logo";
 
 const StoreRoute = () => (
   <ErrorBoundary label="store">
@@ -60,11 +59,6 @@ function PanelContent() {
       <StoreStyles />
       <ErrorBoundary label="menu">
         <PanelSection title="ROM Store">
-        <PanelSectionRow>
-          <div style={{ display: "flex", justifyContent: "center", width: "100%", marginBottom: "4px" }}>
-            <img src={logo} alt="ROM Store" style={{ width: "84px", borderRadius: "16px" }} />
-          </div>
-        </PanelSectionRow>
         <PanelSectionRow>
           <div style={{ display: "flex", gap: "8px", width: "100%", alignItems: "center" }}>
             <input

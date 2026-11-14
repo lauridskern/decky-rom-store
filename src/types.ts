@@ -120,6 +120,7 @@ export interface Settings {
   romspedia_base_url: string;
   retrostic_base_url: string;
   romsdl_base_url: string;
+  switchroms_base_url: string;
   myabandonware_base_url: string;
   show_nsfw: boolean;
   chrome_top_offset: number;

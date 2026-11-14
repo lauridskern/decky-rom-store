@@ -9,8 +9,8 @@ from typing import Any, Dict, Optional
 
 DEFAULTS: Dict[str, Any] = {
     "roms_root": "",
-    "source_priority": ["romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
-    "enabled_sources": ["romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
+    "source_priority": ["switchroms", "romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
+    "enabled_sources": ["switchroms", "romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
     "extract_archives": False,
     "keep_archive": True,
     "max_concurrent": 2,
@@ -20,6 +20,7 @@ DEFAULTS: Dict[str, Any] = {
     "romspedia_base_url": "https://www.romspedia.com",
     "retrostic_base_url": "https://www.retrostic.com",
     "romsdl_base_url": "https://romsdl.com",
+    "switchroms_base_url": "https://nintendo-switch-roms.com",
     "myabandonware_base_url": "https://www.myabandonware.com",
     "show_nsfw": False,
     "chrome_top_offset": 0,

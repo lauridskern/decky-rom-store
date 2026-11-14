@@ -1,5 +1,6 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
+import { Dropdown } from "@decky/ui";
 import { FaCog, FaDownload, FaSearch } from "react-icons/fa";
 import {
   browseRoms,
@@ -210,10 +211,6 @@ const Store: FC = () => {
     <div className="rs-store" ref={storeRef}>
       <StoreStyles />
       <div className="rs-header">
-        <div className="rs-brand">
-          ROM Store <small>EmuDecky library</small>
-        </div>
-
         <div className="rs-search-wrap">
           <span className="rs-search-icon">
             <FaSearch />
@@ -227,32 +224,38 @@ const Store: FC = () => {
           />
         </div>
 
-        <select value={system} onChange={(event) => setSystem(event.target.value)}>
-          <option value="all">All systems</option>
-          {systems.map((key) => (
-            <option key={key} value={key}>
-              {systemLabel(key)}
-              {systemCounts[key] ? ` (${systemCounts[key]})` : ""}
-            </option>
-          ))}
-        </select>
-
-        <select value={source} onChange={(event) => setSource(event.target.value)}>
-          <option value="all">All sources</option>
-          {sourceOptions.map((item) => (
-            <option key={item.id} value={item.id}>
-              {SOURCE_LABELS[item.id] ?? item.label}
-            </option>
-          ))}
-        </select>
-
-        <select value={sort} onChange={(event) => setSort(event.target.value)}>
-          {SORTS.map((item) => (
-            <option key={item.value} value={item.value}>
-              {item.label}
-            </option>
-          ))}
-        </select>
+        <div className="rs-filters">
+          <Dropdown
+            rgOptions={[
+              { label: "All systems", data: "all" },
+              ...systems.map((key) => ({
+                label: `${systemLabel(key)}${systemCounts[key] ? ` (${systemCounts[key]})` : ""}`,
+                data: key,
+              })),
+            ]}
+            selectedOption={system}
+            onChange={(option) => setSystem(option.data)}
+            menuLabel="System"
+          />
+          <Dropdown
+            rgOptions={[
+              { label: "All sources", data: "all" },
+              ...sourceOptions.map((item) => ({
+                label: SOURCE_LABELS[item.id] ?? item.label,
+                data: item.id,
+              })),
+            ]}
+            selectedOption={source}
+            onChange={(option) => setSource(option.data)}
+            menuLabel="Source"
+          />
+          <Dropdown
+            rgOptions={SORTS.map((item) => ({ label: item.label, data: item.value }))}
+            selectedOption={sort}
+            onChange={(option) => setSort(option.data)}
+            menuLabel="Sort by"
+          />
+        </div>
 
         <button className="rs-icon-btn" onClick={() => setShowBrowse(true)} title="Browse by console">
           ☰

@@ -8,9 +8,10 @@ interface Props {
   onSaved: (settings: Settings) => void;
 }
 
-const SOURCE_ORDER = ["romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"] as const;
+const SOURCE_ORDER = ["switchroms", "romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"] as const;
 
 const SOURCE_HINTS: Record<string, string> = {
+  switchroms: "Switch specific catalogue with hundreds of NSP/XCI titles and direct file links.",
   romspedia: "Server rendered search results, region specific builds, direct file links. The only source with a Switch section.",
   retrostic: "Large catalogue of classic consoles, direct zip downloads.",
   romsdl: "Same engine as Retrostic, different catalogue - useful for extra region builds.",
@@ -123,7 +124,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               <div className="rs-form-row">
                 <div className="rs-hint">{SOURCE_HINTS[id]}</div>
               </div>
-              {(id === "romspedia" || id === "retrostic" || id === "romsdl") && (
+              {(id === "romspedia" || id === "retrostic" || id === "romsdl" || id === "switchroms") && (
                 <div className="rs-form-row">
                   <label>Base URL</label>
                   <input

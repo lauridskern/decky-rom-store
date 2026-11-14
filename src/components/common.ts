@@ -1,6 +1,7 @@
 /** Small helpers shared by the store UI. */
 
 export const SOURCE_LABELS: Record<string, string> = {
+  switchroms: "Switch ROMs",
   romspedia: "Romspedia",
   retrostic: "Retrostic",
   romsdl: "RomsDL",
