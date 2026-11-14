@@ -108,7 +108,9 @@ class StoreService:
         """Check which sources resolve before the first search runs.
 
         A dead domain can take ten seconds to fail, so we find out up front
-        and keep it out of the search path.
+        and keep it out of the search path. A failed probe is only trusted for
+        a couple of minutes: the Deck often boots before the network is up,
+        and we do not want to block every source for that.
         """
         for source in self.build_sources():
             host = urlparse(source.homepage).hostname
@@ -119,7 +121,7 @@ class StoreService:
                     asyncio.to_thread(socket.getaddrinfo, host, None), timeout=3
                 )
             except Exception:
-                self._unreachable[source.id] = time.time() + 900
+                self._unreachable[source.id] = time.time() + 120
                 self._errors[source.id] = "host not found"
 
     # ------------------------------------------------------------------ cache
@@ -263,16 +265,29 @@ class StoreService:
         cache = self._read_cache()
         cached = cache.get(cache_key)
         if cached and (time.time() - float(cached.get("at", 0))) < ttl:
-            self._restore(cached)
-            payload = dict(cached.get("payload") or {})
-            payload["cached"] = True
-            payload["cache_age_hours"] = round((time.time() - float(cached.get("at", 0))) / 3600, 1)
-            self._last_search = payload
-            return payload
+            try:
+                self._restore(cached)
+                payload = dict(cached.get("payload") or {})
+                payload["cached"] = True
+                payload["cache_age_hours"] = round((time.time() - float(cached.get("at", 0))) / 3600, 1)
+                self._last_search = payload
+                return payload
+            except Exception:
+                # A broken cache entry must never stop a search.
+                cache.pop(cache_key, None)
+
+        blocked = [
+            source
+            for source in sources
+            if self._unreachable.get(source.id, 0.0) > time.time()
+        ]
+        # If that would silence every source, the network is probably just
+        # not up yet - try them all anyway.
+        ignore_breaker = len(blocked) == len(sources) and len(sources) > 0
 
         async def run(source: Source) -> Tuple[str, List[RomEntry]]:
             blocked_until = self._unreachable.get(source.id, 0.0)
-            if blocked_until > time.time():
+            if blocked_until > time.time() and not ignore_breaker:
                 # We already know this source is down - do not wait for it.
                 self._errors[source.id] = "unreachable"
                 return source.id, []
@@ -287,8 +302,9 @@ class StoreService:
                 message = f"{type(exc).__name__}: {exc}"
                 self._errors[source.id] = message
                 if "host not found" in message.lower() or "nodename" in message.lower():
-                    # Remember it, so the next search does not wait for DNS.
-                    self._unreachable[source.id] = time.time() + 900
+                    # Remember it, so the next search does not wait for DNS -
+                    # but only for a short while, the network may come back.
+                    self._unreachable[source.id] = time.time() + 120
                 return source.id, []
 
         results = await asyncio.gather(*(run(source) for source in sources))
@@ -332,7 +348,10 @@ class StoreService:
         }
         # Enrich before the payload is built, so the ratings and the IGDB art
         # are part of the result the frontend receives.
-        await self._enrich_covers(merged)
+        try:
+            await self._enrich_covers(merged)
+        except Exception:
+            pass
         payload["results"] = [rom.to_dict() for rom in merged]
         payload["cached"] = False
         self._last_search = payload
@@ -757,6 +776,34 @@ class StoreService:
                 },
             )
         return self._nswpedia
+
+    def start_background_tasks(self) -> None:
+        """Re-check the sources now and then, so a source that comes back
+        (or a network that was not up yet) is picked up automatically."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover - defensive
+            return
+
+        async def ticker():
+            while True:
+                await asyncio.sleep(120)
+                for source in self.build_sources():
+                    if self._unreachable.get(source.id, 0.0) <= time.time():
+                        continue
+                    host = urlparse(source.homepage).hostname
+                    if not host:
+                        continue
+                    try:
+                        await asyncio.wait_for(
+                            asyncio.to_thread(socket.getaddrinfo, host, None), timeout=3
+                        )
+                    except Exception:
+                        self._unreachable[source.id] = time.time() + 120
+                        continue
+                    self._unreachable.pop(source.id, None)
+
+        loop.create_task(ticker())
 
     def _build_cover_index_in_background(self) -> None:
         try:

@@ -110,7 +110,15 @@ class Plugin:
         _log(f"ROM library root: {library['root']} (exists={library['root_exists']})")
         _log(f"TLS trust store: {plugin.service.http.ca_source}")
         # Find out right away which sources are reachable.
-        await plugin.service.probe_sources()
+        try:
+            await plugin.service.probe_sources()
+        except Exception as exc:
+            _log(f"source probe failed: {exc!r}")
+        # Keep checking, so a source that was offline comes back on its own.
+        try:
+            plugin.service.start_background_tasks()
+        except Exception as exc:
+            _log(f"could not start the background tasks: {exc!r}")
 
     async def _unload(self) -> None:
         plugin = self._self()
