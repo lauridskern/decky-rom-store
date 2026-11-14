@@ -16,6 +16,7 @@ import {
 } from "../types";
 import { SOURCE_LABELS, systemLabel } from "./common";
 import StoreStyles from "./StoreStyles";
+import { useChromeInsets } from "./useChromeInsets";
 import { searchState } from "../state";
 import RomCard from "./RomCard";
 import RomDetail from "./RomDetail";
@@ -58,6 +59,7 @@ const Store: FC = () => {
 
   const requestId = useRef(0);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storeRef = useChromeInsets();
 
   const refreshDownloads = useCallback(() => {
     getDownloads()
@@ -73,13 +75,21 @@ const Store: FC = () => {
 
   useEffect(() => {
     getSettings().then(setSettings).catch(() => undefined);
-    getSystemCounts()
-      .then(setSystemCounts)
-      .catch(() => undefined);
+    const loadCounts = () =>
+      getSystemCounts()
+        .then((counts) => {
+          if (counts && Object.keys(counts).length) setSystemCounts(counts);
+        })
+        .catch(() => undefined);
+    loadCounts();
     refreshLibrary();
     refreshDownloads();
     const timer = setInterval(refreshDownloads, 900);
-    return () => clearInterval(timer);
+    const countsTimer = setInterval(loadCounts, 60000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(countsTimer);
+    };
   }, [refreshDownloads, refreshLibrary]);
 
   const runSearch = useCallback(
@@ -191,7 +201,7 @@ const Store: FC = () => {
   }, [systems, systemCounts]);
 
   return (
-    <div className="rs-store">
+    <div className="rs-store" ref={storeRef}>
       <StoreStyles />
       <div className="rs-header">
         <div className="rs-brand">

@@ -4,7 +4,11 @@ export const CSS = `
   /* Normal flow on purpose: the Steam route container has no intrinsic
      height, so an absolutely positioned store collapses to nothing. */
   position: relative;
-  min-height: calc(100vh - 150px);
+  --rs-chrome-top: 0px;
+  --rs-chrome-bottom: 0px;
+  padding-top: var(--rs-chrome-top);
+  padding-bottom: var(--rs-chrome-bottom);
+  min-height: calc(100vh - var(--rs-chrome-top) - var(--rs-chrome-bottom));
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #16191d 0%, #0f1114 100%);
@@ -16,7 +20,7 @@ export const CSS = `
 
 .rs-header {
   position: sticky;
-  top: 0;
+  top: var(--rs-chrome-top, 0px);
   z-index: 5;
   display: flex;
   align-items: center;
@@ -163,7 +167,7 @@ export const CSS = `
 
 .rs-footer {
   position: sticky;
-  bottom: 0;
+  bottom: var(--rs-chrome-bottom, 0px);
   z-index: 5;
   flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
   padding: 8px 18px; font-size: 11px; color: #79838c;
@@ -193,6 +197,8 @@ export const CSS = `
   background: rgba(0, 0, 0, 0.68);
   display: flex; align-items: center; justify-content: center;
   padding: 26px;
+  padding-top: calc(var(--rs-chrome-top, 0px) + 26px);
+  padding-bottom: calc(var(--rs-chrome-bottom, 0px) + 26px);
 }
 .rs-panel {
   background: #1b1f24; border: 1px solid rgba(255,255,255,0.1);
@@ -202,7 +208,8 @@ export const CSS = `
 .rs-panel.detail { width: min(1020px, 100%); }
 .rs-panel.settings { width: min(720px, 100%); }
 .rs-panel.drawer {
-  position: fixed; right: 0; top: 0; bottom: 0; width: min(460px, 92%);
+  position: fixed; right: 0; top: var(--rs-chrome-top, 0px); bottom: var(--rs-chrome-bottom, 0px);
+  width: min(460px, 92%);
   border-radius: 12px 0 0 12px; max-height: 100%;
 }
 .rs-panel-head {

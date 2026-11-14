@@ -100,6 +100,36 @@ class RomspediaSource(Source):
         html = await self.http.get_text(f"{self.base}/roms/{slug}")
         return self._parse_cards(html)[:limit]
 
+    async def console_sections(self) -> List[tuple]:
+        """The console sections this site actually has, straight from /roms."""
+        html = await self.http.get_text(f"{self.base}/roms")
+        sections: List[tuple] = []
+        seen = set()
+        for match in re.finditer(
+            r'<a[^>]*href="/roms/([a-z0-9-]+)"[^>]*>(.*?)</a>', html, re.I | re.S
+        ):
+            slug = match.group(1).strip("/")
+            if not slug or slug in seen:
+                continue
+            label = collapse_ws(strip_tags(match.group(2)))
+            label = re.sub(r"\s+(ROMs?|ISOs?|ROMS)$", "", label, flags=re.I).strip()
+            if not label:
+                continue
+            seen.add(slug)
+            sections.append((slug, label))
+        # A few sections (Switch, PS3) are not linked from the index page but
+        # still exist - add them from the known map.
+        for slug, key in CONSOLE_MAP.items():
+            if slug not in seen:
+                seen.add(slug)
+                sections.append((slug, key))
+        return sections
+
+    async def console_entries(self, slug: str) -> List[RomEntry]:
+        """All games listed on a console page (what the browse view shows)."""
+        html = await self.http.get_text(f"{self.base}/roms/{slug}")
+        return self._parse_cards(html)
+
     def _slug_for(self, system: str) -> Optional[str]:
         for slug, key in CONSOLE_MAP.items():
             if key == system:

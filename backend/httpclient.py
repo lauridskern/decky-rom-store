@@ -77,7 +77,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 class HttpClient:
     """Blocking urllib wrapped in asyncio, with cookies, throttling and streaming."""
 
-    def __init__(self, user_agent: str = DEFAULT_UA, timeout: int = 30, min_interval: float = 0.6):
+    def __init__(self, user_agent: str = DEFAULT_UA, timeout: int = 30, min_interval: float = 0.25):
         self._ua = user_agent
         self._timeout = timeout
         self._min_interval = min_interval
@@ -100,14 +100,20 @@ class HttpClient:
 
     # ------------------------------------------------------------------ utils
     def _throttle(self, host: str) -> None:
-        """Keep a small gap between requests to the same host (politeness)."""
-        now = time.monotonic()
-        with self._lock:
-            last = self._last_request.get(host, 0.0)
-            wait = self._min_interval - (now - last)
-            if wait > 0:
-                time.sleep(wait)
-            self._last_request[host] = time.monotonic()
+        """Keep a small gap between requests to the same host (politeness).
+
+        The timestamp has to be read inside the lock: reading it before would
+        make every waiting thread sleep longer than the previous one and the
+        delay would grow exponentially with the number of parallel requests.
+        """
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                wait = self._min_interval - (now - self._last_request.get(host, 0.0))
+                if wait <= 0:
+                    self._last_request[host] = now
+                    return
+            time.sleep(min(wait, 0.05))
 
     @staticmethod
     def _decode_body(body: bytes, encoding: str) -> bytes:
@@ -189,7 +195,13 @@ class HttpClient:
     async def request(self, url: str, method: str = "GET", data: Optional[bytes] = None,
                       headers: Optional[Dict[str, str]] = None, allow_redirects: bool = True,
                       max_bytes: int = 8 * 1024 * 1024) -> Response:
-        resp = await asyncio.to_thread(self._open, url, method, data, headers, allow_redirects)
+        try:
+            resp = await asyncio.wait_for(
+                asyncio.to_thread(self._open, url, method, data, headers, allow_redirects),
+                timeout=max(self._timeout * 2, 45),
+            )
+        except asyncio.TimeoutError as exc:
+            raise HttpError(f"Request timed out: {url}", url=url) from exc
         if resp.status >= 400:
             raise HttpError(f"HTTP {resp.status} for {url}", resp.status, url)
         if len(resp.body) > max_bytes:

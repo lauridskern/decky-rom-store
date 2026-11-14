@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,10 +16,11 @@ from .images import ImageCache
 from .models import MergedRom, RomEntry, RomFile
 from .settings import Settings
 from .sources.base import Source
+from .systems import canonical_system
 from .sources.dumbroms import DumbRomsSource
 from .sources.myabandonware import MyAbandonwareSource
 from .sources.retrostic import RetrosticSource
-from .sources.romspedia import RomspediaSource
+from .sources.romspedia import CONSOLE_MAP, RomspediaSource
 
 # id -> (class, label, homepage, default base url)
 SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
@@ -69,6 +71,8 @@ class StoreService:
         self._last_search: Dict[str, Any] = {}
         self._page = 1
         self._last_page_count = 1
+        self._runtime_dir = runtime_dir
+        self._COUNTS_TTL = 24 * 60 * 60
         self.downloads = DownloadManager(self.http, max_concurrent=int(settings.get("max_concurrent", 2)))
         self.images = ImageCache(self.http, runtime_dir=runtime_dir, plugin_name=plugin_name)
 
@@ -339,19 +343,92 @@ class StoreService:
         loop.create_task(self.images.prefetch(urls))
 
     # ------------------------------------------------------------------ system counts
-    async def system_counts(self) -> Dict[str, int]:
-        """How many titles each console has (used by the browse panel)."""
-        counts: Dict[str, int] = {}
+    async def system_counts(self, refresh: bool = False) -> Dict[str, int]:
+        """How many titles each console has (used by the browse panel).
+
+        Scraping every console page takes a while, so the result is cached on
+        the Deck and refreshed in the background.
+        """
+        cached = self._read_counts_cache()
+        if cached and not refresh:
+            if self._counts_cache_age() < self._COUNTS_TTL:
+                return cached
+            self._refresh_counts_in_background()
+            return cached
+        return await self._refresh_counts()
+
+    async def _refresh_counts(self) -> Dict[str, int]:
         source = RomspediaSource(self.http, {"base_url": self.settings.get("romspedia_base_url")})
-        for slug, key in RomspediaSource.CONSOLE_MAP.items():
-            try:
-                html = await self.http.get_text(f"{source.base}/roms/{slug}")
-            except Exception:
+        try:
+            sections = await source.console_sections()
+        except Exception:
+            sections = [(slug, key) for slug, key in CONSOLE_MAP.items()]
+        semaphore = asyncio.Semaphore(4)
+
+        async def count_console(slug: str, label: str) -> Optional[Tuple[str, int]]:
+            key = canonical_system(label)
+            if key == "unknown":
+                key = canonical_system(slug)
+            async with semaphore:
+                try:
+                    entries = await source.console_entries(slug)
+                except Exception:
+                    return None
+                return (key, len(entries)) if entries else None
+
+        results = await asyncio.gather(*(count_console(slug, label) for slug, label in sections))
+        counts: Dict[str, int] = {}
+        for item in results:
+            if not item:
                 continue
-            count = html.count('class="single-rom"')
-            if count:
-                counts[key] = count
+            key, value = item
+            counts[key] = max(counts.get(key, 0), value)
+        if counts:
+            self._write_counts_cache(counts)
         return counts
+
+    def _refresh_counts_in_background(self) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover - defensive
+            return
+        loop.create_task(self._refresh_counts())
+
+    def _counts_cache_path(self) -> Optional[str]:
+        if not self._runtime_dir:
+            return None
+        return os.path.join(self._runtime_dir, "system_counts.json")
+
+    def _read_counts_cache(self) -> Dict[str, int]:
+        path = self._counts_cache_path()
+        if not path or not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return {str(k): int(v) for k, v in (data.get("counts") or {}).items()}
+        except (OSError, ValueError):
+            return {}
+
+    def _counts_cache_age(self) -> float:
+        path = self._counts_cache_path()
+        if not path or not os.path.isfile(path):
+            return float("inf")
+        try:
+            return time.time() - os.path.getmtime(path)
+        except OSError:
+            return float("inf")
+
+    def _write_counts_cache(self, counts: Dict[str, int]) -> None:
+        path = self._counts_cache_path()
+        if not path:
+            return
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump({"counts": counts, "updated": time.time()}, fh)
+        except OSError:
+            pass
 
     def status(self) -> Dict[str, Any]:
         return {

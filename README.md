@@ -15,7 +15,7 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 | | |
 |---|---|
 | **Search** | One search box queries every enabled source in parallel and merges the hits. |
-| **Browse** | A console picker with live title counts (including Switch), plus *Load more* for deeper result pages. |
+| **Browse** | A console picker with live title counts (including Switch), plus *Load more* for deeper result pages. Counts are scraped once and cached on the Deck for a day. |
 | **Gamepad** | Cards are Steam-focusable — the A button opens a game, the shoulder buttons page through results. |
 | **Artwork** | Cover art is fetched by the backend, cached on the Deck and served locally, so nothing is re-downloaded and the Steam client never has to reach out to a third party. |
 | **De-duplicate** | Titles are normalised (region tags, serial noise and punctuation are stripped) so the same game from two sites becomes one card with a `2×` badge. |
@@ -177,6 +177,18 @@ startup:
 ```bash
 grep "TLS trust store" ~/homebrew/logs/rom-store/rom-store.log
 ```
+
+**The store is cut off by the Steam header bar**
+
+The plugin measures the Steam chrome at runtime (it hit tests the DOM to find
+where its own content becomes visible) and pads itself accordingly, so it works
+in both Game Mode and Desktop Mode.
+
+**The console list says "unavailable"**
+
+The console list is scraped in the background and cached in
+`~/homebrew/data/rom-store-decky/system_counts.json`. If it is empty the
+backend could not reach Romspedia - check the status line in the plugin menu.
 
 **The UI is unstyled**
 
