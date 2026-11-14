@@ -135,17 +135,24 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
                 {rom.year ? <span className="rs-pill">{rom.year}</span> : null}
               </div>
 
-              {primary?.developer || primary?.publisher ? (
-                <div className="rs-meta" style={{ marginBottom: 10 }}>
-                  {primary.developer ? <span className="rs-pill">{primary.developer}</span> : null}
-                  {primary.publisher ? <span className="rs-pill">{primary.publisher}</span> : null}
-                  {(primary?.genres ?? []).slice(0, 4).map((genre) => (
-                    <span key={genre} className="rs-pill">
-                      {genre}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
+              {(() => {
+                const media = details?.extra?.media;
+                const genres = media?.genres?.length ? media.genres : (primary?.genres ?? []);
+                const developer = media?.developers?.length ? media.developers[0] : primary?.developer;
+                const publisher = media?.developers?.length ? media.developers[1] : primary?.publisher;
+                if (!genres.length && !developer && !publisher) return null;
+                return (
+                  <div className="rs-meta" style={{ marginBottom: 10 }}>
+                    {developer ? <span className="rs-pill">{developer}</span> : null}
+                    {publisher ? <span className="rs-pill">{publisher}</span> : null}
+                    {genres.slice(0, 4).map((genre) => (
+                      <span key={genre} className="rs-pill">
+                        {genre}
+                      </span>
+                    ))}
+                  </div>
+                );
+              })()}
 
               {loading && (
                 <div className="rs-loading">

@@ -200,7 +200,13 @@ class IgdbCovers:
 
     @staticmethod
     def _best_game(games: List[Dict[str, Any]], query_title: str) -> Optional[Dict[str, Any]]:
-        """Pick the entry that really is the game we are looking for."""
+        """Pick the entry that is really the game we are looking for.
+
+        IGDB often returns several entries with the same name: a bare one and
+        a richer collection/bundle entry that carries the rating, the trailer
+        and more screenshots. The website shows the complete one, so we do the
+        same and prefer the entry with the most data.
+        """
         wanted = _clean(query_title)
         best = None
         best_score = 0.0
@@ -209,15 +215,14 @@ class IgdbCovers:
             if not name:
                 continue
             if name == wanted:
-                return game
-            if name.startswith(wanted):
+                score = 4.0
+            elif name.startswith(wanted):
                 score = 3.0
             elif wanted in name:
                 score = 2.0
             elif name in wanted:
                 score = 1.5
             else:
-                # Fall back to a word overlap.
                 words = set(wanted.split())
                 overlap = len(words & set(name.split()))
                 if not overlap or len(words) < 2:
@@ -225,13 +230,21 @@ class IgdbCovers:
                 score = overlap / len(words)
                 if score < 0.75:
                     continue
-            if game.get("screenshots") or game.get("cover"):
-                score += 0.25
+
+            # Prefer the entry that actually carries the metadata.
+            if game.get("rating") or game.get("total_rating") or game.get("aggregated_rating"):
+                score += 1.2
             if game.get("videos"):
-                score += 0.5
-            # Prefer the entry whose name is closest to the query - the base
-            # game, not the bundle or the DLC.
-            score -= min(len(name) - len(wanted), 40) / 1000.0
+                score += 1.2
+            if game.get("screenshots"):
+                score += 0.3
+            if game.get("cover"):
+                score += 0.2
+            if game.get("summary"):
+                score += 0.2
+            # Prefer the plain game over a bundle or a DLC.
+            if game.get("involved_companies"):
+                score += 0.1
             if score > best_score:
                 best_score = score
                 best = game
