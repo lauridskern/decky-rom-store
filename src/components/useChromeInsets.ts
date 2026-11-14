@@ -50,8 +50,10 @@ export function useChromeInsets(manualTop = 0, manualBottom = 0): RefObject<HTML
         }
       }
 
-      const top = manualTop > 0 ? manualTop : (headerFromSteam || measuredTop);
-      const bottom = manualBottom > 0 ? manualBottom : footerFromSteam;
+      // Steam does not always publish these, so fall back to a sensible
+      // default instead of ending up under the chrome.
+      const top = manualTop > 0 ? manualTop : (headerFromSteam || measuredTop || 40);
+      const bottom = manualBottom > 0 ? manualBottom : (footerFromSteam || 40);
 
       element.style.setProperty("--rs-chrome-top", `${top}px`);
       element.style.setProperty("--rs-chrome-bottom", `${bottom}px`);

@@ -1,6 +1,6 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
-import { Dropdown } from "@decky/ui";
+import { Dropdown, TextField } from "@decky/ui";
 import { FaCog, FaDownload, FaSearch } from "react-icons/fa";
 import {
   browseRoms,
@@ -59,7 +59,6 @@ const Store: FC = () => {
   const [showIssues, setShowIssues] = useState(false);
 
   const requestId = useRef(0);
-  const searchInput = useRef<HTMLInputElement | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeRef = useChromeInsets(
     settings?.chrome_top_offset ?? 0,
@@ -215,23 +214,11 @@ const Store: FC = () => {
           <span className="rs-search-icon">
             <FaSearch />
           </span>
-          <input
-            ref={searchInput}
-            type="text"
+          <TextField
+            label="Search games"
             value={query}
-            placeholder="Search games, consoles or regions…"
+            placeholder="Games, consoles or regions…"
             onChange={(event) => setQuery(event.target.value)}
-            autoFocus
-            onClick={() => {
-              searchInput.current?.focus();
-              searchInput.current?.select();
-            }}
-            onMouseDown={(event) => {
-              // Keep the focus on the field - the Steam client only shows the
-              // on screen keyboard for a focused text input.
-              event.preventDefault();
-              searchInput.current?.focus();
-            }}
           />
         </div>
 
@@ -284,7 +271,7 @@ const Store: FC = () => {
         </button>
       </div>
 
-      <div className="rs-main">
+      <div className={`rs-main${loading && results.length === 0 ? " is-loading" : ""}`}>
         {loading && results.length === 0 ? (
           <div className="rs-loading">
             <div className="rs-spinner" /> Searching…

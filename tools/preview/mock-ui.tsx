@@ -50,4 +50,36 @@ export const Dropdown: FC<DropdownProps> = ({ rgOptions = [], selectedOption, on
   </select>
 );
 
+interface TextFieldProps {
+  label?: string;
+  value?: string;
+  placeholder?: string;
+  onChange?: (event: { target: { value: string } }) => void;
+  onKeyDown?: (event: any) => void;
+  disabled?: boolean;
+}
+
+export const TextField: FC<TextFieldProps> = ({ label, value, placeholder, onChange, onKeyDown }) => (
+  <label style={{ display: "block", flex: "1 1 auto", minWidth: 0 }}>
+    <span style={{ fontSize: "11px", color: "#8f98a0" }}>{label}</span>
+    <input
+      type="text"
+      value={value ?? ""}
+      placeholder={placeholder}
+      onChange={(event) => onChange?.({ target: { value: event.target.value } })}
+      onKeyDown={onKeyDown}
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        padding: "7px 10px",
+        borderRadius: "6px",
+        border: "1px solid rgba(255,255,255,0.14)",
+        background: "rgba(0,0,0,0.35)",
+        color: "#fff",
+        fontSize: "13px",
+      }}
+    />
+  </label>
+);
+
 export const staticClasses = { Title: "DeckyTitle" } as Record<string, string>;

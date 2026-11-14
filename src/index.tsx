@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { definePlugin, routerHook } from "@decky/api";
-import { ButtonItem, Navigation, PanelSection, PanelSectionRow, staticClasses } from "@decky/ui";
+import { ButtonItem, Navigation, PanelSection, PanelSectionRow, staticClasses, TextField } from "@decky/ui";
 import { FaStore } from "react-icons/fa";
 
 import Store from "./components/Store";
@@ -19,7 +19,6 @@ const StoreRoute = () => (
 function PanelContent() {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const queryInput = useRef<HTMLInputElement | null>(null);
   const [status, setStatus] = useState<Awaited<ReturnType<typeof getStatus>> | null>(null);
 
   useEffect(() => {
@@ -62,31 +61,13 @@ function PanelContent() {
         <PanelSection title="ROM Store">
         <PanelSectionRow>
           <div style={{ display: "flex", gap: "8px", width: "100%", alignItems: "center" }}>
-            <input
-              ref={queryInput}
-              type="text"
+            <TextField
+              label="Search games"
               value={query}
-              placeholder="Search games…"
-              onClick={() => {
-                queryInput.current?.focus();
-                queryInput.current?.select();
-              }}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                queryInput.current?.focus();
-              }}
+              placeholder="Games, consoles or regions…"
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") open();
-              }}
-              style={{
-                flex: "1 1 auto",
-                padding: "6px 8px",
-                borderRadius: "4px",
-                border: "1px solid rgba(255,255,255,0.15)",
-                background: "rgba(0,0,0,0.3)",
-                color: "#fff",
-                fontSize: "13px",
               }}
             />
           </div>

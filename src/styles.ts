@@ -6,7 +6,7 @@ export const CSS = `
      its own; a spacer at the end of the list keeps the last card reachable. */
   position: fixed;
   top: var(--rs-chrome-top, var(--basicui-header-height, 40px));
-  bottom: var(--rs-chrome-bottom, 0px);
+  bottom: var(--rs-chrome-bottom, 40px);
   left: 0;
   right: 0;
   display: flex;
@@ -85,7 +85,7 @@ export const CSS = `
 .rs-main::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); }
 .rs-main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 5px; }
 .rs-main::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
-.rs-bottom-space { height: var(--rs-chrome-bottom, 0px); flex: 0 0 auto; }
+.rs-bottom-space { height: var(--rs-chrome-bottom, 40px); flex: 0 0 auto; }
 
 .rs-grid {
   display: grid;
@@ -181,7 +181,7 @@ export const CSS = `
 
 .rs-footer {
   position: sticky;
-  bottom: var(--rs-chrome-bottom, 0px);
+  bottom: var(--rs-chrome-bottom, 40px);
   z-index: 5;
   flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
   padding: 8px 18px; font-size: 11px; color: #79838c;
@@ -322,7 +322,11 @@ export const CSS = `
   margin: 18px 0 10px; border-bottom: 1px solid rgba(255,255,255,0.07); padding-bottom: 6px;
 }
 
-.rs-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 60px; color: #8b949d; }
+.rs-main.is-loading { display: flex; align-items: center; justify-content: center; }
+.rs-loading {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; padding: 60px; color: #8b949d; text-align: center;
+}
 .rs-spinner {
   width: 18px; height: 18px; border-radius: 50%;
   border: 2px solid rgba(255,255,255,0.15); border-top-color: #66c0f4;
@@ -342,7 +346,7 @@ export const CSS = `
 }
 
 .rs-browse-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 10px;
 }
 .rs-browse-tile {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;

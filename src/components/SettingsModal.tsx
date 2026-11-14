@@ -1,4 +1,5 @@
 import { FC, useEffect, useState } from "react";
+import { TextField } from "@decky/ui";
 import { toaster } from "@decky/api";
 import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
 import { SOURCE_LABELS } from "./common";
@@ -89,7 +90,12 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           <div className="rs-section-title">ROM library</div>
           <div className="rs-form-row">
             <label>EmuDecky ROM folder</label>
-            <input type="text" value={customRoot} onChange={(event) => setCustomRoot(event.target.value)} placeholder="/home/deck/EmuDecky/roms" />
+            <TextField
+              label="EmuDecky ROM folder"
+              value={customRoot}
+              placeholder="/home/deck/EmuDecky/roms"
+              onChange={(event) => setCustomRoot(event.target.value)}
+            />
           </div>
           <div className="rs-form-row">
             <label>Detected folders</label>
@@ -148,8 +154,8 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
                   </div>
                   <div className="rs-form-row">
                     <label>Search URL</label>
-                    <input
-                      type="text"
+                    <TextField
+                      label="DumbRoms search URL"
                       value={settings.dumbroms_search_url}
                       onChange={(event) => update({ dumbroms_search_url: event.target.value })}
                     />
@@ -168,8 +174,8 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           <div className="rs-section-title">Cover art</div>
           <div className="rs-form-row">
             <label>IGDB client ID</label>
-            <input
-              type="text"
+            <TextField
+              label="IGDB client ID"
               value={settings.igdb_client_id ?? ""}
               onChange={(event) => update({ igdb_client_id: event.target.value })}
               placeholder="optional"
@@ -177,8 +183,8 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           </div>
           <div className="rs-form-row">
             <label>IGDB client secret</label>
-            <input
-              type="text"
+            <TextField
+              label="IGDB client secret"
               value={settings.igdb_client_secret ?? ""}
               onChange={(event) => update({ igdb_client_secret: event.target.value })}
               placeholder="optional"
@@ -194,16 +200,16 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           <div className="rs-section-title">Steam overlay</div>
           <div className="rs-form-row">
             <label>Header offset</label>
-            <input
-              type="text"
+            <TextField
+              label="Header offset (px)"
               value={String(settings.chrome_top_offset ?? 0)}
               onChange={(event) => update({ chrome_top_offset: Number(event.target.value) || 0 })}
             />
           </div>
           <div className="rs-form-row">
             <label>Button bar offset</label>
-            <input
-              type="text"
+            <TextField
+              label="Button bar offset (px)"
               value={String(settings.chrome_bottom_offset ?? 0)}
               onChange={(event) => update({ chrome_bottom_offset: Number(event.target.value) || 0 })}
             />
