@@ -1,4 +1,5 @@
 import { FC, useEffect, useRef, useState } from "react";
+import { FaGamepad } from "react-icons/fa";
 import { getCover } from "../types";
 
 // Resolved cover urls are cached for the session: remounting a card (for
@@ -83,7 +84,11 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, eager 
     <div ref={holder} className={className} style={{ width: "100%", height: "100%" }}>
       {src && !failed ? (
         <img src={src} alt={alt} onError={() => setFailed(true)} />
-      ) : null}
+      ) : (
+        <div className="rs-cover-placeholder">
+          <FaGamepad />
+        </div>
+      )}
     </div>
   );
 };

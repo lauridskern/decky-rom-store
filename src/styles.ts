@@ -114,6 +114,12 @@ export const CSS = `
   overflow: hidden;
 }
 .rs-cover > div { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+.rs-cover-placeholder {
+  position: relative; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.13); font-size: 30px;
+  background: linear-gradient(135deg, #0d1116, #080a0d);
+}
 .rs-cover img {
   position: relative;
   width: 100%; height: 100%;

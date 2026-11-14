@@ -78,7 +78,7 @@ const MediaGallery: FC<Props> = ({ media }) => {
           </button>
         ) : null}
 
-        {shots.map((shot, index) => (
+        {shots.slice(0, 5).map((shot, index) => (
           <button className="rs-shot" key={`${shot.thumb}-${index}`} onClick={() => open(shot)}>
             <ProxiedImage url={shot.thumb} alt={`Screenshot ${index + 1}`} />
           </button>

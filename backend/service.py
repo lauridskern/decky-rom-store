@@ -498,7 +498,7 @@ class StoreService:
                 if media.get("shots"):
                     # Keep the site's own shots first, they match the ROM.
                     shots.extend(media["shots"])
-                media["shots"] = shots[:8]
+                media["shots"] = shots[:5]
                 media["trailer"] = info.get("trailer") or media.get("trailer")
                 media["summary"] = info.get("summary") or media.get("summary")
                 if info.get("genres"):
@@ -818,7 +818,7 @@ class StoreService:
         loop.create_task(build())
 
     def _prefetch_covers(self, entries: List[RomEntry]) -> None:
-        urls = [entry.cover for entry in entries if entry.cover][:24]
+        urls = [entry.cover for entry in entries if entry.cover][:30]
         if not urls or not self.images.enabled:
             return
         try:

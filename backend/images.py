@@ -114,12 +114,15 @@ class ImageCache:
             if os.path.exists(path) and os.path.getsize(path) > 0:
                 return self._local_url(key, ext)
             if self._semaphore is None:
-                self._semaphore = asyncio.Semaphore(4)
+                self._semaphore = asyncio.Semaphore(6)
             try:
                 async with self._semaphore:
                     await self._download(target, path)
             except Exception:
-                return url
+                # No local copy: report it as missing so the UI can show the
+                # placeholder straight away instead of waiting for a remote
+                # image the Steam client would block anyway.
+                return None
             if not os.path.exists(path):
                 return url
             # The download may have written a different extension - the url we
