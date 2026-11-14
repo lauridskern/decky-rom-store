@@ -14,12 +14,13 @@ from .downloader import DownloadManager
 from .emudeck import detect_rom_roots, list_folders, resolve_folder, system_folders
 from .httpclient import HttpClient
 from .images import ImageCache
-from .models import MergedRom, RomEntry, RomFile
+from .models import MergedRom, RomEntry, RomFile, normalize_title
 from .settings import Settings
 from .sources.base import Source
 from .systems import canonical_system
 from .sources.dumbroms import DumbRomsSource
 from .sources.myabandonware import MyAbandonwareSource
+from .sources.nswpedia import NswpediaSource
 from .sources.retrostic import RetrosticSource
 from .sources.switchroms import SwitchRomsSource
 from .sources.romspedia import CONSOLE_MAP, RomspediaSource
@@ -56,6 +57,12 @@ SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
         "homepage": "https://dumbroms.com",
         "base_key": "dumbroms_base_url",
         "search_url_key": "dumbroms_search_url",
+    },
+    "nswpedia": {
+        "cls": NswpediaSource,
+        "label": "Nswpedia",
+        "homepage": "https://nswpedia.io",
+        "base_key": "nswpedia_base_url",
     },
     "myabandonware": {
         "cls": MyAbandonwareSource,
@@ -380,6 +387,7 @@ class StoreService:
 
     async def _enrich_covers(self, roms: List[MergedRom]) -> None:
         """Replace missing artwork with a clean IGDB cover when possible."""
+        await self._apply_portrait_covers(roms)
         if not self.covers.enabled:
             return
         missing: List[str] = []
@@ -401,6 +409,44 @@ class StoreService:
                 if url:
                     entry.cover = url
                     entry.cover_full = entry.cover_full or url
+
+    async def _apply_portrait_covers(self, roms: List[MergedRom]) -> None:
+        """Give Switch games the portrait box art from the cover index."""
+        switch_entries = [
+            entry
+            for rom in roms
+            for entry in rom.entries
+            if entry.system == "switch"
+        ]
+        if not switch_entries:
+            return
+        source = self._cover_source()
+        try:
+            index = await source.cover_index()
+        except Exception:
+            return
+        if not index:
+            return
+        lookup = {normalize_title(title): url for title, url in index.items()}
+        for entry in switch_entries:
+            url = lookup.get(normalize_title(entry.title))
+            if not url:
+                continue
+            # The portrait box art always looks better than a wallpaper.
+            entry.cover = url
+            entry.cover_full = url
+
+    def _cover_source(self) -> NswpediaSource:
+        """One shared cover source, so its cache survives between searches."""
+        if getattr(self, "_nswpedia", None) is None:
+            self._nswpedia = NswpediaSource(
+                self.http,
+                {
+                    "base_url": self.settings.get("nswpedia_base_url"),
+                    "cache_dir": self._runtime_dir,
+                },
+            )
+        return self._nswpedia
 
     def _prefetch_covers(self, entries: List[RomEntry]) -> None:
         urls = [entry.cover for entry in entries if entry.cover][:40]

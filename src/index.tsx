@@ -67,8 +67,14 @@ function PanelContent() {
               type="text"
               value={query}
               placeholder="Search games…"
-              onClick={() => queryInput.current?.focus()}
-              onMouseDown={() => queryInput.current?.focus()}
+              onClick={() => {
+                queryInput.current?.focus();
+                queryInput.current?.select();
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                queryInput.current?.focus();
+              }}
               onChange={(event) => setQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") open();

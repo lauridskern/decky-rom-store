@@ -1,8 +1,9 @@
 /** Styles for the ROM Store, injected at runtime (Decky does not load CSS files). */
 export const CSS = `
 .rs-store {
-  /* The Steam client draws a header bar over the top of the window, so the
-     store lives between the two chrome bars and scrolls on its own. */
+  /* The Steam client draws a header bar over the top of the window and a
+     button bar over the bottom. The store lives between them and scrolls on
+     its own; a spacer at the end of the list keeps the last card reachable. */
   position: fixed;
   top: var(--rs-chrome-top, var(--basicui-header-height, 40px));
   bottom: var(--rs-chrome-bottom, 0px);
@@ -84,11 +85,12 @@ export const CSS = `
 .rs-main::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); }
 .rs-main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 5px; }
 .rs-main::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
+.rs-bottom-space { height: var(--rs-chrome-bottom, 0px); flex: 0 0 auto; }
 
 .rs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(186px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 10px;
 }
 
 .rs-card {
@@ -132,7 +134,10 @@ export const CSS = `
 .rs-cover > div { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .rs-cover img {
   position: relative;
-  width: 100%; height: 100%; object-fit: contain;
+  width: 100%; height: 100%;
+  /* Fill the poster frame: portrait art fits exactly, landscape art is
+     cropped to its centre instead of being letterboxed. */
+  object-fit: cover;
 }
 .rs-cover .rs-placeholder { font-size: 34px; color: rgba(255,255,255,0.14); display: flex; }
 .rs-pill.system {
@@ -147,15 +152,15 @@ export const CSS = `
   font-weight: 700;
 }
 
-.rs-card-body { padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow: hidden; }
+.rs-card-body { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow: hidden; }
 .rs-title {
-  font-size: 13px; font-weight: 600; color: #f2f3f3; line-height: 1.25;
+  font-size: 12px; font-weight: 600; color: #f2f3f3; line-height: 1.2;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  min-height: 32px;
+  min-height: 29px;
 }
 .rs-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: #9aa4ad; }
 .rs-pill {
-  border-radius: 10px; padding: 1px 7px; font-size: 10px; font-weight: 600;
+  border-radius: 9px; padding: 0 6px; font-size: 9.5px; font-weight: 600;
   background: rgba(255,255,255,0.08); color: #c3c8cd; white-space: nowrap;
 }
 .rs-pill.romspedia { background: rgba(102,192,244,0.16); color: #66c0f4; }
@@ -246,7 +251,7 @@ export const CSS = `
   filter: blur(24px) saturate(1.2) brightness(0.7);
   opacity: 0.7;
 }
-.rs-detail-cover img { position: relative; width: 100%; height: 100%; object-fit: contain; }
+.rs-detail-cover img { position: relative; width: 100%; height: 100%; object-fit: cover; }
 .rs-detail-cover-placeholder {
   aspect-ratio: 3/4; width: 100%; background: #05070a; border-radius: 8px;
   display: flex; align-items: center; justify-content: center; font-size: 48px; color: rgba(255,255,255,0.1); font-weight: 800;

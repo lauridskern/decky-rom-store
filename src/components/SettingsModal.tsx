@@ -201,9 +201,17 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
             />
           </div>
           <div className="rs-form-row">
+            <label>Button bar offset</label>
+            <input
+              type="text"
+              value={String(settings.chrome_bottom_offset ?? 0)}
+              onChange={(event) => update({ chrome_bottom_offset: Number(event.target.value) || 0 })}
+            />
+          </div>
+          <div className="rs-form-row">
             <div className="rs-hint">
-              Pixels to push the store below the Steam header bar. Leave at 0 to use the height Steam
-              reports automatically.
+              Pixels to push the store below the Steam header bar and above the button hints. Leave at 0
+              to use the values Steam reports automatically.
             </div>
           </div>
 

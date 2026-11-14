@@ -1,54 +1,60 @@
 import { RefObject, useEffect, useRef } from "react";
 
 /**
- * The Steam client draws a header bar over the top of the window and a hint
- * bar at the bottom, both of which sit on top of plugin content. Their height
- * differs between Game Mode and Desktop Mode, so instead of hard coding it we
- * hit test the DOM: the first pixel from the top where our own content is the
- * topmost element is exactly where the Steam header ends.
+ * The Steam client draws a header bar over the top of the window and a button
+ * bar over the bottom, both of which sit on top of plugin content.
+ *
+ * The header height is published by Steam itself as
+ * `--basicui-header-height`. There is no official variable for the bottom
+ * bar, so we look for any variable that mentions "footer" and fall back to
+ * measuring the DOM (hit testing where our own content stops being the
+ * topmost element).
+ *
+ * Both values can be overridden from the plugin settings.
  */
-export function useChromeInsets(): RefObject<HTMLDivElement | null> {
+function steamVariable(pattern: RegExp): number {
+  if (typeof document === "undefined") return 0;
+  const styles = getComputedStyle(document.documentElement);
+  const found: number[] = [];
+  for (const property of Array.from(styles)) {
+    if (!property.startsWith("--")) continue;
+    if (!pattern.test(property)) continue;
+    const value = parseFloat(styles.getPropertyValue(property));
+    if (Number.isFinite(value) && value > 0) found.push(value);
+  }
+  return found.length ? Math.max(...found) : 0;
+}
+
+export function useChromeInsets(manualTop = 0, manualBottom = 0): RefObject<HTMLDivElement | null> {
   const holder = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const measure = () => {
       const element = holder.current;
       if (!element) return;
-      const rect = element.getBoundingClientRect();
-      if (!rect.width || !rect.height) return;
 
-      // Steam exposes the height of its own header bar. If it is there we
-      // use it, otherwise we measure where our content becomes visible.
-      const steamHeader = getComputedStyle(document.documentElement)
-        .getPropertyValue("--basicui-header-height")
-        .trim();
-      const headerFromSteam = parseFloat(steamHeader);
-
-      const x = Math.round(rect.left + Math.min(rect.width, 600) / 2);
-      const limit = Math.min(window.innerHeight, Math.max(rect.bottom, rect.top + 1));
+      const headerFromSteam = steamVariable(/header/i);
+      const footerFromSteam = steamVariable(/footer|bottom-bar|button-bar/i);
 
       let measuredTop = 0;
-      for (let y = Math.max(0, Math.floor(rect.top)); y < limit; y += 2) {
-        const hit = document.elementFromPoint(x, y);
-        if (hit && element.contains(hit)) {
-          measuredTop = Math.max(0, y - rect.top);
-          break;
+      if (!headerFromSteam) {
+        const rect = element.getBoundingClientRect();
+        const x = Math.round(rect.left + Math.min(rect.width, 600) / 2);
+        const limit = Math.min(window.innerHeight, Math.max(rect.bottom, rect.top + 1));
+        for (let y = Math.max(0, Math.floor(rect.top)); y < limit; y += 2) {
+          const hit = document.elementFromPoint(x, y);
+          if (hit && element.contains(hit)) {
+            measuredTop = Math.max(0, y - rect.top);
+            break;
+          }
         }
       }
 
-      let bottom = 0;
-      for (let y = window.innerHeight - 1; y > rect.top; y -= 2) {
-        const hit = document.elementFromPoint(x, y);
-        if (hit && element.contains(hit)) {
-          bottom = Math.max(0, rect.bottom - y);
-          break;
-        }
-      }
+      const top = manualTop > 0 ? manualTop : (headerFromSteam || measuredTop);
+      const bottom = manualBottom > 0 ? manualBottom : footerFromSteam;
 
-      const top = Number.isFinite(headerFromSteam) && headerFromSteam > 0 ? headerFromSteam : measuredTop;
-
-      if (top > 0) element.style.setProperty("--rs-chrome-top", `${top}px`);
-      if (bottom > 0) element.style.setProperty("--rs-chrome-bottom", `${bottom}px`);
+      element.style.setProperty("--rs-chrome-top", `${top}px`);
+      element.style.setProperty("--rs-chrome-bottom", `${bottom}px`);
     };
 
     // The Steam chrome animates in, so measure again shortly after mounting.
@@ -59,14 +65,14 @@ export function useChromeInsets(): RefObject<HTMLDivElement | null> {
       window.setTimeout(measure, 2000),
     ];
     window.addEventListener("resize", measure);
-    const interval = window.setInterval(measure, 2000);
+    const interval = window.setInterval(measure, 3000);
 
     return () => {
       timers.forEach(window.clearTimeout);
       window.clearInterval(interval);
       window.removeEventListener("resize", measure);
     };
-  }, []);
+  }, [manualTop, manualBottom]);
 
   return holder;
 }

@@ -61,13 +61,10 @@ const Store: FC = () => {
   const requestId = useRef(0);
   const searchInput = useRef<HTMLInputElement | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const storeRef = useChromeInsets();
-  const manualOffset = settings?.chrome_top_offset ?? 0;
-
-  useEffect(() => {
-    if (!manualOffset || !storeRef.current) return;
-    storeRef.current.style.setProperty("--rs-chrome-top", `${manualOffset}px`);
-  }, [manualOffset, storeRef]);
+  const storeRef = useChromeInsets(
+    settings?.chrome_top_offset ?? 0,
+    settings?.chrome_bottom_offset ?? 0,
+  );
 
   const refreshDownloads = useCallback(() => {
     getDownloads()
@@ -170,6 +167,8 @@ const Store: FC = () => {
       return;
     }
     debounce.current = setTimeout(() => {
+      // Drop the previous results so a filter change never shows a mix.
+      setResults([]);
       runSearch(query, system, source, sort, 1, false);
     }, 320);
     return () => {
@@ -223,8 +222,16 @@ const Store: FC = () => {
             placeholder="Search games, consoles or regions…"
             onChange={(event) => setQuery(event.target.value)}
             autoFocus
-            onClick={() => searchInput.current?.focus()}
-            onMouseDown={() => searchInput.current?.focus()}
+            onClick={() => {
+              searchInput.current?.focus();
+              searchInput.current?.select();
+            }}
+            onMouseDown={(event) => {
+              // Keep the focus on the field - the Steam client only shows the
+              // on screen keyboard for a focused text input.
+              event.preventDefault();
+              searchInput.current?.focus();
+            }}
           />
         </div>
 
@@ -294,7 +301,7 @@ const Store: FC = () => {
           </div>
         ) : null}
 
-        {!searched && results.length === 0 ? (
+        {!searched && !loading && results.length === 0 ? (
           <div className="rs-empty">
             <h2>Search the ROM indexes</h2>
             <p>
@@ -312,6 +319,8 @@ const Store: FC = () => {
             <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} />
           ))}
         </div>
+
+        <div className="rs-bottom-space" />
 
         {hasMore ? (
           <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 6px" }}>
