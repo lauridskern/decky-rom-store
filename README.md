@@ -40,8 +40,12 @@ library, so there is nothing to compile and nothing to install on the Deck.
 Decky Loader → **Settings → Plugins → Install from URL**, then paste:
 
 ```
-https://github.com/lauridskern/decky-rom-store/releases/download/v1.0.1/rom-store-decky.zip
+https://github.com/lauridskern/decky-rom-store/releases/download/v1.0.4/ROM-Store.zip
 ```
+
+> Decky derives the plugin name from the **file name at the end of the URL** and
+> expects `plugin.json`'s `name` to match it exactly, so the asset has to be
+> called `ROM-Store.zip`.
 
 Decky handles the root-owned `~/homebrew/plugins` folder for you. Restart Decky
 Loader afterwards and the plugin appears in the plugin list.
@@ -50,13 +54,15 @@ Loader afterwards and the plugin appears in the plugin list.
 
 ```bash
 # copy the package over first
-scp rom-store-decky.zip deck@<deck-ip>:/home/deck/
+scp ROM-Store.zip deck@<deck-ip>:/home/deck/
 
-# then on the Deck (the plugins folder is root owned, hence sudo)
-sudo bash -c 'rm -rf /home/deck/homebrew/plugins/rom-store && \
-  mkdir -p /home/deck/homebrew/plugins/rom-store && \
-  unzip -o /home/deck/rom-store-decky.zip -d /home/deck/homebrew/plugins/rom-store && \
-  chown -R root:root /home/deck/homebrew/plugins/rom-store'
+# then on the Deck (the plugins folder is root owned, hence sudo).
+# The zip contains a rom-store-decky/ folder - extract it into the plugins
+# folder, not into a folder of its own.
+sudo bash -c 'cd /home/deck/homebrew/plugins && \
+  rm -rf rom-store-decky && \
+  unzip -o /home/deck/ROM-Store.zip && \
+  chown -R root:root /home/deck/homebrew/plugins/rom-store-decky'
 ```
 
 Use the explicit `/home/deck/...` paths: inside `sudo bash -c` a bare `~`
@@ -68,7 +74,14 @@ Every `v*` tag builds the package with GitHub Actions and attaches it to the
 release:
 
 ```bash
-git tag -a v1.0.2 -m "v1.0.2" && git push origin v1.0.2
+git tag -a v1.0.5 -m "v1.0.5" && git push origin v1.0.5
+```
+
+The asset is always named `ROM-Store.zip` and contains a `rom-store-decky/`
+folder - Decky needs both to install it.
+
+```bash
+python3 tools/verify_package.py ROM-Store.zip   # checks it against Decky's own install logic
 ```
 
 ### Development
