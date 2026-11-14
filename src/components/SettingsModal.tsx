@@ -1,5 +1,6 @@
 import { FC, useEffect, useState } from "react";
 import { Dropdown, TextField } from "@decky/ui";
+import { useBackGuard } from "./useBackGuard";
 import { toaster } from "@decky/api";
 import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
 import { SOURCE_LABELS } from "./common";
@@ -32,6 +33,8 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [library, setLibrary] = useState<LibraryInfo | null>(null);
   const [customRoot, setCustomRoot] = useState("");
+  // The Steam back button closes the settings instead of leaving the plugin.
+  useBackGuard(true, onClose);
 
   useEffect(() => {
     getSettings().then((value) => {

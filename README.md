@@ -217,6 +217,18 @@ Each source reports its own status in the status bar (click the warning chip
 for the full error). The DumbRoms adapter needs the correct address in
 *Settings → Sources*.
 
+## The back button
+
+The Steam Deck's **B** button works inside the plugin:
+
+* **B** in the game details or the settings closes that overlay and you stay
+  in the store.
+* **B** again (with no overlay open) leaves the plugin and goes back to where
+  you came from, like any other Decky route.
+
+That works because the plugin pushes a history entry while an overlay is
+open, so the Steam client's own back navigation lands on the overlay first.
+
 ## Legal
 
 The plugin is a front end for sites you choose to use. It does not ship, host or

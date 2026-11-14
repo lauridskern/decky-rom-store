@@ -12,6 +12,7 @@ import { Dropdown } from "@decky/ui";
 import { formatBytes, formatCount, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import MediaGallery from "./MediaGallery";
+import { useBackGuard } from "./useBackGuard";
 
 interface Props {
   rom: MergedRom;
@@ -24,6 +25,8 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
   const [details, setDetails] = useState<MergedRom | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  // The Steam back button closes this overlay instead of leaving the plugin.
+  useBackGuard(true, onClose);
   const [target, setTarget] = useState<string>(rom.system);
 
   useEffect(() => {
