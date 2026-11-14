@@ -124,6 +124,13 @@ export interface Settings {
   show_nsfw: boolean;
 }
 
+export interface StatusPayload {
+  settings: Settings;
+  sources: SourceInfo[];
+  library: LibraryInfo;
+  downloads: DownloadJob[];
+}
+
 export interface StartDownloadResult {
   ok: boolean;
   error?: string;
@@ -151,3 +158,4 @@ export const openFolder = callable<[string], { ok: boolean; error?: string }>("o
 export const getCover = callable<[string | null, string], string | null>("get_cover");
 export const prefetchCovers = callable<[string[], string], void>("prefetch_covers");
 export const getSystemCounts = callable<[], Record<string, number>>("get_system_counts");
+export const getStatus = callable<[], StatusPayload>("get_status");

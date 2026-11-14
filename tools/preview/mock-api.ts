@@ -227,6 +227,18 @@ const handlers: Record<string, (...args: any[]) => any> = {
   get_settings: async () => settings,
   update_settings: async (values: Partial<Settings>) => ({ ...settings, ...values }),
   get_library: async () => library,
+  get_status: async () => ({
+    settings,
+    sources: [
+      { id: "romspedia", label: "Romspedia", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
+      { id: "retrostic", label: "Retrostic", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
+      { id: "romsdl", label: "RomsDL", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
+      { id: "dumbroms", label: "DumbRoms", homepage: "", supports_browse: true, enabled: true, status: "idle", error: "Could not reach https://dumbroms.com" },
+      { id: "myabandonware", label: "My Abandonware", homepage: "", supports_browse: false, enabled: true, status: "idle", error: null },
+    ],
+    library,
+    downloads: jobs,
+  }),
   open_folder: async () => ({ ok: true }),
 };
 

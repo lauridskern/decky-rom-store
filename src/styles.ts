@@ -1,10 +1,10 @@
 /** Styles for the ROM Store, injected at runtime (Decky does not load CSS files). */
 export const CSS = `
 .rs-store {
-  position: absolute;
-  inset: 0;
-  min-height: 0;
-  z-index: 10;
+  /* Normal flow on purpose: the Steam route container has no intrinsic
+     height, so an absolutely positioned store collapses to nothing. */
+  position: relative;
+  min-height: calc(100vh - 150px);
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #16191d 0%, #0f1114 100%);
@@ -15,6 +15,9 @@ export const CSS = `
 }
 
 .rs-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -81,9 +84,7 @@ export const CSS = `
   font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center;
 }
 
-.rs-main { flex: 1 1 auto; overflow-y: auto; padding: 16px 18px 28px; }
-.rs-main::-webkit-scrollbar { width: 8px; }
-.rs-main::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+.rs-main { flex: 1 1 auto; overflow: visible; padding: 16px 18px 28px; }
 
 .rs-grid {
   display: grid;
@@ -161,6 +162,9 @@ export const CSS = `
 .rs-empty p { margin: 0; font-size: 13px; max-width: 520px; line-height: 1.5; }
 
 .rs-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
   flex: 0 0 auto; display: flex; align-items: center; gap: 14px;
   padding: 8px 18px; font-size: 11px; color: #79838c;
   border-top: 1px solid rgba(255,255,255,0.07); background: rgba(0,0,0,0.25);
@@ -185,7 +189,7 @@ export const CSS = `
 
 /* ---------------------------------------------------------------- overlay */
 .rs-overlay {
-  position: absolute; inset: 0; z-index: 40;
+  position: fixed; inset: 0; z-index: 40;
   background: rgba(0, 0, 0, 0.68);
   display: flex; align-items: center; justify-content: center;
   padding: 26px;
@@ -198,7 +202,7 @@ export const CSS = `
 .rs-panel.detail { width: min(1020px, 100%); }
 .rs-panel.settings { width: min(720px, 100%); }
 .rs-panel.drawer {
-  position: absolute; right: 0; top: 0; bottom: 0; width: min(460px, 92%);
+  position: fixed; right: 0; top: 0; bottom: 0; width: min(460px, 92%);
   border-radius: 12px 0 0 12px; max-height: 100%;
 }
 .rs-panel-head {
@@ -279,6 +283,17 @@ export const CSS = `
   animation: rs-spin 700ms linear infinite;
 }
 @keyframes rs-spin { to { transform: rotate(360deg); } }
+
+.rs-error-screen {
+  padding: 40px 30px; color: #d6d7d8; max-width: 900px; margin: 0 auto;
+}
+.rs-error-screen h2 { margin: 0 0 8px; font-size: 20px; color: #ff8f6b; }
+.rs-error-screen p { margin: 0 0 14px; font-size: 13px; color: #9aa4ad; }
+.rs-error-screen pre {
+  background: #0d0f12; border: 1px solid rgba(255,143,107,0.3); border-radius: 8px;
+  padding: 14px; font-size: 12px; color: #ffb59e; white-space: pre-wrap;
+  word-break: break-word; margin: 0 0 16px; max-height: 40vh; overflow: auto;
+}
 
 .rs-browse-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 10px;
