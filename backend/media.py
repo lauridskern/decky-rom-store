@@ -174,13 +174,27 @@ class SteamMedia:
         titles = re.findall(r'"title":\{"runs":\[\{"text":"((?:[^"\\]|\\.){3,90})"', body)
         wanted = _normalise(title)
         best = None
+        best_score = 0
         for video, name in zip(ids, titles):
             clean = _normalise(name.replace('\\"', ""))
-            if wanted and wanted not in clean and clean not in wanted:
+            if not wanted:
                 continue
-            if "trailer" in clean or "gameplay" in clean or best is None:
+            if clean.startswith(wanted):
+                score = 3
+            elif wanted in clean:
+                score = 2
+            elif clean in wanted:
+                score = 1
+            else:
+                continue
+            if "trailer" in clean:
+                score += 2
+            elif "gameplay" in clean or "announcement" in clean:
+                score += 1
+            if score > best_score:
+                best_score = score
                 best = (video, name)
-                if "trailer" in clean:
+                if score >= 5:
                     break
         if not best:
             return None

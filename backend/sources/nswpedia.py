@@ -192,6 +192,28 @@ class NswpediaSource(Source):
         except OSError:
             pass
 
+    async def media(self, entry: RomEntry) -> Optional[Dict[str, Any]]:
+        """The cover art of every game, plus the page imagery."""
+        try:
+            html = await self.http.get_text(entry.url)
+        except Exception:
+            return None
+        shots: List[Dict[str, str]] = []
+        if entry.cover:
+            shots.append({"kind": "image", "thumb": entry.cover, "full": entry.cover})
+        for match in re.finditer(r'src="(https?://[^"]+/wp-content/uploads/[^"]+)"', html):
+            url = match.group(1).split("?")[0]
+            if "logo" in url.lower() or "cropped-" in url.lower():
+                continue
+            if any(shot["full"] == url for shot in shots):
+                continue
+            shots.append({"kind": "image", "thumb": url, "full": url})
+            if len(shots) >= 8:
+                break
+        if not shots:
+            return None
+        return {"shots": shots, "caption": entry.title}
+
     # ------------------------------------------------------------------ details
     async def resolve(self, entry: RomEntry) -> List[RomFile]:
         try:

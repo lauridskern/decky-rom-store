@@ -22,6 +22,7 @@ from .httpclient import HttpClient, HttpError
 IGDB_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 IGDB_API_URL = "https://api.igdb.com/v4/games"
 IGDB_IMAGE_BASE = "https://images.igdb.com/igdb/image/upload/t_cover_big/"
+IGDB_SCREENSHOT_BASE = "https://images.igdb.com/igdb/image/upload/screenshot_huge/"
 
 # Words that make a title unsearchable on IGDB.
 _NOISE = ("the ", "a ", "an ")
@@ -111,7 +112,8 @@ class IgdbCovers:
             return None
 
         body = (
-            f'search "{query_title}"; fields name,cover.image_id,total_rating,rating_count; '
+            f'search "{query_title}"; fields name,cover.image_id,total_rating,rating_count,'
+            f"screenshots.image_id,videos.video_id; "
             f"where name ~ *\"{query_title}\"*; limit 5;"
         ).encode()
         try:
@@ -128,6 +130,8 @@ class IgdbCovers:
         url = None
         rating = None
         rating_count = None
+        shots: List[Dict[str, str]] = []
+        trailer = None
         wanted = query_title.lower()
         for game in games:
             name = (game.get("name") or "").lower()
@@ -138,6 +142,8 @@ class IgdbCovers:
                 url = f"{IGDB_IMAGE_BASE}{cover}.jpg"
                 rating = game.get("total_rating")
                 rating_count = game.get("rating_count")
+                shots = self._shots(game)
+                trailer = self._trailer(game)
                 break
         if url is None and games:
             cover = (games[0].get("cover") or {}).get("image_id")
@@ -145,15 +151,54 @@ class IgdbCovers:
                 url = f"{IGDB_IMAGE_BASE}{cover}.jpg"
                 rating = games[0].get("total_rating")
                 rating_count = games[0].get("rating_count")
+                shots = self._shots(games[0])
+                trailer = self._trailer(games[0])
 
         result: Optional[Dict[str, Any]] = None
-        if url or rating:
-            result = {"cover": url, "rating": rating, "rating_count": rating_count}
+        if url or rating or shots:
+            result = {
+                "cover": url,
+                "rating": rating,
+                "rating_count": rating_count,
+                "shots": shots,
+                "trailer": trailer,
+            }
         self._memory[key] = result
         self._save_cache()
         return result
 
-    async def lookup_many(self, titles: List[str], limit: int = 12) -> Dict[str, Optional[Dict[str, Any]]]:
+    @staticmethod
+    def _shots(game: Dict[str, Any]) -> List[Dict[str, str]]:
+        shots: List[Dict[str, str]] = []
+        for shot in (game.get("screenshots") or [])[:8]:
+            image = shot.get("image_id")
+            if not image:
+                continue
+            shots.append(
+                {
+                    "kind": "image",
+                    "thumb": f"{IGDB_SCREENSHOT_BASE}{image}.jpg",
+                    "full": f"{IGDB_SCREENSHOT_BASE}{image}.jpg",
+                }
+            )
+        return shots
+
+    @staticmethod
+    def _trailer(game: Dict[str, Any]) -> Optional[Dict[str, str]]:
+        for video in game.get("videos") or []:
+            video_id = video.get("video_id")
+            if not video_id:
+                continue
+            return {
+                "kind": "video",
+                "thumb": f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
+                "full": f"https://www.youtube.com/embed/{video_id}?autoplay=1&rel=0",
+                "watch": f"https://www.youtube.com/watch?v={video_id}",
+                "name": "Trailer",
+            }
+        return None
+
+    async def lookup_many(self, titles: List[str]) -> Dict[str, Optional[Dict[str, Any]]]:
         """Look several titles up in parallel (bounded)."""
         unique: List[str] = []
         for title in titles:

@@ -41,6 +41,7 @@ class SwitchRomsSource(Source):
         self.label = self.options.get("label", self.label)
         self.homepage = self.options.get("homepage", self.homepage)
         self.base = (self.options.get("base_url") or self.homepage or DEFAULT_BASE).rstrip("/")
+        self._pages: Dict[str, str] = {}
 
     # ------------------------------------------------------------------ search
     async def search(self, query: str, limit: int = 40, page: int = 1) -> List[RomEntry]:
@@ -174,8 +175,37 @@ class SwitchRomsSource(Source):
         return entries
 
     # ------------------------------------------------------------------ details
+    async def _page(self, url: str) -> str:
+        cached = self._pages.get(url)
+        if cached is not None:
+            return cached
+        html = await self.http.get_text(url)
+        if len(self._pages) > 24:
+            self._pages.clear()
+        self._pages[url] = html
+        return html
+
+    async def media(self, entry: RomEntry) -> Optional[Dict[str, Any]]:
+        """The site publishes wallpapers/box art for every game."""
+        try:
+            html = await self._page(entry.url)
+        except Exception:
+            return None
+        urls: List[str] = []
+        for match in re.finditer(r'src="(https?://[^"]+/wp-content/uploads/[^"]+)"', html):
+            url = match.group(1).split("?")[0]
+            if "logo" in url.lower() or url in urls:
+                continue
+            urls.append(url)
+            if len(urls) >= 8:
+                break
+        if not urls:
+            return None
+        shots = [{"kind": "image", "thumb": url, "full": url} for url in urls]
+        return {"shots": shots, "caption": entry.title}
+
     async def resolve(self, entry: RomEntry) -> List[RomFile]:
-        html = await self.http.get_text(entry.url)
+        html = await self._page(entry.url)
         match = _FILE_RE.search(html)
         if not match:
             # Some pages only expose the link through the download button.

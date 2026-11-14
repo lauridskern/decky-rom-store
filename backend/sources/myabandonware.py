@@ -46,6 +46,7 @@ class MyAbandonwareSource(Source):
         self._ts_host = self.options.get("ts_host") or DEFAULT_TS_HOST
         self._api_key: Optional[str] = None
         self._api_key_expiry: float = 0.0
+        self._pages: Dict[str, str] = {}
 
     # ------------------------------------------------------------ type sense key
     async def _ensure_key(self) -> str:
@@ -186,8 +187,48 @@ class MyAbandonwareSource(Source):
         )
 
     # ------------------------------------------------------------------ details
+    async def _page(self, url: str) -> str:
+        """Fetch a game page (cached, so we only ask once per game)."""
+        cached = self._pages.get(url)
+        if cached is not None:
+            return cached
+        html = await self.http.get_text(url)
+        if len(self._pages) > 24:
+            self._pages.clear()
+        self._pages[url] = html
+        return html
+
+    async def media(self, entry: RomEntry) -> Optional[Dict[str, Any]]:
+        """MyAbandonware has a full screenshot gallery for most games."""
+        try:
+            html = await self._page(entry.url)
+        except Exception:
+            return None
+        paths = re.findall(
+            r'<a class="game-screenshots__gallery-thumbnail[^"]*" href="([^"]+)"', html
+        )
+        shots: List[Dict[str, str]] = []
+        seen = set()
+        for path in paths:
+            full = absolute(self.base, path)
+            if full in seen:
+                continue
+            seen.add(full)
+            # The gallery links the large jpg, the thumbnails live next to it.
+            head, _, name = path.rpartition("/")
+            if head and name.endswith(".jpg"):
+                thumb = f"{head}/thumbs/{name[:-4]}.png"
+            else:
+                thumb = path
+            shots.append({"kind": "image", "thumb": absolute(self.base, thumb), "full": full})
+            if len(shots) >= 12:
+                break
+        if not shots:
+            return None
+        return {"shots": shots, "caption": entry.title}
+
     async def resolve(self, entry: RomEntry) -> List[RomFile]:
-        html = await self.http.get_text(entry.url)
+        html = await self._page(entry.url)
         files = self._parse_downloads(html, entry)
         entry.extra["download_html_seen"] = bool(files)
         # The game page carries the real box art ("default" image).

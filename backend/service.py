@@ -325,24 +325,57 @@ class StoreService:
 
         await asyncio.gather(*(resolve(entry) for entry in rom.entries))
 
-        # Media for the gallery strip (screenshots + trailer).
+        # Media for the gallery strip.
         primary = rom.entries[0] if rom.entries else None
         if primary:
-            try:
-                media = await self.media.lookup(primary.title)
-            except Exception:
-                media = None
-            if media and not media.get("trailer"):
-                try:
-                    trailer = await self.media.youtube_trailer(primary.title)
-                except Exception:
-                    trailer = None
-                if trailer:
-                    media["trailer"] = trailer
+            media = await self._build_media(primary)
             if media:
                 rom.extra = getattr(rom, "extra", {})
                 rom.extra["media"] = media
         return rom.to_dict()
+
+    async def _build_media(self, entry: RomEntry) -> Optional[Dict[str, Any]]:
+        """Collect artwork for a game.
+
+        The site the game came from is the best source (MyAbandonware has a
+        full screenshot gallery, the Switch sites publish their own art), then
+        IGDB if credentials are configured, and finally a YouTube trailer.
+        """
+        media: Dict[str, Any] = {}
+        source = next((s for s in self.build_sources() if s.id == entry.source), None)
+        if source is not None and hasattr(source, "media"):
+            try:
+                own = await source.media(entry)
+            except Exception:
+                own = None
+            if own:
+                media.update(own)
+
+        # IGDB adds real screenshots and a trailer when it is configured.
+        if self.covers.enabled:
+            try:
+                info = await self.covers.lookup(entry.title)
+            except Exception:
+                info = None
+            if info:
+                if info.get("cover") and not media.get("cover"):
+                    media["cover"] = info["cover"]
+                for shot in info.get("shots") or []:
+                    media.setdefault("shots", []).append(shot)
+                if info.get("trailer") and not media.get("trailer"):
+                    media["trailer"] = info["trailer"]
+
+        if not media.get("trailer"):
+            try:
+                trailer = await self.media.youtube_trailer(entry.title)
+            except Exception:
+                trailer = None
+            if trailer:
+                media["trailer"] = trailer
+        if not media.get("shots") and not media.get("trailer") and not media.get("cover"):
+            return None
+        media.setdefault("caption", entry.title)
+        return media
 
     # ------------------------------------------------------------------ download
     async def start_download(self, rom_id: str, entry_key: str, file_id: str,

@@ -35,6 +35,10 @@ class Source:
         """Return the downloadable files for an entry (may be empty)."""
         return list(entry.files)
 
+    async def media(self, entry: RomEntry) -> Optional[Dict[str, Any]]:
+        """Screenshots/artwork this site has for a game (optional)."""
+        return None
+
     async def resolve_download(self, rom_file: RomFile) -> str:
         """Return the URL that actually serves the bytes (default: as is)."""
         return rom_file.url
