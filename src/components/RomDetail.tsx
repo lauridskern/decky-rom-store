@@ -119,7 +119,7 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
             <div>
               <div className="rs-detail-titlebar">
                 <h2 className="rs-detail-title">{rom.title}</h2>
-                <button className="rs-close" onClick={onClose} title="Close">
+                <button className="rs-close" onClick={onClose} title="Close" autoFocus>
                   ✕
                 </button>
               </div>

@@ -461,6 +461,34 @@ class StoreService:
         }
 
     # ------------------------------------------------------------------ images
+    async def image_diagnostics(self, url: Optional[str] = None) -> Dict[str, Any]:
+        """Tell us exactly where an image gets stuck."""
+        plugin = os.path.basename(self.images._plugin_name or "")
+        sample = url or "https://static.romspedia.com/webp/roms/super-mario-64-cover.webp"
+        local = None
+        error = None
+        try:
+            local = await self.images.resolve(sample, "card")
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+        folder = self.images.folder
+        files = []
+        if os.path.isdir(folder):
+            files = [
+                {"name": name, "size": os.path.getsize(os.path.join(folder, name))}
+                for name in sorted(os.listdir(folder))[:5]
+            ]
+        return {
+            "plugin_name": plugin,
+            "base_url": self.images._base_url,
+            "local_url": local,
+            "cache_folder": folder,
+            "cache_exists": os.path.isdir(folder),
+            "cached_files": files,
+            "runtime_dir": self._runtime_dir,
+            "error": error,
+        }
+
     async def get_cover(self, url: Optional[str], kind: str = "card") -> Optional[str]:
         """Return a locally cached URL for a piece of artwork."""
         if not url:

@@ -24,7 +24,7 @@ from urllib.parse import quote
 
 from .httpclient import HttpClient, HttpError
 
-DEFAULT_BASE_URL = "http://127.0.0.1:1337"
+DEFAULT_BASE_URL = "http://localhost:1337"
 MAX_CACHE_BYTES = 400 * 1024 * 1024  # keep the runtime folder sane
 CONTENT_TYPES = {
     "image/webp": "webp",

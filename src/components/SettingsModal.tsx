@@ -1,6 +1,7 @@
 import { FC, useEffect, useState } from "react";
 import { Dropdown, TextField } from "@decky/ui";
 import { useBackGuard } from "./useBackGuard";
+import { getImageDiagnostics, ImageDiagnostics } from "../types";
 import { toaster } from "@decky/api";
 import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
 import { SOURCE_LABELS } from "./common";
@@ -33,6 +34,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [library, setLibrary] = useState<LibraryInfo | null>(null);
   const [customRoot, setCustomRoot] = useState("");
+  const [diagnostics, setDiagnostics] = useState<ImageDiagnostics | null>(null);
   // The Steam back button closes the settings instead of leaving the plugin.
   useBackGuard(true, onClose);
 
@@ -251,6 +253,31 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               onChange={(event) => update({ max_concurrent: Number(event.target.value) || 1 })}
             />
           </div>
+
+          <div className="rs-section-title">Diagnostics</div>
+          <div className="rs-form-row">
+            <label>Artwork proxy</label>
+            <button
+              className="rs-btn ghost"
+              onClick={() =>
+                getImageDiagnostics(null)
+                  .then(setDiagnostics)
+                  .catch(() => setDiagnostics(null))
+              }
+            >
+              Test image pipeline
+            </button>
+          </div>
+          {diagnostics ? (
+            <pre className="rs-diagnostics">
+{`plugin folder : ${diagnostics.plugin_name}
+base url      : ${diagnostics.base_url}
+local url     : ${diagnostics.local_url ?? "-"}
+cache folder  : ${diagnostics.cache_folder}
+cached files  : ${diagnostics.cached_files.length}
+error         : ${diagnostics.error ?? "none"}`}
+            </pre>
+          ) : null}
 
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
             <button className="rs-btn ghost" onClick={onClose}>

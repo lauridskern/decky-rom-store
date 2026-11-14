@@ -160,6 +160,17 @@ export interface StatusPayload {
   downloads: DownloadJob[];
 }
 
+export interface ImageDiagnostics {
+  plugin_name: string;
+  base_url: string;
+  local_url: string | null;
+  cache_folder: string;
+  cache_exists: boolean;
+  cached_files: { name: string; size: number }[];
+  runtime_dir: string;
+  error: string | null;
+}
+
 export interface StartDownloadResult {
   ok: boolean;
   error?: string;
@@ -188,3 +199,4 @@ export const getCover = callable<[string | null, string], string | null>("get_co
 export const prefetchCovers = callable<[string[], string], void>("prefetch_covers");
 export const getSystemCounts = callable<[], Record<string, number>>("get_system_counts");
 export const getStatus = callable<[], StatusPayload>("get_status");
+export const getImageDiagnostics = callable<[string | null], ImageDiagnostics>("image_diagnostics");

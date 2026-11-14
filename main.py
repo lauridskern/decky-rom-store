@@ -130,6 +130,9 @@ class Plugin:
         """Resolve a remote cover image to a locally cached URL."""
         return await self._self().service.get_cover(url, kind)
 
+    async def image_diagnostics(self, url: Optional[str] = None) -> Dict[str, Any]:
+        return await self._self().service.image_diagnostics(url)
+
     async def prefetch_covers(self, urls: List[Optional[str]], kind: str = "card") -> None:
         await self._self().service.prefetch_covers(urls, kind)
 

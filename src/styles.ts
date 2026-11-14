@@ -175,6 +175,30 @@ export const CSS = `
 }
 .rs-footer .rs-path { font-family: monospace; }
 .rs-error { color: #ff8f6b; }
+.rs-hintbar {
+  display: flex; gap: 14px; align-items: center; justify-content: flex-end;
+  font-size: 11px; color: #79838c; padding: 6px 2px 0;
+}
+.rs-hintbar b { color: #c9ced3; font-weight: 600; }
+
+/* The Steam controller moves focus with the d-pad - make it obvious where
+   the focus currently is. */
+.rs-btn:focus-visible,
+.rs-close:focus-visible,
+.rs-shot:focus-visible,
+.rs-browse-tile:focus-visible,
+.rs-steam-btn:focus-visible,
+.rs-icon-btn:focus-visible {
+  outline: 2px solid #66c0f4;
+  outline-offset: 1px;
+}
+
+.rs-diagnostics {
+  background: #0d0f12; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
+  padding: 10px 12px; font-size: 11px; color: #9aa4ad; margin: 0 0 14px;
+  white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto;
+}
+
 .rs-issues {
   display: inline-flex; align-items: center; gap: 5px;
   background: rgba(255,143,107,0.14); color: #ff8f6b;
