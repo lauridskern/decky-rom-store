@@ -16,6 +16,7 @@ from .downloader import DownloadManager
 from .emudeck import detect_rom_roots, list_folders, resolve_folder, system_folders
 from .httpclient import HttpClient
 from .images import ImageCache
+from .media import SteamMedia
 from .models import MergedRom, RomEntry, RomFile, normalize_title
 from .settings import Settings
 from .sources.base import Source
@@ -94,6 +95,7 @@ class StoreService:
         self._unreachable: Dict[str, float] = {}
         self.downloads = DownloadManager(self.http, max_concurrent=int(settings.get("max_concurrent", 2)))
         self.images = ImageCache(self.http, runtime_dir=runtime_dir, plugin_name=plugin_name)
+        self.media = SteamMedia(self.http, cache_dir=runtime_dir)
         self.covers = IgdbCovers(
             self.http,
             client_id=settings.get("igdb_client_id"),
@@ -322,6 +324,24 @@ class StoreService:
             entry.extra["error"] = last_error or "could not resolve the download link"
 
         await asyncio.gather(*(resolve(entry) for entry in rom.entries))
+
+        # Media for the gallery strip (screenshots + trailer).
+        primary = rom.entries[0] if rom.entries else None
+        if primary:
+            try:
+                media = await self.media.lookup(primary.title)
+            except Exception:
+                media = None
+            if media and not media.get("trailer"):
+                try:
+                    trailer = await self.media.youtube_trailer(primary.title)
+                except Exception:
+                    trailer = None
+                if trailer:
+                    media["trailer"] = trailer
+            if media:
+                rom.extra = getattr(rom, "extra", {})
+                rom.extra["media"] = media
         return rom.to_dict()
 
     # ------------------------------------------------------------------ download

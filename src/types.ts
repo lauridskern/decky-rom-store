@@ -34,6 +34,23 @@ export interface RomEntry {
   error: string | null;
 }
 
+export interface MediaShot {
+  kind: "image" | "video";
+  thumb: string;
+  full: string;
+  watch?: string;
+  name?: string;
+}
+
+export interface Media {
+  appid?: number;
+  caption?: string;
+  shots?: MediaShot[];
+  trailer?: MediaShot | null;
+  capsule?: string;
+  header?: string;
+}
+
 export interface MergedRom {
   id: string;
   title: string;
@@ -47,6 +64,7 @@ export interface MergedRom {
   size: number | null;
   variants: number;
   entries: RomEntry[];
+  extra?: { media?: Media };
 }
 
 export interface SourceInfo {

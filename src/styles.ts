@@ -88,6 +88,10 @@ export const CSS = `
 
 .rs-card {
   min-width: 0;
+  /* Off screen cards are not painted at all - this is what makes a long
+     grid feel smooth on the Deck. */
+  content-visibility: auto;
+  contain-intrinsic-size: 130px 230px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 10px;
@@ -112,18 +116,6 @@ export const CSS = `
   background: #05070a;
   display: flex; align-items: center; justify-content: center;
   overflow: hidden;
-}
-/* Blurred copy of the artwork as a backdrop so every source looks the same
-   no matter what aspect ratio its images have. */
-.rs-cover::before {
-  content: "";
-  position: absolute; inset: -12%;
-  background-image: var(--rs-cover, none);
-  background-size: cover;
-  background-position: center;
-  filter: blur(20px) saturate(1.25) brightness(0.75);
-  opacity: 0.75;
-  transform: translateZ(0);
 }
 .rs-cover > div { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
 .rs-cover img {
@@ -237,14 +229,6 @@ export const CSS = `
   border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
   overflow: hidden; display: flex; align-items: center; justify-content: center;
 }
-.rs-detail-cover::before {
-  content: "";
-  position: absolute; inset: -10%;
-  background-image: var(--rs-cover, none);
-  background-size: cover; background-position: center;
-  filter: blur(24px) saturate(1.2) brightness(0.7);
-  opacity: 0.7;
-}
 .rs-detail-cover img { position: relative; width: 100%; height: 100%; object-fit: cover; }
 .rs-detail-cover-sm { max-width: 190px; }
 .rs-detail-cover-placeholder {
@@ -340,6 +324,41 @@ export const CSS = `
   padding: 14px; font-size: 12px; color: #ffb59e; white-space: pre-wrap;
   word-break: break-word; margin: 0 0 16px; max-height: 40vh; overflow: auto;
 }
+
+.rs-gallery {
+  display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden;
+  padding: 2px 0 8px; margin-bottom: 10px;
+  scrollbar-width: thin; scroll-snap-type: x proximity;
+}
+.rs-gallery::-webkit-scrollbar { height: 6px; }
+.rs-gallery::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 3px; }
+.rs-shot {
+  position: relative; flex: 0 0 auto; width: 168px; height: 96px; padding: 0;
+  border-radius: 6px; overflow: hidden; cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.12); background: #05070a;
+  scroll-snap-align: start;
+}
+.rs-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rs-gallery, .rs-shot { contain: paint; }
+.rs-shot:hover { border-color: rgba(102,192,244,0.7); }
+.rs-play {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.35); color: #fff; font-size: 22px;
+}
+.rs-lightbox {
+  position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.88);
+  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+}
+.rs-lightbox-image { max-width: 92vw; max-height: 78vh; object-fit: contain; border-radius: 6px; }
+.rs-lightbox-video { width: min(1000px, 92vw); }
+.rs-lightbox-video iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; }
+.rs-lightbox-close {
+  position: absolute; top: 14px; right: 18px; width: 38px; height: 38px;
+  border-radius: 50%; border: 1px solid rgba(255,255,255,0.25);
+  background: rgba(0,0,0,0.5); color: #fff; font-size: 16px; cursor: pointer;
+}
+.rs-lightbox-hint { font-size: 11px; color: #8f98a0; display: flex; align-items: center; gap: 6px; }
+.rs-lightbox-link { color: #66c0f4; font-size: 12px; }
 
 .rs-browse-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(138px, 1fr)); gap: 10px;

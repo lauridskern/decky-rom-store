@@ -225,7 +225,32 @@ const handlers: Record<string, (...args: any[]) => any> = {
     megadrive: 906,
     arcades: 9053,
   }),
-  get_details: async (id: string) => roms.find((rom) => rom.id === id) ?? null,
+  get_details: async (id: string) => {
+    const rom = roms.find((r) => r.id === id);
+    if (!rom) return null;
+    return {
+      ...rom,
+      extra: {
+        media: {
+          appid: 367520,
+          caption: rom.title,
+          capsule: "https://cdn.cloudflare.steamstatic.com/steam/apps/367520/capsule_616x353.jpg",
+          trailer: {
+            kind: "video",
+            thumb: "https://img.youtube.com/vi/UAO2urG23S4/mqdefault.jpg",
+            full: "https://www.youtube.com/embed/UAO2urG23S4?autoplay=1&rel=0",
+            watch: "https://www.youtube.com/watch?v=UAO2urG23S4",
+            name: "Release Trailer",
+          },
+          shots: [1, 2, 3, 4, 5].map((n) => ({
+            kind: "image",
+            thumb: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_5384f9f8b96a0b9934b2bc35a4058376211636d2.600x338.jpg?n=${n}`,
+            full: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_5384f9f8b96a0b9934b2bc35a4058376211636d2.1920x1080.jpg?n=${n}`,
+          })),
+        },
+      },
+    };
+  },
   start_download: async () => ({ ok: true, job: jobs[0], destination: "/home/deck/EmuDecky/roms/n64" }),
   get_downloads: async () => jobs,
   cancel_download: async () => ({ ok: true }),

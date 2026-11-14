@@ -11,6 +11,7 @@ import {
 import { Dropdown } from "@decky/ui";
 import { formatBytes, formatCount, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
+import MediaGallery from "./MediaGallery";
 
 interface Props {
   rom: MergedRom;
@@ -150,6 +151,8 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
                 </div>
               )}
               {!loading && variants.length === 0 && <div className="rs-hint">No downloadable variants found.</div>}
+
+              <MediaGallery media={details?.extra?.media} />
 
               {!loading &&
                 variants

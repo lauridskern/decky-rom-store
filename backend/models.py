@@ -115,6 +115,7 @@ class MergedRom:
     title: str
     system: str
     entries: List[RomEntry] = field(default_factory=list)
+    extra: Dict[str, Any] = field(default_factory=dict)
 
     @property
     def sources(self) -> List[str]:
@@ -181,4 +182,5 @@ class MergedRom:
             "size": self.size,
             "variants": len(self.entries),
             "entries": [e.to_dict() for e in self.entries],
+            "extra": dict(self.extra),
         }

@@ -1,6 +1,10 @@
 import { FC, useEffect, useRef, useState } from "react";
 import { getCover } from "../types";
 
+// Resolved cover urls are cached for the session: remounting a card (for
+// example after a search) must not ask the backend again.
+const coverCache = new Map<string, string>();
+
 interface Props {
   url: string | null;
   kind?: "card" | "detail";
@@ -54,9 +58,18 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, eager 
       setSrc(null);
       return;
     }
+    const cacheKey = `${kind}:${url}`;
+    const cached = coverCache.get(cacheKey);
+    if (cached) {
+      setSrc(cached);
+      return;
+    }
     getCover(url, kind)
       .then((resolved) => {
-        if (!cancelled) setSrc(resolved ?? url);
+        if (cancelled) return;
+        const value = resolved ?? url;
+        coverCache.set(cacheKey, value);
+        setSrc(value);
       })
       .catch(() => {
         if (!cancelled) setSrc(url);
