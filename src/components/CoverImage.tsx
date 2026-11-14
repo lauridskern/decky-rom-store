@@ -83,7 +83,7 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, eager 
   return (
     <div ref={holder} className={className} style={{ width: "100%", height: "100%" }}>
       {src && !failed ? (
-        <img src={src} alt={alt} onError={() => setFailed(true)} />
+        <img src={src} alt={alt} decoding="async" onError={() => setFailed(true)} />
       ) : (
         <div className="rs-cover-placeholder">
           <FaGamepad />

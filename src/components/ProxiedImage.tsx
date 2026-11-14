@@ -5,6 +5,7 @@ interface Props {
   url: string;
   alt?: string;
   className?: string;
+  eager?: boolean;
 }
 
 /**
@@ -12,7 +13,7 @@ interface Props {
  * serves it from the Deck. Remote hosts are often blocked by the Steam
  * client, so going through the backend is the only reliable way.
  */
-const ProxiedImage: FC<Props> = ({ url, alt = "", className }) => {
+const ProxiedImage: FC<Props> = ({ url, alt = "", className, eager }) => {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -42,7 +43,16 @@ const ProxiedImage: FC<Props> = ({ url, alt = "", className }) => {
   if (!src || failed) {
     return <div className={`rs-shot-empty ${className ?? ""}`} />;
   }
-  return <img className={className} src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} />;
+  return (
+    <img
+      className={className}
+      src={src}
+      alt={alt}
+      loading={eager ? "eager" : "lazy"}
+      decoding="async"
+      onError={() => setFailed(true)}
+    />
+  );
 };
 
 export default ProxiedImage;

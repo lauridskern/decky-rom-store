@@ -40,11 +40,15 @@ export function useBackGuard(open: boolean, onClose: () => void): void {
       window.removeEventListener("popstate", onPop);
       if (pushed.current) {
         pushed.current = false;
-        try {
-          window.history.back();
-        } catch {
-          /* ignore */
-        }
+        // Defer it: doing this while React is unmounting the overlay makes
+        // the whole Steam client re-render at the worst possible moment.
+        window.setTimeout(() => {
+          try {
+            window.history.back();
+          } catch {
+            /* ignore */
+          }
+        }, 0);
       }
     };
   }, [open]);

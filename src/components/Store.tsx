@@ -61,6 +61,14 @@ const Store: FC = () => {
 
   const requestId = useRef(0);
   const showDownloadsRef = useRef(false);
+  const activeRef = useRef(0);
+
+  const renderCard = useCallback(
+    (rom: MergedRom, _index: number, rowIndex: number) => (
+      <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} rowIndex={rowIndex} />
+    ),
+    [page, setSelected],
+  );
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeRef = useChromeInsets(
     settings?.chrome_top_offset ?? 0,
@@ -91,9 +99,10 @@ const Store: FC = () => {
     loadCounts();
     refreshLibrary();
     refreshDownloads();
-    // Poll fast while the download drawer is open, slowly otherwise.
+    // Poll fast only while something is actually downloading, otherwise stay
+    // out of the Steam client's way.
     const timer = setInterval(() => {
-      if (showDownloadsRef.current) refreshDownloads();
+      if (showDownloadsRef.current || activeRef.current > 0) refreshDownloads();
     }, 1200);
     const slowTimer = setInterval(refreshDownloads, 5000);
     const countsTimer = setInterval(loadCounts, 600000);
@@ -201,6 +210,10 @@ const Store: FC = () => {
     () => jobs.filter((job) => job.status === "downloading" || job.status === "queued" || job.status === "extracting").length,
     [jobs],
   );
+
+  useEffect(() => {
+    activeRef.current = activeDownloads;
+  }, [activeDownloads]);
 
   const sourceOptions = useMemo(() => {
     const list = sources.filter((item) => item.enabled);
@@ -311,9 +324,7 @@ const Store: FC = () => {
             <VirtualGrid
               items={results}
               scrollRef={mainRef}
-              renderItem={(rom, _index, rowIndex) => (
-                <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} rowIndex={rowIndex} />
-              )}
+              renderItem={renderCard}
             />
 
             <div className="rs-bottom-space" />

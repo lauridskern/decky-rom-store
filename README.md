@@ -243,6 +243,13 @@ when you open one. If artwork still does not show up,
 open **Settings → Diagnostics → Test image pipeline**; it prints the plugin
 folder, the resolved local URL and the cache folder.
 
+## Performance
+
+The result grid is a windowed list: only the rows near the viewport exist in
+the DOM, scroll events are coalesced into one update per animation frame, image
+decoding is asynchronous and the download poll only runs fast while something
+is actually downloading.
+
 ## Gamepad
 
 The cards are Decky `Focusable` elements, so the Steam client's d-pad moves

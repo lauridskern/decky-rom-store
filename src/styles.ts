@@ -376,7 +376,7 @@ export const CSS = `
   overflow-x: auto; overflow-y: hidden;
   max-width: 100%; min-width: 0;
   padding: 2px 0 8px; margin-bottom: 10px;
-  scrollbar-width: thin; scroll-snap-type: x proximity;
+  scrollbar-width: thin;
   contain: layout paint;
   overscroll-behavior-x: contain;
 }
@@ -386,7 +386,7 @@ export const CSS = `
   position: relative; flex: 0 0 168px; width: 168px; height: 96px; padding: 0;
   border-radius: 6px; overflow: hidden; cursor: pointer;
   border: 1px solid rgba(255,255,255,0.12); background: #05070a;
-  scroll-snap-align: start; contain: paint;
+  contain: paint;
 }
 .rs-shot > img,
 .rs-shot > div {

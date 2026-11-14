@@ -65,13 +65,13 @@ const MediaGallery: FC<Props> = ({ media }) => {
       <div className="rs-gallery">
         {media.capsule ? (
           <button className="rs-shot" onClick={() => open({ kind: "image", thumb: media.capsule!, full: media.capsule! })}>
-            <ProxiedImage url={media.capsule} alt={media.caption || "cover"} />
+            <ProxiedImage url={media.capsule} alt={media.caption || "cover"} eager />
           </button>
         ) : null}
 
         {trailer ? (
           <button className="rs-shot rs-shot-video" onClick={() => open(trailer)}>
-            <ProxiedImage url={trailer.thumb} alt={trailer.name || "Trailer"} />
+            <ProxiedImage url={trailer.thumb} alt={trailer.name || "Trailer"} eager />
             <span className="rs-play">
               <FaPlay />
             </span>
@@ -80,7 +80,7 @@ const MediaGallery: FC<Props> = ({ media }) => {
 
         {shots.slice(0, 5).map((shot, index) => (
           <button className="rs-shot" key={`${shot.thumb}-${index}`} onClick={() => open(shot)}>
-            <ProxiedImage url={shot.thumb} alt={`Screenshot ${index + 1}`} />
+            <ProxiedImage url={shot.thumb} alt={`Screenshot ${index + 1}`} eager />
           </button>
         ))}
       </div>

@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 interface Props<T> {
   items: T[];
@@ -14,7 +14,7 @@ interface Props<T> {
  * With a few dozen cards this keeps the Steam client from laying out and
  * painting the whole catalogue every time the list scrolls.
  */
-function VirtualGrid<T>({
+function VirtualGridInner<T>({
   items,
   renderItem,
   scrollRef,
@@ -28,21 +28,31 @@ function VirtualGrid<T>({
   const [viewportHeight, setViewportHeight] = useState(600);
   const [rowHeights, setRowHeights] = useState<number[]>([]);
 
-  // Follow the scroll container.
+  // Follow the scroll container. Scroll events are coalesced into a single
+  // update per animation frame - reacting to every event made the grid stutter.
+  const frameRef = useRef<number | null>(null);
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
     const update = () => {
-      setScrollTop(element.scrollTop);
       setViewportHeight(element.clientHeight);
     };
+    const onScroll = () => {
+      if (frameRef.current !== null) return;
+      frameRef.current = requestAnimationFrame(() => {
+        frameRef.current = null;
+        setScrollTop(element.scrollTop);
+      });
+    };
     update();
-    element.addEventListener("scroll", update, { passive: true });
+    setScrollTop(element.scrollTop);
+    element.addEventListener("scroll", onScroll, { passive: true });
     const observer = new ResizeObserver(update);
     observer.observe(element);
     return () => {
-      element.removeEventListener("scroll", update);
+      element.removeEventListener("scroll", onScroll);
       observer.disconnect();
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
   }, [scrollRef]);
 
@@ -67,29 +77,7 @@ function VirtualGrid<T>({
     return out;
   }, [items, columns]);
 
-  // Measure the rendered rows.
-  useLayoutEffect(() => {
-    const element = gridRef.current;
-    if (!element) return;
-    const observer = new ResizeObserver((entries) => {
-      setRowHeights((previous) => {
-        const next = previous.slice();
-        let changed = false;
-        for (const entry of entries) {
-          const row = Number((entry.target as HTMLElement).dataset.row);
-          const height = Math.round(entry.contentRect.height);
-          if (!Number.isNaN(row) && next[row] !== height) {
-            next[row] = height;
-            changed = true;
-          }
-        }
-        return changed ? next : previous;
-      });
-    });
-    element.querySelectorAll<HTMLElement>("[data-row]").forEach((node) => observer.observe(node));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    return () => observer.disconnect();
-  });
+
 
   const { start, end, topSpace, bottomSpace } = useMemo(() => {
     const estimate = 230;
@@ -121,6 +109,33 @@ function VirtualGrid<T>({
     return { start: startRow, end: endRow, topSpace: top, bottomSpace: bottom };
   }, [rows, rowHeights, scrollTop, viewportHeight, overscan]);
 
+  // Measure the rendered rows. This must only run when the visible rows
+  // change - re-creating the observer on every render was a major source of
+  // the scroll stutter.
+  const visibleStart = useMemo(() => start, [start]);
+  const visibleEnd = useMemo(() => end, [end]);
+  useLayoutEffect(() => {
+    const element = gridRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver((entries) => {
+      setRowHeights((previous) => {
+        const next = previous.slice();
+        let changed = false;
+        for (const entry of entries) {
+          const row = Number((entry.target as HTMLElement).dataset.row);
+          const height = Math.round(entry.contentRect.height);
+          if (!Number.isNaN(row) && next[row] !== height) {
+            next[row] = height;
+            changed = true;
+          }
+        }
+        return changed ? next : previous;
+      });
+    });
+    element.querySelectorAll<HTMLElement>("[data-row]").forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [visibleStart, visibleEnd, columns]);
+
   const renderRow = useCallback(
     (rowIndex: number) => {
       const row = rows[rowIndex];
@@ -151,5 +166,7 @@ function VirtualGrid<T>({
     </div>
   );
 }
+
+const VirtualGrid = memo(VirtualGridInner) as typeof VirtualGridInner;
 
 export default VirtualGrid;
