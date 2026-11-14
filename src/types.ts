@@ -125,6 +125,7 @@ export interface Settings {
   show_nsfw: boolean;
   chrome_top_offset: number;
   chrome_bottom_offset: number;
+  igdb_replace_covers: boolean;
   igdb_client_id: string;
   igdb_client_secret: string;
 }

@@ -31,17 +31,10 @@ export const CSS = `
 }
 
 .rs-search-wrap { flex: 1 1 200px; min-width: 140px; position: relative; }
-.rs-search-wrap input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 12px 9px 34px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.35);
-  color: #fff;
-  font-size: 14px;
-  outline: none;
-}
+/* Steam's TextField carries a floating label - shrink it for the header. */
+.rs-search-wrap > * { margin: 0 !important; }
+.rs-search-wrap label { font-size: 8.5px !important; line-height: 1 !important; margin-bottom: 1px !important; }
+.rs-search-wrap input { height: 28px !important; padding-top: 2px !important; padding-bottom: 2px !important; font-size: 13px !important; }
 .rs-search-wrap input:focus { border-color: #66c0f4; }
 .rs-search-icon {
   position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
@@ -236,7 +229,7 @@ export const CSS = `
 .rs-panel-head h3 { margin: 0; font-size: 16px; color: #fff; }
 .rs-panel-body { padding: 16px 18px; overflow-y: auto; }
 
-.rs-detail-grid { display: grid; grid-template-columns: 240px 1fr; gap: 18px; }
+.rs-detail-grid { display: grid; grid-template-columns: 190px 1fr; gap: 16px; }
 .rs-detail-cover {
   position: relative;
   aspect-ratio: 3/4; width: 100%; background: #05070a;
@@ -252,6 +245,7 @@ export const CSS = `
   opacity: 0.7;
 }
 .rs-detail-cover img { position: relative; width: 100%; height: 100%; object-fit: cover; }
+.rs-detail-cover-sm { max-width: 190px; }
 .rs-detail-cover-placeholder {
   aspect-ratio: 3/4; width: 100%; background: #05070a; border-radius: 8px;
   display: flex; align-items: center; justify-content: center; font-size: 48px; color: rgba(255,255,255,0.1); font-weight: 800;
@@ -323,6 +317,7 @@ export const CSS = `
 }
 
 .rs-main.is-loading { display: flex; align-items: center; justify-content: center; }
+.rs-main.is-empty { overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .rs-loading {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: 12px; padding: 60px; color: #8b949d; text-align: center;

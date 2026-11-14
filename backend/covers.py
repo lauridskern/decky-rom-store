@@ -89,8 +89,8 @@ class IgdbCovers:
         return self._token
 
     # ------------------------------------------------------------------ lookup
-    async def lookup(self, title: str) -> Optional[str]:
-        """Return an IGDB cover URL for a game title, if one is known."""
+    async def lookup(self, title: str) -> Optional[Dict[str, Any]]:
+        """Return the IGDB art and rating for a game title, if known."""
         if not self.enabled or not title:
             return None
         key = title.strip().lower()
@@ -111,7 +111,7 @@ class IgdbCovers:
             return None
 
         body = (
-            f'search "{query_title}"; fields name,cover.image_id; '
+            f'search "{query_title}"; fields name,cover.image_id,total_rating,rating_count; '
             f"where name ~ *\"{query_title}\"*; limit 5;"
         ).encode()
         try:
@@ -126,6 +126,8 @@ class IgdbCovers:
             return None
 
         url = None
+        rating = None
+        rating_count = None
         wanted = query_title.lower()
         for game in games:
             name = (game.get("name") or "").lower()
@@ -134,17 +136,24 @@ class IgdbCovers:
                 continue
             if name.startswith(wanted) or wanted in name:
                 url = f"{IGDB_IMAGE_BASE}{cover}.jpg"
+                rating = game.get("total_rating")
+                rating_count = game.get("rating_count")
                 break
         if url is None and games:
             cover = (games[0].get("cover") or {}).get("image_id")
             if cover:
                 url = f"{IGDB_IMAGE_BASE}{cover}.jpg"
+                rating = games[0].get("total_rating")
+                rating_count = games[0].get("rating_count")
 
-        self._memory[key] = url
+        result: Optional[Dict[str, Any]] = None
+        if url or rating:
+            result = {"cover": url, "rating": rating, "rating_count": rating_count}
+        self._memory[key] = result
         self._save_cache()
-        return url
+        return result
 
-    async def lookup_many(self, titles: List[str], limit: int = 12) -> Dict[str, Optional[str]]:
+    async def lookup_many(self, titles: List[str], limit: int = 12) -> Dict[str, Optional[Dict[str, Any]]]:
         """Look several titles up in parallel (bounded)."""
         unique: List[str] = []
         for title in titles:
@@ -160,7 +169,7 @@ class IgdbCovers:
                 return title, await self.lookup(title)
 
         results = await asyncio.gather(*(one(title) for title in unique), return_exceptions=True)
-        found: Dict[str, Optional[str]] = {}
+        found: Dict[str, Optional[Dict[str, Any]]] = {}
         for item in results:
             if isinstance(item, BaseException):
                 continue

@@ -8,6 +8,7 @@ import {
   RomEntry,
   RomFile,
 } from "../types";
+import { Dropdown } from "@decky/ui";
 import { formatBytes, formatCount, SOURCE_LABELS, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 
@@ -97,7 +98,7 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
             <div>
               {primary?.cover_full || rom.cover ? (
                 <div
-                  className="rs-detail-cover"
+                  className="rs-detail-cover rs-detail-cover-sm"
                   style={
                     (primary?.cover_full ?? rom.cover)
                       ? ({ ["--rs-cover" as string]: `url(${primary?.cover_full ?? rom.cover})` } as CSSProperties)
@@ -111,13 +112,12 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
               )}
               <div className="rs-form-row" style={{ marginTop: 12, flexDirection: "column", alignItems: "stretch" }}>
                 <label style={{ flex: "0 0 auto" }}>Save into</label>
-                <select value={target} onChange={(event) => setTarget(event.target.value)}>
-                  {systems.map((item) => (
-                    <option key={item.key} value={item.key}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
+                <Dropdown
+                  rgOptions={systems.map((item) => ({ label: item.label, data: item.key }))}
+                  selectedOption={target}
+                  onChange={(option) => setTarget(option.data)}
+                  menuLabel="System"
+                />
                 <div className="rs-hint rs-path">{destination}</div>
               </div>
             </div>
@@ -141,7 +141,6 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
                 {rom.year ? <span className="rs-pill">{rom.year}</span> : null}
               </div>
 
-              {primary?.summary ? <p style={{ color: "#9aa4ad", fontSize: 12, marginTop: 0 }}>{primary.summary}</p> : null}
               {primary?.developer || primary?.publisher ? (
                 <div className="rs-meta" style={{ marginBottom: 10 }}>
                   {primary.developer ? <span className="rs-pill">{primary.developer}</span> : null}
@@ -154,7 +153,6 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
                 </div>
               ) : null}
 
-              <div className="rs-section-title">Available files</div>
               {loading && (
                 <div className="rs-loading">
                   <div className="rs-spinner" /> Resolving download links…

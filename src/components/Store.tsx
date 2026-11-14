@@ -271,7 +271,11 @@ const Store: FC = () => {
         </button>
       </div>
 
-      <div className={`rs-main${loading && results.length === 0 ? " is-loading" : ""}`}>
+      <div
+        className={`rs-main${loading && results.length === 0 ? " is-loading" : ""}${
+          !loading && results.length === 0 ? " is-empty" : ""
+        }`}
+      >
         {loading && results.length === 0 ? (
           <div className="rs-loading">
             <div className="rs-spinner" /> Searching…
@@ -319,16 +323,19 @@ const Store: FC = () => {
       </div>
 
       <div className="rs-footer">
-        <span>{results.length} titles</span>
-        {Object.entries(sourceCounts).map(([id, count]) => (
-          <span key={id}>
-            {SOURCE_LABELS[id] ?? id}: {count}
-          </span>
-        ))}
-        <span className="rs-path">{settings?.roms_root || library?.root || ""}</span>
+        <span className="rs-count">
+          {results.length} titles
+          {Object.entries(sourceCounts)
+            .map(([id, count]) => ` · ${SOURCE_LABELS[id] ?? id} ${count}`)
+            .join("")}
+        </span>
         {Object.keys(errors).length > 0 && (
-          <button className="rs-issues" onClick={() => setShowIssues((value) => !value)}>
-            ⚠ {Object.keys(errors).length} source{Object.keys(errors).length === 1 ? "" : "s"} unavailable
+          <button
+            className="rs-issues rs-issues-icon"
+            title={`${Object.keys(errors).length} source(s) unavailable`}
+            onClick={() => setShowIssues((value) => !value)}
+          >
+            ⚠
           </button>
         )}
       </div>

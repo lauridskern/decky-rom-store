@@ -1,5 +1,5 @@
 import { FC, useEffect, useState } from "react";
-import { TextField } from "@decky/ui";
+import { Dropdown, TextField } from "@decky/ui";
 import { toaster } from "@decky/api";
 import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
 import { SOURCE_LABELS } from "./common";
@@ -99,19 +99,17 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           </div>
           <div className="rs-form-row">
             <label>Detected folders</label>
-            <select
-              value=""
-              onChange={(event) => {
-                if (event.target.value) setCustomRoot(event.target.value);
+            <Dropdown
+              rgOptions={[
+                { label: "Select a detected location…", data: "" },
+                ...candidates.map((path) => ({ label: path, data: path })),
+              ]}
+              selectedOption=""
+              onChange={(option) => {
+                if (option.data) setCustomRoot(option.data);
               }}
-            >
-              <option value="">Select a detected location…</option>
-              {candidates.map((path) => (
-                <option key={path} value={path}>
-                  {path}
-                </option>
-              ))}
-            </select>
+              menuLabel="Detected folders"
+            />
           </div>
           <div className="rs-form-row">
             <div className="rs-hint">
@@ -180,6 +178,10 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               onChange={(event) => update({ igdb_client_id: event.target.value })}
               placeholder="optional"
             />
+          </div>
+          <div className="rs-form-row">
+            <label>Replace all artwork</label>
+            <Toggle on={settings.igdb_replace_covers !== false} onChange={(value) => update({ igdb_replace_covers: value })} />
           </div>
           <div className="rs-form-row">
             <label>IGDB client secret</label>

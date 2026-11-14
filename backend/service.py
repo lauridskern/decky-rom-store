@@ -390,25 +390,35 @@ class StoreService:
         await self._apply_portrait_covers(roms)
         if not self.covers.enabled:
             return
-        missing: List[str] = []
+        replace = bool(self.settings.get("igdb_replace_covers", True))
+        wanted: List[str] = []
         for rom in roms:
             for entry in rom.entries:
-                if not entry.cover and entry.title not in missing:
-                    missing.append(entry.title)
-        if not missing:
+                if replace or not entry.cover:
+                    if entry.title not in wanted:
+                        wanted.append(entry.title)
+        if not wanted:
             return
         try:
-            found = await self.covers.lookup_many(missing, limit=12)
+            found = await self.covers.lookup_many(wanted, limit=12)
         except Exception:
             return
         for rom in roms:
             for entry in rom.entries:
-                if entry.cover:
+                info = found.get(entry.title)
+                if not info:
                     continue
-                url = found.get(entry.title)
-                if url:
+                url = info.get("cover")
+                if url and (replace or not entry.cover):
                     entry.cover = url
                     entry.cover_full = entry.cover_full or url
+                rating = info.get("rating")
+                if rating and not entry.rating:
+                    try:
+                        entry.rating = round(float(rating), 1)
+                        entry.rating_count = info.get("rating_count") or entry.rating_count
+                    except (TypeError, ValueError):
+                        pass
 
     async def _apply_portrait_covers(self, roms: List[MergedRom]) -> None:
         """Give Switch games the portrait box art from the cover index."""
