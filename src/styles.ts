@@ -88,10 +88,6 @@ export const CSS = `
 
 .rs-card {
   min-width: 0;
-  /* Off screen cards are not painted at all - this is what makes a long
-     grid feel smooth on the Deck. */
-  content-visibility: auto;
-  contain-intrinsic-size: 130px 230px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 10px;
@@ -175,7 +171,6 @@ export const CSS = `
 }
 .rs-footer .rs-path { font-family: monospace; }
 .rs-error { color: #ff8f6b; }
-.rs-focus-ring { display: block; width: 100%; }
 .rs-foot-hint { color: #79838c; }
 .rs-foot-hint b { color: #c9ced3; font-weight: 600; }
 

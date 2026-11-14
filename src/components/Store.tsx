@@ -1,6 +1,6 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
-import { Button, Dropdown, FocusRing, TextField } from "@decky/ui";
+import { Button, Dropdown, TextField } from "@decky/ui";
 import { FaCog, FaDownload } from "react-icons/fa";
 import {
   browseRoms,
@@ -308,15 +308,13 @@ const Store: FC = () => {
 
         {results.length > 0 ? (
           <>
-            <FocusRing className="rs-focus-ring">
-              <VirtualGrid
-                items={results}
-                scrollRef={mainRef}
-                renderItem={(rom, _index, rowIndex) => (
-                  <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} rowIndex={rowIndex} />
-                )}
-              />
-            </FocusRing>
+            <VirtualGrid
+              items={results}
+              scrollRef={mainRef}
+              renderItem={(rom, _index, rowIndex) => (
+                <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} rowIndex={rowIndex} />
+              )}
+            />
 
             <div className="rs-bottom-space" />
 

@@ -126,11 +126,9 @@ function VirtualGrid<T>({
       const row = rows[rowIndex];
       if (!row) return null;
       const base = rowIndex * columns;
-      return row.map((item, offset) => (
-        <div key={base + offset} style={{ display: "contents" }}>
-          {renderItem(item, base + offset, rowIndex)}
-        </div>
-      ));
+      // The card is the grid item itself - a display:contents wrapper can
+      // stop images inside it from painting.
+      return row.map((item, offset) => renderItem(item, base + offset, rowIndex));
     },
     [rows, columns, renderItem],
   );

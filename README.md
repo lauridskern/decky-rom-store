@@ -238,6 +238,13 @@ Decky keys its file routes by. If artwork still does not show up, open
 **Settings → Diagnostics → Test image pipeline**; it prints the plugin folder,
 the resolved local URL and the cache folder.
 
+## Gamepad
+
+The cards are Decky `Focusable` elements, so the Steam client's d-pad moves
+the focus ring between them and **A** opens the selected game. The grid is
+rendered with a windowed (virtualised) list, so only the rows near the
+viewport exist in the DOM - that is what keeps the list smooth.
+
 ## The back button
 
 The Steam Deck's **B** button works inside the plugin:
