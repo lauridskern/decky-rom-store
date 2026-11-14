@@ -37,6 +37,7 @@ class Plugin:
         decky.logger.info("ROM Store backend started")
         library = self.service.library()
         decky.logger.info(f"ROM library root: {library['root']} (exists={library['root_exists']})")
+        decky.logger.info(f"TLS trust store: {self.service.http.ca_source}")
 
     async def _unload(self) -> None:
         decky.logger.info("ROM Store backend unloading")

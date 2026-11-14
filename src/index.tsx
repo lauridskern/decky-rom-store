@@ -6,6 +6,7 @@ import { FaStore } from "react-icons/fa";
 import Store from "./components/Store";
 import { injectStyles } from "./styles";
 import { requestSearch } from "./state";
+import StoreStyles from "./components/StoreStyles";
 import logo from "virtual:logo";
 
 const StoreRoute = () => <Store />;
@@ -50,6 +51,7 @@ function PanelContent() {
 
   return (
     <>
+      <StoreStyles />
       <PanelSection title="ROM Store">
         <PanelSectionRow>
           <div style={{ display: "flex", justifyContent: "center", width: "100%", marginBottom: "4px" }}>

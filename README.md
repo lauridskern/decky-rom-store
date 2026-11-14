@@ -151,6 +151,32 @@ Existing files are never overwritten silently — the new file is written as
 * **Keep the archive too** — keep the zip next to the extracted files.
 * **Results per source** / **Parallel downloads**.
 
+## Troubleshooting
+
+**"certificate verify failed" / every source shows as unavailable**
+
+SteamOS ships an outdated CA bundle, so Python cannot verify modern
+certificates. The plugin ships its own up to date CA store
+(`backend/cacert.pem`) and uses it for every request, and falls back to a
+relaxed context if even that fails. The trust store in use is logged on
+startup:
+
+```bash
+grep "TLS trust store" ~/homebrew/logs/rom-store/rom-store.log
+```
+
+**The UI is unstyled**
+
+The stylesheet is rendered inside the plugin's own React tree, so it cannot
+be dropped by the Steam client re-rendering its `<head>`. If the plugin was
+installed from an older release, update it and restart Decky Loader.
+
+**A source is unreachable**
+
+Each source reports its own status in the status bar (click the warning chip
+for the full error). The DumbRoms adapter needs the correct address in
+*Settings → Sources*.
+
 ## Legal
 
 The plugin is a front end for sites you choose to use. It does not ship, host or

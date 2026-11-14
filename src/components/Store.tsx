@@ -15,6 +15,7 @@ import {
   SourceInfo,
 } from "../types";
 import { SOURCE_LABELS, systemLabel } from "./common";
+import StoreStyles from "./StoreStyles";
 import { searchState } from "../state";
 import RomCard from "./RomCard";
 import RomDetail from "./RomDetail";
@@ -53,6 +54,7 @@ const Store: FC = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [showIssues, setShowIssues] = useState(false);
 
   const requestId = useRef(0);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,9 +140,17 @@ const Store: FC = () => {
     }
   }, [searchState.version]);
 
-  // Debounced search while typing.
+  // Debounced search while typing. An empty query without a console filter
+  // means "browse mode" - do not fire a pointless search for it.
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
+    if (!query.trim() && system === "all") {
+      requestId.current += 1;
+      setResults([]);
+      setSearched(false);
+      setLoading(false);
+      return;
+    }
     debounce.current = setTimeout(() => {
       runSearch(query, system, source, sort, 1, false);
     }, 320);
@@ -182,6 +192,7 @@ const Store: FC = () => {
 
   return (
     <div className="rs-store">
+      <StoreStyles />
       <div className="rs-header">
         <div className="rs-brand">
           ROM Store <small>EmuDecky library</small>
@@ -296,12 +307,23 @@ const Store: FC = () => {
           </span>
         ))}
         <span className="rs-path">{settings?.roms_root || library?.root || ""}</span>
-        {Object.entries(errors).map(([id, message]) => (
-          <span key={id} className="rs-error">
-            {SOURCE_LABELS[id] ?? id}: {message}
-          </span>
-        ))}
+        {Object.keys(errors).length > 0 && (
+          <button className="rs-issues" onClick={() => setShowIssues((value) => !value)}>
+            ⚠ {Object.keys(errors).length} source{Object.keys(errors).length === 1 ? "" : "s"} unavailable
+          </button>
+        )}
       </div>
+
+      {showIssues && Object.keys(errors).length > 0 && (
+        <div className="rs-issue-list">
+          {Object.entries(errors).map(([id, message]) => (
+            <div className="rs-issue-row" key={id}>
+              <b>{SOURCE_LABELS[id] ?? id}</b>
+              <span>{message}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {showBrowse && (
         <div className="rs-overlay" onClick={(event) => event.target === event.currentTarget && setShowBrowse(false)}>

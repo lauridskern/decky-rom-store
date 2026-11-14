@@ -1,9 +1,10 @@
 /** Styles for the ROM Store, injected at runtime (Decky does not load CSS files). */
 export const CSS = `
 .rs-store {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 100;
+  min-height: 0;
+  z-index: 10;
   display: flex;
   flex-direction: column;
   background: linear-gradient(180deg, #16191d 0%, #0f1114 100%);
@@ -117,7 +118,10 @@ export const CSS = `
   overflow: hidden;
 }
 .rs-cover > div { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-.rs-cover img { width: 100%; height: 100%; object-fit: contain; }
+.rs-cover img {
+  width: 100%; height: 100%; object-fit: contain;
+  transform: translateZ(0); backface-visibility: hidden;
+}
 .rs-cover .rs-placeholder { font-size: 34px; color: rgba(255,255,255,0.14); display: flex; }
 .rs-cover .rs-system-tag {
   position: absolute; left: 6px; top: 6px;
@@ -163,6 +167,21 @@ export const CSS = `
 }
 .rs-footer .rs-path { font-family: monospace; }
 .rs-error { color: #ff8f6b; }
+.rs-issues {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(255,143,107,0.14); color: #ff8f6b;
+  border: 1px solid rgba(255,143,107,0.35); border-radius: 10px;
+  padding: 1px 8px; font-size: 11px; cursor: pointer;
+}
+.rs-issues:hover { background: rgba(255,143,107,0.24); }
+.rs-issue-list {
+  position: absolute; left: 0; right: 0; bottom: 100%;
+  background: #1b1f24; border-top: 1px solid rgba(255,143,107,0.3);
+  padding: 10px 18px; max-height: 40vh; overflow-y: auto;
+}
+.rs-issue-row { display: flex; gap: 8px; font-size: 12px; margin-bottom: 6px; }
+.rs-issue-row b { color: #ff8f6b; flex: 0 0 auto; }
+.rs-issue-row span { color: #9aa4ad; word-break: break-word; }
 
 /* ---------------------------------------------------------------- overlay */
 .rs-overlay {
@@ -284,11 +303,20 @@ export const CSS = `
 
 let injected = false;
 
+/**
+ * Fallback: inject the sheet into the document head.
+ *
+ * Decky renders plugin content inside the Steam client DOM, but the head is
+ * owned by Steam and can be replaced when the client re-renders, which drops
+ * the sheet and leaves the plugin completely unstyled. The stylesheet is
+ * therefore also rendered as part of the React tree (see <StoreStyles />),
+ * where it lives and dies with the plugin content.
+ */
 export function injectStyles(): void {
   if (injected || typeof document === "undefined") return;
   injected = true;
   const style = document.createElement("style");
   style.id = "rom-store-styles";
   style.textContent = CSS;
-  document.head.appendChild(style);
+  (document.head || document.documentElement).appendChild(style);
 }

@@ -18,7 +18,9 @@ import urllib.request
 import zlib
 from dataclasses import dataclass, field
 from http.cookiejar import CookieJar
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Optional, Set
+
+from .certs import is_certificate_error, relaxed_context, ssl_context
 
 DEFAULT_UA = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -82,14 +84,17 @@ class HttpClient:
         self._jar = CookieJar()
         self._lock = threading.Lock()
         self._last_request: Dict[str, float] = {}
-        ctx = ssl.create_default_context()
+        # SteamOS ships an outdated CA store, so we use our own bundle.
+        self._context, self._ca_source = ssl_context()
+        self._relaxed = relaxed_context()
+        self._relaxed_hosts: Set[str] = set()
         self._opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self._jar),
-            urllib.request.HTTPSHandler(context=ctx),
+            urllib.request.HTTPSHandler(context=self._context),
         )
         self._no_redirect = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self._jar),
-            urllib.request.HTTPSHandler(context=ctx),
+            urllib.request.HTTPSHandler(context=self._context),
             _NoRedirect,
         )
 
@@ -134,6 +139,21 @@ class HttpClient:
               headers: Optional[Dict[str, str]] = None, allow_redirects: bool = True) -> Response:
         host = urllib.request.Request(url).host or ""
         self._throttle(host)
+        try:
+            return self._open_once(url, method, data, headers, allow_redirects)
+        except urllib.error.URLError as exc:
+            reason = exc.reason
+            if is_certificate_error(reason) and host not in self._relaxed_hosts:
+                # The trust store on this machine cannot verify this host -
+                # retry once without verification so the plugin keeps working.
+                self._relaxed_hosts.add(host)
+                return self._open_relaxed(url, method, data, headers, allow_redirects)
+            raise HttpError(f"Request failed: {reason}", url=url) from exc
+        except (TimeoutError, OSError) as exc:
+            raise HttpError(f"Network error: {exc}", url=url) from exc
+
+    def _open_once(self, url: str, method: str, data: Optional[bytes],
+                   headers: Optional[Dict[str, str]], allow_redirects: bool) -> Response:
         opener = self._opener if allow_redirects else self._no_redirect
         req = self._build_request(url, method, data, headers or {})
         try:
@@ -145,10 +165,25 @@ class HttpClient:
             body = exc.read()
             body = self._decode_body(body, exc.headers.get("Content-Encoding", "") if exc.headers else "")
             return Response(exc.code, exc.geturl(), dict(exc.headers.items()) if exc.headers else {}, body)
+
+    def _open_relaxed(self, url: str, method: str, data: Optional[bytes],
+                      headers: Optional[Dict[str, str]], allow_redirects: bool) -> Response:
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(self._jar),
+            urllib.request.HTTPSHandler(context=self._relaxed),
+            *_NO_REDIRECT if not allow_redirects else [],
+        )
+        req = self._build_request(url, method, data, headers or {})
+        try:
+            with opener.open(req, timeout=self._timeout) as resp:
+                body = resp.read()
+                body = self._decode_body(body, resp.headers.get("Content-Encoding", ""))
+                return Response(resp.status, resp.geturl(), dict(resp.headers.items()), body)
+        except urllib.error.HTTPError as exc:
+            body = exc.read()
+            return Response(exc.code, exc.geturl(), dict(exc.headers.items()) if exc.headers else {}, body)
         except urllib.error.URLError as exc:
             raise HttpError(f"Request failed: {exc.reason}", url=url) from exc
-        except (TimeoutError, OSError) as exc:
-            raise HttpError(f"Network error: {exc}", url=url) from exc
 
     # --------------------------------------------------------------- public API
     async def request(self, url: str, method: str = "GET", data: Optional[bytes] = None,
@@ -245,11 +280,22 @@ class HttpClient:
             raise HttpError(f"HTTP {exc.code} while downloading {url}", exc.code, url) from exc
         except HttpError:
             raise
-        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        except urllib.error.URLError as exc:
+            if is_certificate_error(exc.reason):
+                raise HttpError(
+                    f"TLS problem while downloading {url}: {exc.reason}", url=url
+                ) from exc
+            raise HttpError(f"Download failed: {exc.reason}", url=url) from exc
+        except (TimeoutError, OSError) as exc:
             raise HttpError(f"Download failed: {exc}", url=url) from exc
         if on_progress:
             on_progress(written, written)
         return written
+
+    @property
+    def ca_source(self) -> str:
+        """Where the TLS trust store came from (for the plugin log)."""
+        return self._ca_source
 
     def cookies_snapshot(self) -> str:
         return "; ".join(f"{c.name}={c.value}" for c in self._jar)
