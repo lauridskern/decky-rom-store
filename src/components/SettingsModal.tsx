@@ -49,7 +49,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
   if (!settings) {
     return (
       <div className="rs-overlay">
-        <div className="rs-panel settings">
+        <div className="rs-panel settings" role="dialog" aria-modal="true" aria-label="Settings">
           <div className="rs-panel-body">
             <div className="rs-loading">
               <div className="rs-spinner" /> Loading settings…
@@ -84,7 +84,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
 
   return (
     <div className="rs-overlay" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="rs-panel settings">
+      <div className="rs-panel settings" role="dialog" aria-modal="true" aria-label="Settings">
         <div className="rs-panel-head">
           <h3>Settings</h3>
           <button className="rs-btn ghost" onClick={onClose}>

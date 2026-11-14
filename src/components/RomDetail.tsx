@@ -86,7 +86,7 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
 
   return (
     <div className="rs-overlay" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="rs-panel detail">
+      <div className="rs-panel detail" role="dialog" aria-modal="true" aria-label={rom.title}>
         <div className="rs-panel-body">
           <div className="rs-detail-grid">
             <div>
