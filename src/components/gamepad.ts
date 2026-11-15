@@ -28,6 +28,8 @@ export const PAD = {
   OPTIONS: 4, // Y
   BUMPER_LEFT: 5,
   BUMPER_RIGHT: 6,
+  TRIGGER_LEFT: 7,
+  TRIGGER_RIGHT: 8,
   DIR_UP: 9,
   DIR_DOWN: 10,
   DIR_LEFT: 11,

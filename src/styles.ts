@@ -91,6 +91,122 @@ export const CSS = `
 }
 .rs-pager-label { font-size: 12px; color: #8b949d; }
 
+/* Console chips under the header (A picks, L2/R2 step). */
+.rs-chips {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+  padding: 7px 18px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.rs-chips::-webkit-scrollbar { display: none; }
+.rs-chip-btn {
+  flex: 0 0 auto;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #b8c0c7;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.rs-chip-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.rs-chip-btn.active { background: #66c0f4; color: #0a1a24; }
+.rs-chip-btn:focus-visible, .rs-chip-btn.is-focus { outline: 2px solid #66c0f4; outline-offset: 2px; }
+.rs-chip-btn.active.is-focus, .rs-chip-btn.active:focus-visible { outline-color: #fff; }
+
+/* Home screen: shelves of games, then every console. */
+.rs-home { display: flex; flex-direction: column; gap: 22px; }
+.rs-home-section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.rs-home-head {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: #8b949d;
+}
+.rs-shelf {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 6px;
+  scrollbar-width: none;
+}
+.rs-shelf::-webkit-scrollbar { display: none; }
+.rs-shelf-tile { flex: 0 0 auto; display: flex; flex-direction: column; gap: 5px; cursor: pointer; outline: none; }
+.rs-shelf-art { position: relative; width: 100%; overflow: hidden; background: #05070a; contain: paint; }
+.rs-shelf-tile.is-focus .rs-shelf-art, .rs-shelf-tile:focus-visible .rs-shelf-art { outline: 2px solid #66c0f4; outline-offset: 2px; }
+.rs-shelf-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e6e8ea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rs-shelf-sub { font-size: 10.5px; color: #79838c; white-space: nowrap; }
+.rs-download-tile {
+  flex: 0 0 210px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+}
+.rs-download-tile .rs-shelf-sub { grid-column: 2; }
+.rs-download-tile-check {
+  grid-row: 1 / span 2;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #5ba32b;
+  color: #fff;
+  font-size: 10px;
+}
+.rs-download-tile-title { font-size: 12px; font-weight: 600; color: #e6e8ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-download-tile:focus-visible, .rs-download-tile.is-focus, .rs-browse-tile.is-focus { outline: 2px solid #66c0f4; outline-offset: 2px; }
+.rs-download-tile-check.manage { background: #3d4450; }
+
+/* Installed games panel */
+.rs-panel.drawer.library { width: min(560px, 94%); }
+.rs-lib-head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rs-lib-sub { font-size: 11.5px; color: #8b949d; }
+.rs-lib-group { margin-bottom: 14px; }
+.rs-lib-count { margin-left: 6px; font-weight: 500; color: #6f7a83; }
+.rs-lib-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 8px 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.03);
+}
+.rs-lib-row.asking { border-color: rgba(255, 120, 90, 0.45); background: rgba(255, 120, 90, 0.07); }
+.rs-lib-main { flex: 1 1 auto; min-width: 0; }
+.rs-lib-title { font-size: 12.5px; font-weight: 600; color: #e6e8ea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-lib-meta { margin-top: 2px; font-size: 11px; color: #8b949d; }
+.rs-lib-steam { display: inline-flex; margin-right: 6px; color: #66c0f4; font-size: 11px; vertical-align: -1px; }
+.rs-lib-row.asking .rs-lib-meta { color: #ffb39b; }
+.rs-lib-row .rs-btn { display: inline-flex !important; align-items: center; gap: 6px; }
+
 /* Same column width for every cover, each in its own shape. Covers hang from
    a common top edge, so a shorter one (a near-square DS box, say) leaves its
    gap below rather than above. */
@@ -141,6 +257,24 @@ export const CSS = `
   overflow: hidden;
   background: #05070a;
   contain: paint;
+}
+
+/* Already in the library: a small check in the top-right corner. */
+.rs-owned {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 3;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #5ba32b;
+  color: #fff;
+  font-size: 10px;
+  box-shadow: 0 0 0 2px rgba(6, 10, 14, 0.7);
 }
 
 /* No art: the placeholder carries the title instead. */
@@ -248,11 +382,11 @@ export const CSS = `
   letter-spacing: 0.3px;
 }
 .rs-pill.romspedia { background: rgba(102,192,244,0.16); color: #66c0f4; }
-.rs-pill.dumbroms { background: rgba(153,204,255,0.14); color: #99ccff; }
 .rs-pill.myabandonware { background: rgba(255,153,85,0.16); color: #ff9955; }
 .rs-pill.retrostic { background: rgba(168,120,255,0.16); color: #a878ff; }
 .rs-pill.switchroms { background: rgba(255,95,95,0.16); color: #ff7b7b; }
 .rs-pill.romsdl { background: rgba(255,120,180,0.14); color: #ff78b4; }
+.rs-pill.romsfun { background: rgba(255,170,90,0.14); color: #ffaa5a; }
 .rs-pill.region { background: rgba(178,255,102,0.14); color: #b2ff66; }
 .rs-pill.rating { background: rgba(255,215,102,0.14); color: #ffd766; }
 
@@ -522,6 +656,19 @@ export const CSS = `
   margin-top: 10px;
 }
 .rs-kv { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rs-owned-note {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(91, 163, 43, 0.16);
+  color: #9fdc6a;
+  font-size: 12px;
+  font-weight: 700;
+}
 .rs-kv-label {
   font-size: 9.5px;
   font-weight: 700;
@@ -575,6 +722,24 @@ export const CSS = `
 .rs-get-btn:hover { background: linear-gradient(90deg, #6cc6ff 0%, #3d8bff 100%) !important; }
 .rs-get-btn:focus-visible, .rs-get-btn.gpfocus { outline: 2px solid #fff; outline-offset: 3px; }
 .rs-get-file { flex: 1 1 auto; min-width: 0; }
+/* Favourite star at the end of the download card. */
+.rs-fav {
+  flex: 0 0 auto;
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  color: #8b949d;
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+}
+.rs-fav.on { color: #ffd766; }
+.rs-fav:hover { background: rgba(255, 255, 255, 0.12); }
+.rs-fav:focus-visible, .rs-fav.is-focus { outline: 2px solid #66c0f4; outline-offset: 2px; }
 .rs-get-name {
   font-size: 14px;
   font-weight: 600;
@@ -604,6 +769,23 @@ export const CSS = `
   padding: 0 4px;
   font-size: 13px; color: #8b949d;
 }
+
+/* BIOS note under the main action. */
+.rs-bios {
+  margin: 10px 28px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #a9b2ba;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+.rs-bios b { color: #e6e8ea; }
+.rs-bios.ok b { color: #8fca5d; }
+.rs-bios.missing { border-color: rgba(230, 180, 80, 0.4); background: rgba(230, 180, 80, 0.07); }
+.rs-bios.missing b { color: #e6b450; }
+.rs-bios .rs-path { font-family: monospace; font-size: 10.5px; color: #c9ced3; word-break: break-all; }
 
 /* ---- sections below the main action */
 .rs-detail-section {
@@ -689,6 +871,7 @@ export const CSS = `
 .rs-dest-icon { flex: 0 0 auto; color: #79838c; font-size: 12px; }
 .rs-dest-label { flex: 0 0 auto; font-size: 12px; font-weight: 600; color: #c9ced3; }
 .rs-dest-select { flex: 0 0 220px; min-width: 0; }
+.rs-dest-select.drive { flex-basis: 230px; }
 .rs-dest-select > * { width: 100%; max-width: 100%; margin: 0 !important; }
 /* Only the preview renders a native select; Steam draws its own button. */
 .rs-dest-select select {
@@ -724,7 +907,9 @@ export const CSS = `
 .rs-btn:disabled { opacity: .45; cursor: default; }
 .rs-btn.ghost { background: rgba(255,255,255,0.08); color: #d6d7d8; }
 .rs-btn.ghost:hover { background: rgba(255,255,255,0.16); }
-.rs-btn.danger { background: rgba(255,120,90,0.16); color: #ff8f6b; }
+/* Destructive actions (Delete, Close Steam and run) must look different, also
+   over the Steam button style. */
+.rs-btn.danger { background: rgba(255,120,90,0.18) !important; color: #ff9f80 !important; border-color: rgba(255,120,90,0.45) !important; }
 
 .rs-dl-row {
   border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 10px 12px; margin-bottom: 9px;
@@ -753,6 +938,12 @@ export const CSS = `
 .rs-form-row input:focus { outline: none; border-color: #66c0f4; }
 /* Steam's TextField and Dropdown take the rest of the row; a switch does not. */
 .rs-form-row > div:not(.rs-switch):not(.rs-hint) { flex: 1 1 auto; min-width: 0; }
+.rs-health { display: block; margin-bottom: 3px; font-weight: 600; }
+.rs-health.ok { color: #8fca5d; }
+.rs-health.warn { color: #e6b450; }
+.rs-health.bad { color: #ff8f6b; }
+.rs-health.idle { color: #79838c; }
+.rs-hint.rs-warn, .rs-form-row .rs-hint.rs-warn { color: #ffb39b; }
 .rs-form-row .rs-hint { flex: 1 1 100%; font-size: 11px; color: #79838c; margin-top: -6px; }
 .rs-switch { position: relative; flex: 0 0 auto; width: 40px; height: 22px; border-radius: 11px; background: rgba(255,255,255,0.15); cursor: pointer; transition: background 150ms; }
 .rs-switch.on { background: #66c0f4; }

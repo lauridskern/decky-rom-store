@@ -17,7 +17,10 @@ import re
 import time
 from typing import Any, Dict, List, Optional
 
-from ..htmlutil import absolute, collapse_ws, strip_tags
+from html import unescape
+from urllib.parse import quote_plus
+
+from ..htmlutil import absolute, collapse_ws, parse_size, strip_tags
 from ..models import RomEntry, RomFile, extract_region, normalize_title
 from .base import Source
 
@@ -27,6 +30,14 @@ _IMG_RE = re.compile(
     r'<img[^>]+src="(https?://[^"]+/wp-content/uploads/\d{4}/\d{2}/([^"]+))"[^>]*>', re.I
 )
 _ALT_RE = re.compile(r'alt="([^"]*)"', re.I)
+# One result card, on the catalogue pages and in the search results:
+#   <div class="nsw-rom-card"> ... <img src="..."> ...
+#   <h3 class="nsw-card-title"><a href="https://nswpedia.io/rom/<slug>/">Title</a></h3>
+#   <p class="nsw-card-size">NSP • 16.3 GB</p>
+_CARD_SPLIT = 'class="nsw-rom-card"'
+_CARD_TITLE_RE = re.compile(r'class="nsw-card-title"[^>]*>\s*<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', re.I | re.S)
+_CARD_IMG_RE = re.compile(r'<img[^>]+src="([^"]+)"', re.I)
+_CARD_SIZE_RE = re.compile(r'class="nsw-card-size"[^>]*>([^<]*)<', re.I)
 _SIZE_SUFFIX_RE = re.compile(r"-\d+x\d+(?=\.[a-z0-9]+$)", re.I)
 _FILE_RE = re.compile(
     r'href="(https?://[^"]+?\.(?:nsp|xci|nspz|xcz|rar|zip)(?:\?[^"]*)?)"', re.I
@@ -50,10 +61,73 @@ class NswpediaSource(Source):
         self._cache_dir = self.options.get("cache_dir")
 
     # ------------------------------------------------------------------ search
+    def _parse_cards(self, html: str) -> List[Dict[str, Any]]:
+        """Result cards: real page link, title, cover and size."""
+        cards: List[Dict[str, Any]] = []
+        for block in html.split(_CARD_SPLIT)[1:]:
+            title_match = _CARD_TITLE_RE.search(block)
+            if not title_match:
+                continue
+            title = collapse_ws(unescape(strip_tags(title_match.group(2))))
+            if not title:
+                continue
+            image = _CARD_IMG_RE.search(block)
+            size = _CARD_SIZE_RE.search(block)
+            cover = absolute(self.base, image.group(1)) if image else None
+            cards.append({
+                "url": absolute(self.base, title_match.group(1)),
+                "title": title,
+                # The card shows a 200x300 crop; the upload without the size
+                # suffix is the full cover.
+                "cover": cover,
+                "cover_full": _SIZE_SUFFIX_RE.sub("", cover) if cover else None,
+                "size": parse_size(size.group(1).split("\u2022")[-1]) if size else None,
+            })
+        return cards
+
+    def _card_entries(self, cards: List[Dict[str, Any]], seen: set, start: int) -> List[RomEntry]:
+        entries: List[RomEntry] = []
+        for card in cards:
+            key = normalize_title(card["title"])
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            entries.append(
+                RomEntry(
+                    source=self.id,
+                    source_id=key,
+                    title=card["title"],
+                    system="switch",
+                    url=card["url"],
+                    cover=card["cover"],
+                    cover_full=card["cover_full"],
+                    size=card["size"],
+                    region=extract_region(card["title"]),
+                    rank=start + len(entries),
+                )
+            )
+        return entries
+
     async def search(self, query: str, limit: int = 40, page: int = 1) -> List[RomEntry]:
-        # No server side search - fall back to matching the cover index. Only
-        # the cached index is used here: building it takes seconds and must not
-        # hold up a search.
+        """The site's own WordPress search (?s=), result cards like the catalogue."""
+        query = (query or "").strip()
+        if not query:
+            return []
+        if page <= 1:
+            url = f"{self.base}/?s={quote_plus(query)}"
+        else:
+            url = f"{self.base}/page/{page}/?s={quote_plus(query)}"
+        try:
+            html = await self.http.get_text(url)
+        except Exception:
+            html = ""
+        entries = self._card_entries(self._parse_cards(html), set(), 0) if html else []
+        if entries:
+            return entries[:limit]
+        return self._index_search(query, limit)
+
+    def _index_search(self, query: str, limit: int) -> List[RomEntry]:
+        """Fallback: match the cached cover index (no request)."""
         index = self.cached_index()
         wanted = normalize_title(query)
         if not wanted:
@@ -89,6 +163,14 @@ class NswpediaSource(Source):
                 html = await self.http.get_text(url)
             except Exception:
                 break
+            cards = self._parse_cards(html)
+            if cards:
+                added_cards = self._card_entries(cards, seen, len(entries))
+                entries.extend(added_cards)
+                if not added_cards or len(entries) >= limit:
+                    break
+                continue
+            # Older page layout without cards: covers only, links guessed.
             found = self._parse_covers(html)
             if not found:
                 break

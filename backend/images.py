@@ -41,6 +41,10 @@ def _extension(url: str, content_type: str = "") -> str:
         ext = CONTENT_TYPES.get(content_type.split(";")[0].strip().lower())
         if ext:
             return ext
+    # Resizing proxies name the format in the query (wsrv.nl: output=webp).
+    output = re.search(r"[?&]output=([a-z0-9]{2,5})(?:&|$)", url.lower())
+    if output:
+        return output.group(1)
     match = re.search(r"\.([a-z0-9]{2,5})(?:\?|$)", url.lower())
     return match.group(1) if match else "jpg"
 
@@ -174,7 +178,7 @@ class ImageCache:
         body = response.body
         if not body:
             raise HttpError(f"Empty image response for {url}")
-        ext = _extension(url, response.headers.get("content-type", ""))
+        ext = _extension(url, response.header("content-type"))
         if ext != os.path.splitext(path)[1].lstrip("."):
             path = os.path.splitext(path)[0] + "." + ext
         tmp = path + ".tmp"

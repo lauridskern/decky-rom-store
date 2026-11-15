@@ -4,6 +4,11 @@ const MARKER = "romStoreOverlay";
 // Each guard gets its own number, so stacked overlays (a screenshot opened from
 // the game panel) can tell whose history entry the back button removed.
 let nextGuardId = 1;
+// History entries outlive a reload of the page or the plugin, the numbering
+// does not. Entries are tagged with this load's token, so a stale entry with a
+// higher number is never mistaken for a newer overlay still being open.
+const SESSION_KEY = "romStoreSession";
+const SESSION = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 /**
  * Makes the Steam Deck's back button work inside the plugin.
@@ -28,7 +33,7 @@ export function useBackGuard(open: boolean, onClose: () => void): void {
     const id = nextGuardId++;
     pushed.current = true;
     try {
-      window.history.pushState({ [MARKER]: id }, "");
+      window.history.pushState({ [MARKER]: id, [SESSION_KEY]: SESSION }, "");
     } catch {
       pushed.current = false;
       return;
@@ -37,8 +42,9 @@ export function useBackGuard(open: boolean, onClose: () => void): void {
     const onPop = (event: PopStateEvent) => {
       if (!pushed.current) return;
       // A later overlay's entry was popped and ours is still current.
-      const current = (event.state as Record<string, unknown> | null)?.[MARKER];
-      if (typeof current === "number" && current >= id) return;
+      const state = event.state as Record<string, unknown> | null;
+      const current = state?.[MARKER];
+      if (state?.[SESSION_KEY] === SESSION && typeof current === "number" && current >= id) return;
       // The user pressed back: our entry is consumed, close the overlay and
       // leave the history alone so the next press leaves the plugin.
       pushed.current = false;

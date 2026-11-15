@@ -1,6 +1,6 @@
 import { FC, memo, useReducer } from "react";
 import { Focusable } from "@decky/ui";
-import { FaGamepad } from "react-icons/fa";
+import { FaCheck, FaGamepad } from "react-icons/fa";
 import { MergedRom } from "../types";
 import { artRatios, clampArtRatio, isResizedArt, systemAspect, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
@@ -30,10 +30,11 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
   const shape = known ? String(clampArtRatio(known)) : systemAspect(rom.system);
 
   const onRatio = (ratio: number) => {
-    if (rom.cover && artRatios.get(rom.cover) !== ratio) {
-      artRatios.set(rom.cover, ratio);
-      refresh();
-    }
+    if (rom.cover) artRatios.set(rom.cover, ratio);
+    // Re-render whenever this card's frame is not the art's shape yet - also
+    // when another card with the same cover already measured it, or this one
+    // keeps the box shape while the art is told to fill it (and gets cropped).
+    if (known !== ratio) refresh();
     return clampArtRatio(ratio) === ratio;
   };
 
@@ -63,6 +64,11 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
           </div>
         )}
         <span className="rs-chip">{systemLabel(rom.system)}</span>
+        {rom.installed ? (
+          <span className="rs-owned" title="In your library">
+            <FaCheck />
+          </span>
+        ) : null}
       </div>
     </Focusable>
   );

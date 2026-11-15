@@ -9,19 +9,18 @@ from typing import Any, Dict, Optional
 
 DEFAULTS: Dict[str, Any] = {
     "roms_root": "",
-    "source_priority": ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
-    "enabled_sources": ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
+    "source_priority": ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
+    "enabled_sources": ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
     "extract_archives": False,
     "keep_archive": True,
     "max_concurrent": 2,
     "results_per_source": 30,
-    "dumbroms_base_url": "https://dumbroms.com",
-    "dumbroms_search_url": "{base}/search?q={query}",
     "romspedia_base_url": "https://www.romspedia.com",
     "retrostic_base_url": "https://www.retrostic.com",
     "romsdl_base_url": "https://romsdl.com",
     "switchroms_base_url": "https://nintendo-switch-roms.com",
     "nswpedia_base_url": "https://nswpedia.io",
+    "romsfun_base_url": "https://romsfun.com",
     "myabandonware_base_url": "https://www.myabandonware.com",
     "show_nsfw": False,
     "search_cache_hours": 72,
@@ -31,7 +30,23 @@ DEFAULTS: Dict[str, Any] = {
     # its art only fills in games that have no cover unless this is turned on.
     "igdb_replace_covers": False,
     # Bumped when a stored value has to be migrated (see Settings.load).
-    "settings_revision": 2,
+    "settings_revision": 4,
+    # Box art from libretro-thumbnails (see backend/boxart.py), and whether the
+    # grid gets small copies through the wsrv.nl resizing proxy.
+    # Region whose file the game panel offers first ("" picks no favourite).
+    "preferred_region": "",
+    # Add installed games to the Steam library (backend/steam.py), sorted into
+    # the collections their Steam ROM Manager parser names.
+    "steam_shortcuts": True,
+    "steam_collections": True,
+    # Library art for those shortcuts (backend/artwork.py): SteamGridDB with
+    # the user's own key, otherwise IGDB.
+    "steam_artwork": True,
+    "steamgriddb_api_key": "",
+    # Where Steam ROM Manager is, if it is not in Emulation/tools/srm.
+    "srm_path": "",
+    "libretro_boxart": True,
+    "boxart_resize": True,
     "igdb_client_id": "g5l93pm0saj4mnqpya3xujmmmcsna1",
     "igdb_client_secret": "v2qtz1potmdvx2blhcvg75ccc3ver7",
 }
@@ -75,6 +90,23 @@ class Settings:
             # the file stored that default. Return to the new default once;
             # turning it back on afterwards sticks.
             self._values["igdb_replace_covers"] = False
+        if revision < 3:
+            # The DumbRoms source was removed (dumbroms.com no longer exists):
+            # forget it and its address settings.
+            for key in ("enabled_sources", "source_priority"):
+                value = self._values.get(key)
+                if isinstance(value, list):
+                    self._values[key] = [s for s in value if s != "dumbroms"]
+            for key in ("dumbroms_base_url", "dumbroms_search_url"):
+                self._values.pop(key, None)
+        if revision < 4:
+            # New source: RomsFun. Existing installs saved their source lists,
+            # so it is added once; switching it off afterwards sticks.
+            for key in ("enabled_sources", "source_priority"):
+                value = self._values.get(key)
+                if isinstance(value, list) and "romsfun" not in value:
+                    at = value.index("myabandonware") if "myabandonware" in value else len(value)
+                    self._values[key] = value[:at] + ["romsfun"] + value[at:]
         self._values["settings_revision"] = DEFAULTS["settings_revision"]
         return True
 

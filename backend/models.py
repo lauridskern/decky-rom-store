@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -33,17 +34,34 @@ def extract_region(title: str) -> Optional[str]:
     return None
 
 
+def _ascii(text: str) -> str:
+    """'Pokémon' -> 'Pokemon', so accents do not split a title in two."""
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+
+
+# Words that differ between the sites' names for the same game:
+# "Pokemon Red" / "Pokemon - Red Version", "Mario Kart 8 Deluxe Edition" ...
+_FILLER_RE = re.compile(r"\b(the|a|an|of|and|version|edition)\b")
+
+
 def normalize_title(title: str) -> str:
     """Title without region/tag noise - used to detect duplicates."""
     if not title:
         return ""
-    text = title.lower()
+    text = _ascii(title).lower()
     # Drop file extension first ("Super Mario (USA).zip" -> "Super Mario (USA)").
-    text = re.sub(r"\.(zip|7z|rar|iso|xci|nsp|xci|rom|bin|chd|cue|gz|tar|exe|iso)$", "", text, flags=re.I)
+    text = re.sub(r"\.(zip|7z|rar|iso|xci|nsp|xci|rom|bin|chd|cue|gz|tar|exe|iso|gb|gbc|gba|nes|sfc|smc|z64|n64|v64|nds|3ds|cia|md|gen|sms|gg|32x|pbp|cso|rvz|wbfs|wua|m3u|pce|ws|wsc|ngp|ngc|vb|min|a26|a78|lnx|col|int|vec|adf|d64|dsk|st|png)$", "", text, flags=re.I)
     text = _TAG_RE.sub(" ", text)
+    text = text.replace("&", " and ")
     text = re.sub(r"[^a-z0-9]+", " ", text)
-    text = re.sub(r"\b(the|a|an|of|and)\b", " ", text)
+    text = _FILLER_RE.sub(" ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def match_title(title: str) -> str:
+    """Key for matching a title against box art and library files: the
+    normalised title without spaces, so "Mega Man X" and "MegaMan X" agree."""
+    return normalize_title(title).replace(" ", "")
 
 
 def title_sort_key(title: str) -> str:

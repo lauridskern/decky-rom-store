@@ -1,8 +1,8 @@
 # ROM Store — Decky plugin
 
 A game-store style front end for browsing and downloading ROMs on the Steam Deck.
-It searches **Romspedia**, **Retrostic**, **RomsDL**, **DumbRoms** and
-**MyAbandonware** at the same time, merges the results, removes duplicates, and
+It searches **Romspedia**, **Retrostic**, **RomsDL**, **RomsFun**, **MyAbandonware**
+and two Switch catalogues (**Switch ROMs**, **Nswpedia**) at the same time, merges the results, removes duplicates, and
 drops the file you pick straight into the matching **EmuDecky** ROM folder
 (`~/EmuDecky/roms/<system>/`).
 
@@ -126,7 +126,8 @@ real ROM library.
 | **Romspedia** | `https://www.romspedia.com` — server rendered search, region specific builds, direct file links on `downloads.romspedia.com`. The only source with a **Nintendo Switch** section. |
 | **Retrostic** | `https://www.retrostic.com` — large classic catalogue, 46 consoles, direct zip downloads. |
 | **RomsDL** | `https://romsdl.com` — the same engine as Retrostic with a different catalogue; good for extra region builds. |
-| **DumbRoms** | The base URL and search URL are **settings**, because the domain has moved around. Point *Settings → Sources → DumbRoms* at the address you want to use. The parser is heuristic (it finds repeated link patterns), so it copes with most simple ROM indexes. |
+| **RomsFun** | `https://romsfun.com` — large catalogue across 50+ consoles, including romhacks and fan translations (listed after the games). Each download waits out the site's 7-second countdown, as a visitor would. |
+| **Nswpedia** | `https://nswpedia.io` — a Switch catalogue with its own search; titles, covers and sizes come from its result cards. |
 | **MyAbandonware** | `https://www.myabandonware.com` — backed by a TypeSense index. The plugin reads the short-lived scoped search key out of the search page and queries the index directly. Older PC and console titles. |
 
 Each source can be switched off individually if it is unreachable; failures are
@@ -152,9 +153,8 @@ What the catalogues actually contain is the limiting factor, not the plugin:
 * **Retrostic / RomsDL / MyAbandonware** carry no Switch catalogue at all
   (MyAbandonware's platform list has 144 platforms, Switch is not one of them).
 
-So for a full Switch library, point the **DumbRoms** adapter at a Switch-heavy
-site — the generic adapter already recognises `.xci`, `.nsp` and `.nsz` files
-and maps the console to the `switch` folder.
+For Switch games the two Switch catalogues, **Switch ROMs** and **Nswpedia**,
+carry far more titles; both are searched and browsed alongside the others.
 
 ## Where files land
 
@@ -173,10 +173,44 @@ The destination path is always shown before a download starts.
 Existing files are never overwritten silently — the new file is written as
 `Name (2).zip` instead.
 
+## Installed games
+
+The disk button in the header (and the **Installed** row on the home screen)
+lists every game in your ROM folders, by console, with its size. **Uninstall**
+asks first ("Delete 3 files, 963 MB? This cannot be undone.", with *Keep*
+selected) and then removes that game's files: all discs of a multi-disc game
+together. Saves, EmuDeck's notes and artwork folders are never touched, and
+nothing outside the ROM folders can be deleted.
+
+## Steam library
+
+Every game you download is added to your Steam library straight away, and
+removed again when you uninstall it, with no Steam restart. The launch command
+comes from your **Steam ROM Manager** setup (the one EmuDeck creates), so the
+shortcut starts the game exactly like a shortcut made by SRM. A shortcut SRM
+already made for the same file is reused, not doubled.
+
+Like SRM, each shortcut gets library art: cover, wide cover, hero, logo and
+icon from **SteamGridDB** once you enter your own free API key in
+*Settings → Steam library* (steamgriddb.com → Preferences → API). Without a key
+the cover and hero come from IGDB. Art a shortcut already has is never replaced.
+
+*Settings → Steam library → Sync with Steam now* checks the whole library both
+ways and lists consoles that have no SRM parser yet.
+
+**Run Steam ROM Manager…** in the same place runs SRM itself, for its own
+titles, artwork and controller layouts. SRM needs Steam closed, so after you
+confirm, ROM Store hands its own shortcuts over to SRM (so nothing is doubled),
+closes Steam, runs SRM, and Steam starts again; the result is shown once Steam
+is back. SRM is found in `Emulation/tools/srm` (EmuDeck) automatically. Steam ROM Manager itself
+needs Steam closed, which is why the plugin does this through Steam's own
+shortcut API instead of running SRM.
+
 ## Settings
 
 * **EmuDecky ROM folder** — override the detected root.
-* **Sources** — enable/disable each site, and repoint the DumbRoms adapter.
+* **Sources** — enable/disable each site, change its address, and see how it
+  has been doing (last answer, failures in a row).
 * **IGDB client ID / secret** — optional. Create a free application at
   twitch.tv/developers and the store fills in missing artwork with clean
   poster art from the IGDB database.
@@ -220,8 +254,8 @@ installed from an older release, update it and restart Decky Loader.
 **A source is unreachable**
 
 Each source reports its own status in the status bar (click the warning chip
-for the full error). The DumbRoms adapter needs the correct address in
-*Settings → Sources*.
+for the full error). *Settings → Sources* shows when each source last answered;
+one that fails three times in a row is skipped for 15 minutes.
 
 ## Caching
 

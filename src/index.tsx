@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
-import { definePlugin, routerHook } from "@decky/api";
+import { addEventListener, definePlugin, removeEventListener, routerHook, toaster } from "@decky/api";
 import { ButtonItem, Navigation, PanelSection, PanelSectionRow, staticClasses, TextField } from "@decky/ui";
 import { FaStore } from "react-icons/fa";
 
 import StoreHost from "./components/StoreHost";
 import { injectStyles } from "./styles";
 import { requestSearch } from "./state";
-import { getDownloads, getStatus } from "./types";
+import { DownloadJob, getDownloads, getStatus } from "./types";
+import { reportSteamRomManager, syncWithSteam } from "./steam";
 import StoreStyles from "./components/StoreStyles";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -107,8 +108,33 @@ function PanelContent() {
   );
 }
 
+/**
+ * A finished download goes straight into the Steam library. The backend sends
+ * the event, so this works while the store page is closed.
+ */
+const onDownloadDone = (job: DownloadJob) => {
+  const paths = [job.path, job.extracted_to].filter((path): path is string => Boolean(path));
+  if (!paths.length) return;
+  syncWithSteam(paths)
+    .then((result) => {
+      if (result.added.length || result.adopted.length) {
+        toaster.toast({ title: "Added to your Steam library", body: [...result.added, ...result.adopted].join(", "), icon: "Steam" });
+      } else if (Object.keys(result.missing).length && result.ok) {
+        toaster.toast({
+          title: "Not added to Steam",
+          body: "Steam ROM Manager has no parser for this console. Sync again after setting one up.",
+          icon: "Steam",
+        });
+      }
+    })
+    .catch(() => undefined);
+};
+
 export default definePlugin(() => {
   injectStyles();
+  addEventListener<[DownloadJob]>("rom_store_download_done", onDownloadDone);
+  // Steam ROM Manager may have run while Steam was closed: report and adopt.
+  reportSteamRomManager((title, body) => toaster.toast({ title, body, icon: "Steam" })).catch(() => undefined);
 
   routerHook.addRoute("/rom-store", StoreRoute, { exact: true });
 
@@ -118,6 +144,7 @@ export default definePlugin(() => {
     content: <PanelContent />,
     icon: <FaStore />,
     onDismount() {
+      removeEventListener("rom_store_download_done", onDownloadDone);
       routerHook.removeRoute("/rom-store");
     },
   };

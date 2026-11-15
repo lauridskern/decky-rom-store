@@ -72,22 +72,31 @@ backend/
   service.py                source fan-out, dedupe, IGDB enrichment, caches
   sources/                  one adapter per site (base.py is the contract)
     romspedia.py  retrostic.py  romsdl.py  switchroms.py
-    myabandonware.py  dumbroms.py  nswpedia.py
+    myabandonware.py  nswpedia.py  romsfun.py
+  boxart.py                 libretro-thumbnails box art: index, matching, resize
   covers.py                 IGDB client: covers, screenshots, trailer, rating
   media.py                  Steam and YouTube fallback media for PC titles
   images.py                 image download cache + variant selection
-  downloader.py             download jobs, progress, cancel, extraction
+  downloader.py             download jobs, progress, cancel, extraction, resume
+  library.py                in-library check, installed games list, uninstall
+  bios.py                   which consoles need a BIOS, and is one in place
+  shelves.py                favourites and recently viewed (home screen)
+  steam.py                  Steam library: SRM parsers -> shortcut plan, app ids
+  artwork.py                Steam library art: SteamGridDB (user key) or IGDB
+  srm_runner.py             runs Steam ROM Manager itself while Steam is closed
   httpclient.py             urllib + cookies + per-host throttle (polite=)
   systems.py                console normalisation -> EmuDecky folder names
   emudeck.py                library detection (roms root, systems, folders)
-  dedupe.py                 title normalisation and merge
+  dedupe.py                 merge by match_title() (models.py)
   settings.py               defaults + JSON persistence
 src/
   index.tsx                 panel registration, side-menu route
   state.ts                  shared search state, view epoch / reloadStore()
+  steam.ts                  adds/removes Steam shortcuts (SteamClient.Apps)
   styles.ts                 the entire stylesheet (injected at runtime)
   components/
-    Store.tsx               header, search, paging, polling
+    Store.tsx               header, console chips, search, paging, polling
+    HomeView.tsx            home screen: shelves and consoles
     StoreHost.tsx           epoch-keyed mount + error boundary
     RomGrid.tsx             slot-keyed grid, 30 cards per page
     RomCard.tsx             one shelf item
@@ -95,12 +104,19 @@ src/
     RomDetail.tsx           game panel (hero, poster, files, save-into)
     MediaGallery.tsx        screenshot strip + lightbox
     DownloadsDrawer.tsx     download queue
+    LibraryPanel.tsx        installed games, uninstall (asks first)
     SettingsModal.tsx       sources, library, performance, diagnostics
     common.ts               labels, formatting, per-console aspect ratios
     perf.ts                 one-shot fps/heap/node sample
+tests/                      offline backend tests (run in CI and before release)
+  test_sources.py           every parser against recorded pages (fixtures/)
+  test_core.py              matching, merging, box art, library, BIOS, settings
+  test_downloads.py         suspend + resume against a local server
+  test_steam.py             SRM parser reading and the shortcut plan
 tools/
   verify_package.py         validates a release zip against Decky's installer
   selftest.py               live end-to-end backend test (temp download dir)
+  record_fixtures.py        re-record tests/fixtures from the live sites
   preview/                  browser harness for the UI (see §5)
 ```
 
@@ -131,7 +147,7 @@ npm run dev        # http://localhost:5174, rebuilds + reloads on save; drawn in
                    # Gamepad emulation: arrows = d-pad, Enter = A, Esc = B, X, Y,
                    # Q/E = L1/R1, or a real controller; the bar shows the hints
 npm run build      # bundle preview.tsx -> preview.js
-npm run shots      # store.png, detail.png, settings.png, downloads.png
+npm run shots      # store.png, detail.png, settings.png, downloads.png, installed.png
 npm run soak       # 70 rounds of search/page/open/close, samples frames+heap
 npm run aspects    # synthetic covers in 7 shapes -> aspects.png (no cropping)
 npm run back       # back button / history behaviour
@@ -147,9 +163,9 @@ Expected results on a healthy build:
 | check | expected |
 |---|---|
 | `npm run shots` | 8 cards per row at 1280 wide, 12 total, **0 console errors** |
-| `npm run soak` | nodes flat at **275**, heap flat ≈ 6.8 MB, 95th-percentile frame ≈ **18 ms** |
+| `npm run soak` | nodes flat at **291**, heap levels off ≈ 7.4 MB (`SOAK_ROUNDS=200` to see it), 95th-percentile frame ≈ **18 ms** |
 | `npm run back` | modal opens, history grows by one, back closes it, `historyLength` stops growing |
-| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 137 nodes |
+| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 153 nodes |
 | `npm run aspects` | each frame takes its test image's shape; white border visible on all four sides |
 
 The harness is Chromium on macOS, not Steam's CEF on a Deck. Use it for layout
@@ -159,8 +175,15 @@ artefacts there are usually a harness quirk, not a plugin bug.
 ## 6. Testing the backend
 
 ```bash
-python3 tools/selftest.py "mario"     # live: search, resolve links, download one file
+python3 -m unittest discover -s tests     # offline: parsers, matching, resume (~2 s)
+python3 tools/selftest.py "mario"          # live: search, resolve links, download one file
+python3 tools/record_fixtures.py retrostic # after fixing a parser for a changed site
 ```
+
+The unit tests run on every push (`.github/workflows/ci.yml`) and gate every
+release. `test_sources.py` replays pages recorded from each site, so it catches
+parser regressions offline; it does not notice a site changing its HTML (the
+live `selftest.py` and the source health in Settings do).
 
 It hits the real sites, so it needs network access and can fail because a site
 is down or changed its HTML. It downloads into a temporary folder, never into a
@@ -297,6 +320,11 @@ never cropped.**
 
 Shapes (grid covers and the detail poster):
 
+- First choice is a libretro-thumbnails front scan (`boxart.py`), matched by
+  `match_title()`: real proportions, right platform. Grid gets a ~25 kB WebP
+  via wsrv.nl, the poster the full PNG. Never put full-size scans in the grid:
+  30 of them decoded is well over 100 MB.
+
 - `BOX_RATIOS` in `common.ts` is each console's real front-box shape, measured
   from libretro-thumbnails scans (USA/Europe medians). Game Boy family, PS1,
   Dreamcast and PC Engine are square; SNES and N64 landscape; DS/3DS 1.12.
@@ -320,6 +348,66 @@ destination folder, and hands the job to `Downloader`, which streams through
 extracts archives, and keeps only the 40 most recent jobs in memory. The UI polls
 `get_downloads()` only while the drawer is open or something is running.
 
+- The queue is saved to `downloads.json`. On unload `suspend_all()` stops the
+  worker threads through their cancel events (cancelling the asyncio task alone
+  does not stop the thread, which then kept writing the `.part` file) and the
+  next start continues each `.part` with a Range request. Retries resume too.
+- Free space is checked before a download (size known, doubled when extracting)
+  and again from Content-Length; `library().storage` lists the internal and SD
+  card libraries a download can go to (`root` argument of `start_download`).
+
+### Steam library
+
+Steam ROM Manager cannot run while Steam runs (it rewrites shortcuts.vdf, which
+Steam only reads at start), so the plugin does its job live:
+
+- `backend/steam.py` reads SRM's `userConfigurations.json` (EmuDeck's setup;
+  `.config/steam-rom-manager/userData` and the other `SRM_DIRS`), keeps the
+  enabled glob parsers, fills in `${filePath}`, `${romsdirglobal}` and friends,
+  and plans one shortcut per installed game (the `.m3u` of a multi-disc game).
+  Consoles without a parser are reported, never guessed.
+- `src/steam.ts` carries the plan out with `SteamClient.Apps.AddShortcut` /
+  `RemoveShortcut`, adopts a shortcut that already launches the same file (an
+  earlier SRM run), adds to the parser's Steam collection (best effort; the
+  collection store is internal), and reports app ids to `steam_shortcuts.json`.
+  Syncs run one at a time.
+- Triggers: the backend emits `rom_store_download_done` (index.tsx listens, so
+  it works with the store closed); an uninstall runs a remove-only sync;
+  Settings → Steam library → "Sync with Steam now" does both directions.
+- Only shortcuts the plugin made or adopted are ever removed.
+- "Run Steam ROM Manager" (Settings): `srm_runner.py` finds SRM
+  (`Emulation/tools/srm` next to the library, `~/Applications`, Flatpak, or
+  `srm_path`), starts a `/bin/sh` helper in its own session that waits until
+  Steam has closed, runs `<SRM> add` (retrying with `--no-sandbox` on a sandbox
+  error) and writes `srm/result.json` + `srm/run.log`. The frontend
+  (`runSteamRomManager`) then hands its own shortcuts over (removes them so
+  SRM does not double them) and calls `SteamClient.User.StartShutdown`. After
+  the restart `reportSteamRomManager` shows the result once and syncs, which
+  adopts SRM's shortcuts. Tests never run a real SRM (`find_srm` is mocked).
+- Artwork (`backend/artwork.py`), like SRM: capsule, header (wide cover),
+  hero, logo, icon via `SetCustomArtworkForApp`. SteamGridDB needs the user's
+  own key (`steamgriddb_api_key`; SRM's built-in key is SRM's and is not used);
+  without it IGDB gives capsule, hero and header, using only landscape images
+  for the wide slots. A rejected key falls back to IGDB and is reported. A
+  shortcut that already has custom art (an adopted SRM one) is never touched.
+
+### Library, sources, shelves
+
+- `LibraryIndex` lists each console folder once and again only when its mtime
+  changes; results get `installed: true` when a file matches the title.
+- Source health (`source_health.json`): last success, last failure, failures in
+  a row. Three in a row rest the source for 15 minutes. Shown in Settings.
+- With a console filter, search also matches that console's catalogue (the
+  cached browse list), because the sites return one page across all consoles.
+- Favourites and recently viewed live in `shelves.json`; opening one searches
+  for it and opens the game once it shows up (`openShelfItem`).
+- Installed games (`library.installed_games`): every console folder of the
+  library, files of one game grouped by `match_title()` (discs + .m3u), EmuDeck
+  notes, saves and media folders skipped. `uninstall(root, id)` looks the game
+  up again by id (the UI never sends paths) and deletes only entries directly
+  inside a console folder that is itself a direct child of the library; a
+  symlink is removed, never its target. The UI asks first, Keep focused.
+
 ### UI structure
 
 `Store` is remounted when `reloadStore()` bumps the view epoch (`StoreHost`),
@@ -327,7 +415,8 @@ which is both the escape hatch for a stale view and a diagnostic. The grid
 renders **one page of 30 cards**, keyed by slot so paging reuses the same card
 components and Steam focus nodes. `useBackGuard` pushes a history entry so the
 Steam back button closes overlays instead of leaving the plugin; guards stack,
-so B closes only the top overlay (a screenshot over the game panel).
+so B closes only the top overlay (a screenshot over the game panel). History
+entries carry a per-load token: entries from before a reload never count.
 
 ### Gamepad
 
@@ -340,8 +429,9 @@ opened them. Hints come from `on…ActionDescription` / `actionDescriptionMap`.
 
 | where | buttons |
 |---|---|
-| store | d-pad header row ↔ grid ↔ pager · A details · X search · Y downloads · L1/R1 page |
-| game panel | starts on Download · A/X download · L1/R1 previous/next game · B close |
+| store | d-pad header ↔ console chips ↔ grid (or home) ↔ pager · A details · X search · Y downloads · L1/R1 page · L2/R2 console |
+| game panel | starts on Download · A/X download · Y favourite · L1/R1 previous/next game · B close |
+| installed games | A Uninstall → Keep (focused) / Delete · B close |
 | screenshot viewer | ◀ ▶ / A next · B back to the panel |
 | downloads | X clear finished · B close |
 | settings | A flips switches · X save · B cancel |
@@ -372,9 +462,29 @@ opened them. Hints come from `on…ActionDescription` / `actionDescriptionMap`.
 - No automated tests on the Deck itself; verification is the preview harness
   plus a manual install.
 - Scrapers break when a site changes its HTML. `get_status()` reports per-source
-  errors and the UI surfaces them through the footer warning.
-- `dumbroms.com` currently does not resolve; the adapter stays because the base
-  URL is configurable.
+  errors and health, the UI shows them in the footer warning and in Settings.
+- Box art: libretro names arcade sets by ROM set, so arcade has no libretro art.
+  Grid thumbnails come from the third-party proxy wsrv.nl (setting
+  `boxart_resize`); without it the grid keeps the sites' covers.
+- Steam library sync is written against SRM's documented config format and
+  EmuDeck's parsers, tested with synthetic configs and a mocked SteamClient in
+  the preview; check it on a Deck after SRM/EmuDeck updates. The SteamGridDB
+  artwork path is untested without a real key (a bad key is tested). The SRM
+  run is untested on a Deck: whether SRM's AppImage runs its CLI without a
+  window in Game Mode, and that Game Mode restarts Steam after StartShutdown.
+- BIOS names in `bios.py` are the common RetroArch/DuckStation/PCSX2 ones; an
+  emulator configured differently may want another name. The plugin never
+  downloads BIOS files.
+- The DumbRoms source was removed in Nov 2026: dumbroms.com no longer
+  resolves and no new address could be found. Settings revision 3 removes it
+  and its address settings from existing installs.
+- RomsFun: each download waits out the site's 7-second countdown and asks for
+  the link the way its page script does (admin-ajax `k_get_download`), as a
+  guest. A guest download limit or a Cloudflare check is reported, never
+  worked around. Romhacks are listed after the games.
+- Nswpedia: search uses the site's WordPress search (`?s=`) and both search and
+  browse read its `nsw-rom-card` result cards; the old cover-index parsing is
+  only a fallback.
 - IGDB client credentials are baked into `backend/settings.py` as defaults so
   covers work out of the box. Do not log them, and treat a leak as a reason to
   rotate them rather than to remove the feature.

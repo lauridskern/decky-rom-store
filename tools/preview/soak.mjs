@@ -53,7 +53,9 @@ const sample = async (label) => {
 const rows = [await sample("start")];
 const queries = ["mario", "zelda", "kirby", "sonic", "metroid", "doom", "pokemon"];
 
-for (let round = 0; round < 70; round += 1) {
+// SOAK_ROUNDS=200 npm run soak for a longer run (default 70).
+const ROUNDS = Number(process.env.SOAK_ROUNDS ?? 70);
+for (let round = 0; round < ROUNDS; round += 1) {
   const q = queries[round % queries.length];
   await page.locator(".rs-search-wrap input").fill(`${q}${round}`);
   await page.waitForTimeout(450);

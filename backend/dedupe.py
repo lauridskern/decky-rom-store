@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Dict, Iterable, List, Optional, Sequence
 
-from .models import MergedRom, RomEntry, title_sort_key
+from .models import MergedRom, RomEntry, match_title, title_sort_key
 
 
 def _group_key(entry: RomEntry) -> str:
-    return f"{entry.system}::{entry.normalized_title}"
+    # match_title ignores spacing, accents and filler words, so "Pokemon Red",
+    # "Pokémon - Red Version (USA)" and "Pokemon Red Version" are one game.
+    return f"{entry.system}::{match_title(entry.title)}"
 
 
 def merge_entries(entries: Iterable[RomEntry], source_priority: Optional[Sequence[str]] = None) -> List[MergedRom]:

@@ -10,6 +10,7 @@
  *   Escape, Backspace / B   back        (onCancelButton, else history.back())
  *   X, Y                    onSecondaryButton, onOptionsButton
  *   Q / E, L1 / R1          bumpers     (onButtonDown)
+ *   Z / C, L2 / R2          triggers    (onButtonDown)
  *
  * A real controller works too (the browser's Gamepad API, standard mapping).
  * The focused element's button hints are sent to the Deck frame's bottom bar
@@ -25,7 +26,7 @@ import { forwardRef, HTMLAttributes, ReactNode, useEffect, useRef } from "react"
 
 // --------------------------------------------------------------- nav engine
 
-const BTN = { OK: 1, CANCEL: 2, SECONDARY: 3, OPTIONS: 4, BUMPER_LEFT: 5, BUMPER_RIGHT: 6, DIR_UP: 9, DIR_DOWN: 10, DIR_LEFT: 11, DIR_RIGHT: 12 };
+const BTN = { OK: 1, CANCEL: 2, SECONDARY: 3, OPTIONS: 4, BUMPER_LEFT: 5, BUMPER_RIGHT: 6, TRIGGER_LEFT: 7, TRIGGER_RIGHT: 8, DIR_UP: 9, DIR_DOWN: 10, DIR_LEFT: 11, DIR_RIGHT: 12 };
 type Dir = "up" | "down" | "left" | "right";
 const DIR_BTN: Record<Dir, number> = { up: BTN.DIR_UP, down: BTN.DIR_DOWN, left: BTN.DIR_LEFT, right: BTN.DIR_RIGHT };
 
@@ -41,11 +42,10 @@ function useNavProps<T extends HTMLElement>(props: NavProps, outer?: any) {
     const el = ref.current;
     if (!el) return;
     (el as NavEl).__nav = props;
-    // A re-render rewrites className; keep the focus classes on a focused element.
-    if (el === document.activeElement) {
-      el.classList.add("gpfocus");
-      if (props.focusClassName) el.classList.add(props.focusClassName);
-    }
+    // A re-render rewrites className: the focus classes follow real focus.
+    const focused = el === document.activeElement;
+    el.classList.toggle("gpfocus", focused);
+    if (props.focusClassName) el.classList.toggle(props.focusClassName, focused);
   });
   return (el: T | null) => {
     ref.current = el;
@@ -205,7 +205,7 @@ function press(button: number) {
 
 // ------------------------------------------------------------- button hints
 
-const LABEL: Record<number, string> = { [BTN.OK]: "A", [BTN.CANCEL]: "B", [BTN.SECONDARY]: "X", [BTN.OPTIONS]: "Y", [BTN.BUMPER_LEFT]: "L1", [BTN.BUMPER_RIGHT]: "R1" };
+const LABEL: Record<number, string> = { [BTN.OK]: "A", [BTN.CANCEL]: "B", [BTN.SECONDARY]: "X", [BTN.OPTIONS]: "Y", [BTN.BUMPER_LEFT]: "L1", [BTN.BUMPER_RIGHT]: "R1", [BTN.TRIGGER_LEFT]: "L2", [BTN.TRIGGER_RIGHT]: "R2" };
 const DESCRIPTION: Record<number, string> = {
   [BTN.OK]: "onOKActionDescription",
   [BTN.CANCEL]: "onCancelActionDescription",
@@ -230,7 +230,7 @@ function emitLegend() {
   }
   if (focused && !found.has(BTN.OK)) found.set(BTN.OK, "Select");
   if (!found.has(BTN.CANCEL)) found.set(BTN.CANCEL, "Back");
-  const order = [BTN.BUMPER_LEFT, BTN.BUMPER_RIGHT, BTN.OPTIONS, BTN.SECONDARY, BTN.CANCEL, BTN.OK];
+  const order = [BTN.TRIGGER_LEFT, BTN.TRIGGER_RIGHT, BTN.BUMPER_LEFT, BTN.BUMPER_RIGHT, BTN.OPTIONS, BTN.SECONDARY, BTN.CANCEL, BTN.OK];
   const legend = order.filter((b) => found.has(b)).map((b) => ({ button: LABEL[b], label: found.get(b)! }));
   window.dispatchEvent(new CustomEvent("rs-legend", { detail: legend }));
 }
@@ -257,6 +257,8 @@ function installEngine() {
         else if (k === "y") button = BTN.OPTIONS;
         else if (k === "q" || k === "[") button = BTN.BUMPER_LEFT;
         else if (k === "e" || k === "]") button = BTN.BUMPER_RIGHT;
+        else if (k === "z") button = BTN.TRIGGER_LEFT;
+        else if (k === "c") button = BTN.TRIGGER_RIGHT;
       }
       if (!dir && button === null) return;
       event.preventDefault();
@@ -268,19 +270,36 @@ function installEngine() {
   );
 
   // Focus classes, last-focused memory and onGamepadFocus, as Steam does.
-  document.addEventListener("focusin", (event) => {
-    const el = event.target as HTMLElement;
-    if (el?.dataset?.nav !== "target") return;
+  let marked: HTMLElement | null = null;
+  const markFocus = (el: HTMLElement) => {
+    if (el?.dataset?.nav !== "target" || el === marked) return;
+    marked = el;
     const nav = navOf(el);
+    // Exactly one element carries the focus look, as in Steam.
+    document.querySelectorAll(".gpfocus").forEach((other) => {
+      if (other === el) return;
+      other.classList.remove("gpfocus");
+      const cls = navOf(other).focusClassName;
+      if (cls) other.classList.remove(cls);
+    });
     el.classList.add("gpfocus");
     if (nav.focusClassName) el.classList.add(nav.focusClassName);
     for (const parent of ancestors(el)) (parent as NavEl).__last = el;
     nav.onGamepadFocus?.(gamepadEvent(0));
     emitLegend();
-  });
+  };
+  document.addEventListener("focusin", (event) => markFocus(event.target as HTMLElement));
+  // Chrome holds back focus events while its window is not focused (a pane
+  // driven by scripts); focus() itself still moves focus, so mark it there.
+  const focus = HTMLElement.prototype.focus;
+  HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+    focus.call(this, options);
+    if (document.activeElement === this) markFocus(this);
+  };
   document.addEventListener("focusout", (event) => {
     const el = event.target as HTMLElement;
     if (el?.dataset?.nav !== "target") return;
+    if (marked === el) marked = null;
     el.classList.remove("gpfocus");
     const nav = navOf(el);
     if (nav.focusClassName) el.classList.remove(nav.focusClassName);
@@ -291,6 +310,7 @@ function installEngine() {
   // A real controller through the Gamepad API (standard mapping).
   const PAD_BUTTONS: Record<number, number | Dir> = {
     0: BTN.OK, 1: BTN.CANCEL, 2: BTN.SECONDARY, 3: BTN.OPTIONS, 4: BTN.BUMPER_LEFT, 5: BTN.BUMPER_RIGHT,
+    6: BTN.TRIGGER_LEFT, 7: BTN.TRIGGER_RIGHT,
     12: "up", 13: "down", 14: "left", 15: "right",
   };
   const held = new Map<string, number>();

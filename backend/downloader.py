@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import shutil
 import threading
@@ -41,6 +42,8 @@ class DownloadJob:
     path: Optional[str] = None
     extracted_to: Optional[str] = None
     headers: Dict[str, str] = field(default_factory=dict)
+    extract: bool = False
+    keep_archive: bool = True
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -64,9 +67,15 @@ class DownloadJob:
 
 
 class DownloadManager:
-    """Keeps a small queue of downloads running in the background."""
+    """Keeps a small queue of downloads running in the background.
 
-    def __init__(self, http: HttpClient, max_concurrent: int = 2):
+    The queue is saved to ``state_path``. A download that was running when the
+    plugin stopped (Steam restarted, the Deck went to sleep or was turned off)
+    keeps its ``.part`` file and continues from there on the next start, see
+    ``resume_pending``.
+    """
+
+    def __init__(self, http: HttpClient, max_concurrent: int = 2, state_path: Optional[str] = None):
         self._http = http
         self._max_concurrent = max(1, max_concurrent)
         self._jobs: Dict[str, DownloadJob] = {}
@@ -75,6 +84,94 @@ class DownloadManager:
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._lock = threading.Lock()
         self._counter = 0
+        self._state_path = state_path
+        self._saved_at = 0.0
+        self._suspending = False
+        self._pending: List[str] = []
+        # Called with each job that finished (the plugin tells the frontend,
+        # which adds the game to the Steam library).
+        self.on_done = None
+        self._load()
+
+    # ------------------------------------------------------------------ state
+    def _load(self) -> None:
+        if not self._state_path or not os.path.isfile(self._state_path):
+            return
+        try:
+            with open(self._state_path, "r", encoding="utf-8") as fh:
+                stored = json.load(fh)
+        except (OSError, ValueError):
+            return
+        known = set(DownloadJob.__dataclass_fields__)
+        for item in stored if isinstance(stored, list) else []:
+            try:
+                job = DownloadJob(**{k: v for k, v in item.items() if k in known})
+            except TypeError:
+                continue
+            if job.status in (STATUS_QUEUED, STATUS_DOWNLOADING, STATUS_EXTRACTING):
+                # It was cut off; it goes back in the queue and continues.
+                job.status = STATUS_QUEUED
+                job.speed = 0.0
+                self._pending.append(job.id)
+            self._jobs[job.id] = job
+            self._cancels[job.id] = threading.Event()
+        self._counter = len(self._jobs)
+
+    def _save(self, force: bool = False) -> None:
+        """Write the queue, at most every few seconds unless forced."""
+        if not self._state_path:
+            return
+        now = time.time()
+        if not force and now - self._saved_at < 3.0:
+            return
+        self._saved_at = now
+        with self._lock:
+            jobs = [
+                {**job.to_dict(), "headers": job.headers, "extract": job.extract, "keep_archive": job.keep_archive}
+                for job in self._jobs.values()
+            ]
+        try:
+            os.makedirs(os.path.dirname(self._state_path), exist_ok=True)
+            temp = self._state_path + ".tmp"
+            with open(temp, "w", encoding="utf-8") as fh:
+                json.dump(jobs, fh)
+            os.replace(temp, self._state_path)
+        except OSError:
+            pass
+
+    def resume_pending(self) -> int:
+        """Continue the downloads that were running when the plugin stopped."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:  # pragma: no cover - defensive
+            return 0
+        started = 0
+        for job_id in self._pending:
+            job = self._jobs.get(job_id)
+            if job and job.status == STATUS_QUEUED:
+                self._tasks[job_id] = loop.create_task(self._run(job, job.extract, job.keep_archive, resume=True))
+                started += 1
+        self._pending = []
+        return started
+
+    async def suspend_all(self) -> None:
+        """Stop for now, keeping partial files so the next start continues.
+
+        The transfer runs on a worker thread, which cancelling the asyncio task
+        does not stop: it is told to stop through its cancel event and waited
+        for, so nothing writes to a .part file after the queue is saved.
+        """
+        self._suspending = True
+        for event in self._cancels.values():
+            event.set()
+        tasks = [task for task in self._tasks.values() if not task.done()]
+        if tasks:
+            done, pending = await asyncio.wait(tasks, timeout=8)
+            for task in pending:
+                task.cancel()
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+        self._save(force=True)
 
     # ------------------------------------------------------------------ public
     def set_max_concurrent(self, value: int) -> None:
@@ -96,6 +193,7 @@ class DownloadManager:
             for job_id, job in list(self._jobs.items()):
                 if job.status in (STATUS_DONE, STATUS_ERROR, STATUS_CANCELLED):
                     self._jobs.pop(job_id, None)
+        self._save(force=True)
 
     def enqueue(self, *, title: str, system: str, source: str, filename: str, url: str,
                 destination: str, headers: Optional[Dict[str, str]] = None,
@@ -112,10 +210,13 @@ class DownloadManager:
                 url=url,
                 destination=destination,
                 headers=headers or {},
+                extract=extract,
+                keep_archive=keep_archive,
             )
             self._jobs[job_id] = job
             self._cancels[job_id] = threading.Event()
             self._forget_finished()
+        self._save(force=True)
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # pragma: no cover - defensive
@@ -150,6 +251,9 @@ class DownloadManager:
         if job and job.status in (STATUS_QUEUED, STATUS_DOWNLOADING):
             job.status = STATUS_CANCELLED
             job.finished = time.time()
+            if job.path:
+                self._remove(job.path + ".part")
+            self._save(force=True)
             return True
         return False
 
@@ -159,7 +263,7 @@ class DownloadManager:
             await asyncio.gather(*tasks, return_exceptions=True)
 
     # ------------------------------------------------------------------ worker
-    async def _run(self, job: DownloadJob, extract: bool, keep_archive: bool) -> None:
+    async def _run(self, job: DownloadJob, extract: bool, keep_archive: bool, resume: bool = False) -> None:
         if self._semaphore is None:
             self._semaphore = asyncio.Semaphore(self._max_concurrent)
         cancel = self._cancels.get(job.id) or threading.Event()
@@ -189,26 +293,39 @@ class DownloadManager:
                         job.speed = (received - last_bytes) / max(now - last, 0.001)
                         last = now
                         last_bytes = received
+                    self._save()
 
                 last_error: Optional[str] = None
                 for attempt in range(3):
                     try:
+                        # Retries (and a download picked up after a restart)
+                        # continue the partial file instead of starting over.
                         await self._http.download(
-                            job.url, temp_path, headers=job.headers, on_progress=progress, cancel=cancel
+                            job.url, temp_path, headers=job.headers, on_progress=progress, cancel=cancel,
+                            resume=resume or attempt > 0,
                         )
                         last_error = None
                         break
                     except HttpError as exc:
                         last_error = str(exc)
-                        self._remove(temp_path)
                         if cancel.is_set():
                             raise
+                        if "Not enough free space" in last_error:
+                            break
+                        if resume and exc.status in (401, 403, 404, 410):
+                            # The site's download links expire after a while.
+                            last_error = "The download link has expired. Start it again from the game page."
+                            break
                         if attempt < 2:
                             await asyncio.sleep(1.0 * (attempt + 1))
                 if last_error:
                     raise HttpError(last_error)
 
                 if cancel.is_set():
+                    if self._suspending:
+                        job.status = STATUS_QUEUED
+                        job.speed = 0.0
+                        return
                     self._remove(temp_path)
                     job.status = STATUS_CANCELLED
                     job.finished = time.time()
@@ -233,21 +350,40 @@ class DownloadManager:
 
                 job.status = STATUS_DONE
                 job.finished = time.time()
+                self._save(force=True)
+                if self.on_done is not None:
+                    try:
+                        self.on_done(job)
+                    except Exception:  # pragma: no cover - a listener must not fail a download
+                        pass
         except asyncio.CancelledError:
+            if self._suspending and job.status != STATUS_CANCELLED:
+                # The plugin is stopping: keep the partial file for next time.
+                job.status = STATUS_QUEUED
+                job.speed = 0.0
+                raise
             job.status = STATUS_CANCELLED
             job.finished = time.time()
             self._remove(temp_path)
+            self._save(force=True)
             raise
         except HttpError as exc:
+            if self._suspending:
+                # Stopped by suspend_all: the partial file stays for next time.
+                job.status = STATUS_QUEUED
+                job.speed = 0.0
+                return
             job.status = STATUS_ERROR
             job.error = str(exc)
             job.finished = time.time()
             self._remove(temp_path)
+            self._save(force=True)
         except Exception as exc:  # pragma: no cover - defensive
             job.status = STATUS_ERROR
             job.error = f"{type(exc).__name__}: {exc}"
             job.finished = time.time()
             self._remove(temp_path)
+            self._save(force=True)
 
     # ------------------------------------------------------------------ helpers
     @staticmethod

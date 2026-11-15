@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import gzip
+import os
+import shutil
 import socket
 import ssl
 import threading
@@ -47,10 +49,19 @@ class Response:
     headers: Dict[str, str] = field(default_factory=dict)
     body: bytes = b""
 
+    def header(self, name: str, default: str = "") -> str:
+        """Header value regardless of case (servers send "Content-Type" or
+        "content-type", and the dict keeps whatever they sent)."""
+        wanted = name.lower()
+        for key, value in self.headers.items():
+            if key.lower() == wanted:
+                return value
+        return default
+
     @property
     def text(self) -> str:
         charset = "utf-8"
-        ctype = self.headers.get("content-type", "")
+        ctype = self.header("content-type")
         if "charset=" in ctype:
             charset = ctype.split("charset=", 1)[1].split(";")[0].strip() or "utf-8"
         try:
@@ -66,6 +77,15 @@ class Response:
     @property
     def ok(self) -> bool:
         return 200 <= self.status < 400
+
+
+def _human(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def _is_dns_failure(reason: object) -> bool:
@@ -308,27 +328,62 @@ class HttpClient:
 
     async def download(self, url: str, dest_path: str, headers: Optional[Dict[str, str]] = None,
                        on_progress: Optional[Callable[[int, int], None]] = None,
-                       cancel: Optional[threading.Event] = None) -> int:
-        """Stream a URL to disk. Returns the number of bytes written."""
-        return await asyncio.to_thread(self._download_sync, url, dest_path, headers or {}, on_progress, cancel)
+                       cancel: Optional[threading.Event] = None, resume: bool = False) -> int:
+        """Stream a URL to disk. Returns the size of the file.
+
+        With ``resume`` an existing partial file is continued with a Range
+        request; a server that ignores the range sends the whole file again,
+        which then simply overwrites it.
+        """
+        return await asyncio.to_thread(
+            self._download_sync, url, dest_path, headers or {}, on_progress, cancel, resume
+        )
 
     def _download_sync(self, url: str, dest_path: str, headers: Dict[str, str],
                        on_progress: Optional[Callable[[int, int], None]],
-                       cancel: Optional[threading.Event]) -> int:
+                       cancel: Optional[threading.Event], resume: bool = False) -> int:
         host = urllib.request.Request(url).host or ""
         self._throttle(host)
-        req = self._build_request(url, "GET", None, headers)
+        existing = 0
+        if resume:
+            try:
+                existing = os.path.getsize(dest_path)
+            except OSError:
+                existing = 0
+        request_headers = dict(headers)
+        if existing:
+            request_headers["Range"] = f"bytes={existing}-"
+            # A compressed transfer cannot be continued at a byte offset.
+            request_headers["Accept-Encoding"] = "identity"
+        req = self._build_request(url, "GET", None, request_headers)
         written = 0
         try:
             with self._opener.open(req, timeout=max(self._timeout, 120)) as resp:
+                partial = existing > 0 and getattr(resp, "status", 200) == 206
+                if not partial:
+                    existing = 0
                 total = int(resp.headers.get("Content-Length") or 0)
+                if total:
+                    total += existing
+                    # Fail now rather than with a full disk halfway through.
+                    try:
+                        free = shutil.disk_usage(os.path.dirname(dest_path) or ".").free
+                    except OSError:
+                        free = 0
+                    if free and total - existing > free:
+                        raise HttpError(
+                            f"Not enough free space: the file needs {_human(total - existing)}, "
+                            f"{_human(free)} is free",
+                            url=url,
+                        )
                 encoding = (resp.headers.get("Content-Encoding") or "").lower()
                 decoder = None
                 if "gzip" in encoding:
                     decoder = gzip.GzipFile(fileobj=resp)
                 elif "deflate" in encoding:
                     decoder = zlib.decompressobj()
-                with open(dest_path, "wb") as fh:
+                written = existing
+                with open(dest_path, "ab" if partial else "wb") as fh:
                     while True:
                         if cancel is not None and cancel.is_set():
                             raise HttpError("Download cancelled", url=url)
@@ -344,6 +399,11 @@ class HttpClient:
                         if on_progress:
                             on_progress(written, total)
         except urllib.error.HTTPError as exc:
+            if exc.code == 416 and existing:
+                # Nothing left to send: the partial file is already complete.
+                if on_progress:
+                    on_progress(existing, existing)
+                return existing
             raise HttpError(f"HTTP {exc.code} while downloading {url}", exc.code, url) from exc
         except HttpError:
             raise

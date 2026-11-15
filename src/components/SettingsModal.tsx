@@ -4,7 +4,21 @@ import { useBackGuard } from "./useBackGuard";
 import { focusElement } from "./gamepad";
 import { CacheStats, clearCache, getCacheStats, getImageDiagnostics, ImageDiagnostics } from "../types";
 import { toaster } from "@decky/api";
-import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
+import {
+  getLibrary,
+  getSettings,
+  getStatus,
+  LibraryInfo,
+  Settings,
+  SourceInfo,
+  srmStatus,
+  SrmStatus,
+  steamStatus,
+  SteamStatus,
+  updateSettings,
+} from "../types";
+import { runSteamRomManager, syncWithSteam, SyncResult } from "../steam";
+import { systemLabel } from "./common";
 import { SOURCE_LABELS } from "./common";
 import { measurePerformance, PerfSample } from "./perf";
 import { reloadStore } from "../state";
@@ -14,14 +28,47 @@ interface Props {
   onSaved: (settings: Settings) => void;
 }
 
-const SOURCE_ORDER = ["switchroms", "romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"] as const;
+const SOURCE_ORDER = ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"] as const;
+
+function ago(seconds: number): string {
+  const delta = Math.max(0, Date.now() / 1000 - seconds);
+  if (delta < 90) return "just now";
+  if (delta < 5400) return `${Math.round(delta / 60)} min ago`;
+  if (delta < 129600) return `${Math.round(delta / 3600)} h ago`;
+  return `${Math.round(delta / 86400)} days ago`;
+}
+
+/** One line on how a source has been doing lately. */
+function SourceHealth({ info }: { info: SourceInfo | undefined }) {
+  if (!info || (!info.last_ok && !info.last_error_at)) {
+    return <span className="rs-health idle">Not used yet</span>;
+  }
+  if (info.resting_until) {
+    const minutes = Math.max(1, Math.round((info.resting_until - Date.now() / 1000) / 60));
+    return (
+      <span className="rs-health bad" title={info.last_error ?? undefined}>
+        Failed {info.failures} times in a row, skipped for {minutes} more min · {info.last_error}
+      </span>
+    );
+  }
+  if (info.failures && info.last_error_at) {
+    return (
+      <span className="rs-health warn" title={info.last_error ?? undefined}>
+        Last try failed {ago(info.last_error_at)} · {info.last_error}
+      </span>
+    );
+  }
+  return <span className="rs-health ok">Working · last answered {ago(info.last_ok!)}</span>;
+}
 
 const SOURCE_HINTS: Record<string, string> = {
   switchroms: "Switch specific catalogue with hundreds of NSP/XCI titles and direct file links.",
   romspedia: "Server rendered search results, region specific builds, direct file links. The only source with a Switch section.",
   retrostic: "Large catalogue of classic consoles, direct zip downloads.",
   romsdl: "Same engine as Retrostic, different catalogue - useful for extra region builds.",
-  dumbroms: "Point this at the DumbRoms address you want to use (the domain below is the default).",
+  nswpedia: "Switch catalogue with its own search; covers and sizes come from the result cards.",
+  romsfun:
+    "Big catalogue across 50+ consoles, including romhacks and fan translations (listed after the games). Each download waits out the site's 7-second countdown first.",
   myabandonware: "TypeSense backed search for older PC and console titles.",
 };
 
@@ -51,6 +98,57 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
   const [perf, setPerf] = useState<PerfSample | null>(null);
   const [perfBusy, setPerfBusy] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const [sources, setSources] = useState<SourceInfo[]>([]);
+  const [steam, setSteam] = useState<SteamStatus | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [synced, setSynced] = useState<SyncResult | null>(null);
+  const [srm, setSrm] = useState<SrmStatus | null>(null);
+  const [srmAsking, setSrmAsking] = useState(false);
+  const [srmError, setSrmError] = useState<string | null>(null);
+  useEffect(() => {
+    steamStatus().then(setSteam).catch(() => undefined);
+    srmStatus().then(setSrm).catch(() => undefined);
+  }, []);
+
+  const askSrm = () => {
+    setSrmAsking(true);
+    setSrmError(null);
+    // The safe answer has focus.
+    window.requestAnimationFrame(() => focusElement(panelRef.current?.querySelector(".rs-srm-cancel")));
+  };
+  const cancelSrm = () => {
+    setSrmAsking(false);
+    window.requestAnimationFrame(() => focusElement(panelRef.current?.querySelector(".rs-srm-run")));
+  };
+  const runSrm = () => {
+    runSteamRomManager()
+      .then((result) => {
+        if (!result.ok) {
+          setSrmAsking(false);
+          setSrmError(result.error ?? "Steam ROM Manager could not be started.");
+        }
+      })
+      .catch((error) => setSrmError(String(error)));
+  };
+
+  const syncNow = () => {
+    setSyncing(true);
+    setSynced(null);
+    syncWithSteam()
+      .then((result) => {
+        setSynced(result);
+        steamStatus().then(setSteam).catch(() => undefined);
+      })
+      .catch((error) =>
+        setSynced({ ok: false, added: [], adopted: [], removed: [], artwork: [], missing: {}, error: String(error) }),
+      )
+      .finally(() => setSyncing(false));
+  };
+  useEffect(() => {
+    getStatus()
+      .then((status) => setSources(status.sources ?? []))
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     getCacheStats()
@@ -175,9 +273,12 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
                 <Toggle on={settings.enabled_sources.includes(id)} onChange={(value) => toggleSource(id, value)} />
               </div>
               <div className="rs-form-row">
-                <div className="rs-hint">{SOURCE_HINTS[id]}</div>
+                <div className="rs-hint">
+                  <SourceHealth info={sources.find((source) => source.id === id)} />
+                  {SOURCE_HINTS[id]}
+                </div>
               </div>
-              {(id === "romspedia" || id === "retrostic" || id === "romsdl" || id === "switchroms") && (
+              {(id === "romspedia" || id === "retrostic" || id === "romsdl" || id === "switchroms" || id === "nswpedia" || id === "romsfun") && (
                 <div className="rs-form-row">
                   <label>Base URL</label>
                   <TextField
@@ -189,36 +290,30 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
                   />
                 </div>
               )}
-              {id === "dumbroms" && (
-                <>
-                  <div className="rs-form-row">
-                    <label>Base URL</label>
-                    <TextField
-                      label=""
-                      value={settings.dumbroms_base_url}
-                      onChange={(event) => update({ dumbroms_base_url: event.target.value })}
-                    />
-                  </div>
-                  <div className="rs-form-row">
-                    <label>Search URL</label>
-                    <TextField
-                      label="DumbRoms search URL"
-                      value={settings.dumbroms_search_url}
-                      onChange={(event) => update({ dumbroms_search_url: event.target.value })}
-                    />
-                  </div>
-                  <div className="rs-form-row">
-                    <div className="rs-hint">
-                      Use <span className="rs-path">{"{base}"}</span> for the base address and{" "}
-                      <span className="rs-path">{"{query}"}</span> for the search term.
-                    </div>
-                  </div>
-                </>
-              )}
             </div>
           ))}
 
           <div className="rs-section-title">Cover art</div>
+          <div className="rs-form-row">
+            <label>Box art from libretro</label>
+            <Toggle on={settings.libretro_boxart !== false} onChange={(value) => update({ libretro_boxart: value })} />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              Real front scans from RetroArch's box-art library (libretro-thumbnails), matched by title, in each
+              box's true shape. Used before the sites' own covers.
+            </div>
+          </div>
+          <div className="rs-form-row">
+            <label>Small copies for the grid</label>
+            <Toggle on={settings.boxart_resize !== false} onChange={(value) => update({ boxart_resize: value })} />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              The scans are large; the grid loads 25 kB copies made by the open-source image proxy wsrv.nl. Off: the
+              grid keeps the sites' covers and only the game panel shows the full scan.
+            </div>
+          </div>
           <div className="rs-form-row">
             <label>IGDB client ID</label>
             <TextField
@@ -280,6 +375,23 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
 
           <div className="rs-section-title">Downloads</div>
           <div className="rs-form-row">
+            <label>Preferred region</label>
+            <Dropdown
+              rgOptions={[
+                { label: "No preference", data: "" },
+                { label: "USA", data: "USA" },
+                { label: "Europe", data: "Europe" },
+                { label: "Japan", data: "Japan" },
+              ]}
+              selectedOption={settings.preferred_region ?? ""}
+              onChange={(option) => update({ preferred_region: option.data })}
+              menuLabel="Preferred region"
+            />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">The game panel offers this region's file first, as the big Download button.</div>
+          </div>
+          <div className="rs-form-row">
             <label>Extract .zip archives</label>
             <Toggle on={settings.extract_archives} onChange={(value) => update({ extract_archives: value })} />
           </div>
@@ -303,6 +415,123 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               onChange={(event) => update({ max_concurrent: Number(event.target.value) || 1 })}
             />
           </div>
+
+          <div className="rs-section-title">Steam library</div>
+          <div className="rs-form-row">
+            <label>Add games to Steam</label>
+            <Toggle on={settings.steam_shortcuts !== false} onChange={(value) => update({ steam_shortcuts: value })} />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              Every downloaded game is added to your Steam library right away, and removed again when you uninstall
+              it. The launch command comes from your Steam ROM Manager setup (the one EmuDeck makes), so the
+              shortcut starts the game exactly like one SRM would create. No Steam restart needed.
+            </div>
+          </div>
+          <div className="rs-form-row">
+            <label>Sort into collections</label>
+            <Toggle on={settings.steam_collections !== false} onChange={(value) => update({ steam_collections: value })} />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              {steam === null
+                ? "Looking for Steam ROM Manager…"
+                : steam.srm
+                  ? `Steam ROM Manager found: ${steam.parsers} enabled ${steam.parsers === 1 ? "parser" : "parsers"}${
+                      steam.consoles.length ? ` (${steam.consoles.map(systemLabel).slice(0, 8).join(", ")}${steam.consoles.length > 8 ? ", …" : ""})` : ""
+                    }. ${steam.tracked} ${steam.tracked === 1 ? "game" : "games"} added by ROM Store.`
+                  : "No Steam ROM Manager setup found. Run EmuDeck's Steam ROM Manager once so the consoles have parsers, then sync."}
+            </div>
+          </div>
+          <div className="rs-form-row">
+            <label>Library artwork</label>
+            <Toggle on={settings.steam_artwork !== false} onChange={(value) => update({ steam_artwork: value })} />
+          </div>
+          <div className="rs-form-row">
+            <label>SteamGridDB API key</label>
+            <TextField
+              label=""
+              value={settings.steamgriddb_api_key ?? ""}
+              placeholder="optional"
+              onChange={(event) => update({ steamgriddb_api_key: event.target.value.trim() })}
+            />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              Like Steam ROM Manager, each game added to Steam gets a cover, wide cover, hero, logo and icon from
+              SteamGridDB. That needs your own free API key (steamgriddb.com → Preferences → API). Without one,
+              covers and heroes come from IGDB (no logos or icons). Art a shortcut already has is never replaced.
+            </div>
+          </div>
+          <div className="rs-form-row">
+            <label>Library check</label>
+            <Button className="rs-btn ghost" disabled={syncing} onClick={syncNow}>
+              {syncing ? "Syncing…" : "Sync with Steam now"}
+            </Button>
+          </div>
+          <div className="rs-form-row">
+            <label>Steam ROM Manager</label>
+            {srmAsking ? (
+              <Focusable className="rs-panel-actions" flow-children="row">
+                <Button className="rs-btn ghost rs-srm-cancel" onClick={cancelSrm}>
+                  Cancel
+                </Button>
+                <Button className="rs-btn danger" onClick={runSrm}>
+                  Close Steam and run
+                </Button>
+              </Focusable>
+            ) : (
+              <Button className="rs-btn ghost rs-srm-run" disabled={!srm?.found} onClick={askSrm}>
+                Run Steam ROM Manager…
+              </Button>
+            )}
+          </div>
+          <div className="rs-form-row">
+            <div className={`rs-hint${srmAsking ? " rs-warn" : ""}`}>
+              {srmAsking
+                ? "Steam closes now, together with any running game. Steam ROM Manager then updates your whole library with its own titles, artwork and controller layouts, and Steam starts again (about half a minute). The games ROM Store added are handed over to it, so nothing is doubled."
+                : srm === null
+                  ? "Looking for Steam ROM Manager…"
+                  : srm.found
+                    ? `Runs your Steam ROM Manager setup itself (${srm.command}). It needs Steam closed, so Steam restarts.`
+                    : "Steam ROM Manager was not found in Emulation/tools/srm or ~/Applications. Set its path below if it is elsewhere."}
+              {srmError ? <span className="rs-error"> {srmError}</span> : null}
+              {srm?.last && !srmAsking ? (
+                <span className={srm.last.ok ? "" : "rs-error"}>
+                  {" "}
+                  Last run {new Date(srm.last.at * 1000).toLocaleString()}: {srm.last.ok ? "finished." : srm.last.error || "failed."}
+                </span>
+              ) : null}
+            </div>
+          </div>
+          {srm?.last && !srm.last.ok && srm.log.length ? (
+            <pre className="rs-diagnostics">{srm.log.join("\n")}</pre>
+          ) : null}
+          <div className="rs-form-row">
+            <label>SRM location</label>
+            <TextField
+              label=""
+              value={settings.srm_path ?? ""}
+              placeholder="found automatically"
+              onChange={(event) => update({ srm_path: event.target.value.trim() })}
+            />
+          </div>
+
+          {synced ? (
+            <div className="rs-form-row">
+              <div className={`rs-hint${synced.ok ? "" : " rs-error"}`}>
+                {synced.error
+                  ? synced.error
+                  : `Added ${synced.added.length}, adopted ${synced.adopted.length} existing, removed ${synced.removed.length}, artwork for ${synced.artwork.length}.`}
+                {synced.warning ? ` ${synced.warning} (check the key; IGDB art was used).` : ""}
+                {Object.keys(synced.missing).length
+                  ? ` No parser for: ${Object.entries(synced.missing)
+                      .map(([key, count]) => `${systemLabel(key)} (${count})`)
+                      .join(", ")}.`
+                  : ""}
+              </div>
+            </div>
+          ) : null}
 
           <div className="rs-section-title">Offline cache</div>
           <div className="rs-form-row">

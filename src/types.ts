@@ -69,6 +69,8 @@ export interface MergedRom {
   size: number | null;
   variants: number;
   entries: RomEntry[];
+  /** A file for this game is already in its console's ROM folder. */
+  installed?: boolean;
   extra?: { media?: Media };
 }
 
@@ -81,6 +83,13 @@ export interface SourceInfo {
   status: string;
   error: string | null;
   base_url?: string;
+  /** Unix seconds of the last successful search or browse. */
+  last_ok?: number | null;
+  last_error?: string | null;
+  last_error_at?: number | null;
+  /** Failures in a row; after a few the source rests for a while. */
+  failures?: number;
+  resting_until?: number | null;
 }
 
 export interface SearchPayload {
@@ -124,12 +133,21 @@ export interface LibrarySystem {
   path: string;
 }
 
+export interface StorageInfo {
+  root: string;
+  label: string;
+  free: number;
+  total: number;
+}
+
 export interface LibraryInfo {
   root: string;
   root_exists: boolean;
   candidates: string[];
   folders: string[];
   systems: LibrarySystem[];
+  /** ROM libraries a download can go to (internal, SD card), with space. */
+  storage?: StorageInfo[];
 }
 
 export interface Settings {
@@ -140,8 +158,6 @@ export interface Settings {
   keep_archive: boolean;
   max_concurrent: number;
   results_per_source: number;
-  dumbroms_base_url: string;
-  dumbroms_search_url: string;
   romspedia_base_url: string;
   retrostic_base_url: string;
   romsdl_base_url: string;
@@ -152,6 +168,14 @@ export interface Settings {
   chrome_top_offset: number;
   chrome_bottom_offset: number;
   igdb_replace_covers: boolean;
+  preferred_region?: string;
+  steam_shortcuts?: boolean;
+  steam_collections?: boolean;
+  steam_artwork?: boolean;
+  steamgriddb_api_key?: string;
+  srm_path?: string;
+  libretro_boxart?: boolean;
+  boxart_resize?: boolean;
   igdb_client_id: string;
   igdb_client_secret: string;
 }
@@ -181,6 +205,93 @@ export interface ImageDiagnostics {
   error: string | null;
 }
 
+export interface BiosInfo {
+  system: string;
+  label: string;
+  /** File names the usual emulators accept (any one of them). */
+  files: string[];
+  hint: string | null;
+  optional: boolean;
+  /** Path of the file that was found, or null. */
+  found: string | null;
+  folder: string;
+}
+
+/** A game found in the ROM library's console folders. */
+export interface InstalledGame {
+  id: string;
+  system: string;
+  title: string;
+  folder: string;
+  files: { name: string; size: number; folder: boolean }[];
+  size: number;
+  modified: number;
+  /** A Steam shortcut for it was made by the plugin. */
+  in_steam?: boolean;
+}
+
+export interface InstalledPayload {
+  root: string;
+  games: InstalledGame[];
+  size: number;
+}
+
+export interface UninstallResult {
+  ok: boolean;
+  removed?: number;
+  freed?: number;
+  title?: string;
+  error?: string | null;
+}
+
+/** One shortcut the Steam library should have (backend/steam.py). */
+export interface SteamPlanItem {
+  key: string;
+  name: string;
+  system: string;
+  exe: string;
+  launchOptions: string;
+  startDir: string;
+  collection: string | null;
+  parser: string;
+  appid: number | null;
+}
+
+export interface SteamPlan {
+  srm: string | null;
+  parsers: number;
+  enabled: boolean;
+  collections: boolean;
+  artwork: boolean;
+  items: SteamPlanItem[];
+  remove: { key: string; appid: number; name: string }[];
+  /** Consoles with games but no enabled Steam ROM Manager parser. */
+  missing: Record<string, number>;
+}
+
+export interface SteamStatus {
+  srm: string | null;
+  parsers: number;
+  consoles: string[];
+  tracked: number;
+  enabled: boolean;
+}
+
+/** A game on a home-screen shelf (favourites, recently viewed). */
+export interface ShelfItem {
+  key: string;
+  title: string;
+  system: string;
+  cover: string | null;
+  at: number;
+}
+
+export interface ShelvesPayload {
+  favorites: ShelfItem[];
+  recent: ShelfItem[];
+  favorite?: boolean;
+}
+
 export interface StartDownloadResult {
   ok: boolean;
   error?: string;
@@ -195,7 +306,7 @@ export const searchRoms = callable<
 export const browseRoms = callable<[string, number], SearchPayload>("browse");
 export const getDetails = callable<[string], MergedRom | null>("get_details");
 export const startDownload = callable<
-  [string, string, string, string | null, string | null],
+  [string, string, string, string | null, string | null, string | null],
   StartDownloadResult
 >("start_download");
 export const getDownloads = callable<[], DownloadJob[]>("get_downloads");
@@ -204,6 +315,36 @@ export const clearDownloads = callable<[], { ok: boolean }>("clear_downloads");
 export const getSettings = callable<[], Settings>("get_settings");
 export const updateSettings = callable<[Partial<Settings>], Settings>("update_settings");
 export const getLibrary = callable<[], LibraryInfo>("get_library");
+export const checkBios = callable<[string], BiosInfo | null>("check_bios");
+export const getShelves = callable<[], ShelvesPayload>("get_shelves");
+export const getInstalled = callable<[], InstalledPayload>("get_installed");
+export const steamPlan = callable<[string[] | null, boolean], SteamPlan>("steam_plan");
+export const steamReport = callable<[Record<string, { appid: number; name: string }>, string[]], { ok: boolean }>("steam_report");
+export const steamStatus = callable<[], SteamStatus>("steam_status");
+
+export interface SteamArtworkPayload {
+  source: "steamgriddb" | "igdb" | null;
+  warning?: string | null;
+  /** Slot -> image (base64), for SteamClient.Apps.SetCustomArtworkForApp. */
+  assets: Partial<Record<"capsule" | "hero" | "header" | "logo" | "icon", { data: string; ext: "png" | "jpg" }>>;
+}
+export const steamArtwork = callable<[string], SteamArtworkPayload>("steam_artwork");
+
+export interface SrmStatus {
+  found: boolean;
+  command: string | null;
+  running: boolean;
+  /** The last run's result (written by the helper after SRM finished). */
+  last: { ok: boolean; code: number; at: number; error: string; seen?: boolean } | null;
+  log: string[];
+}
+export const srmStatus = callable<[], SrmStatus>("srm_status");
+export const srmStart = callable<[], { ok: boolean; error?: string; command?: string }>("srm_start");
+export const srmAck = callable<[], { ok: boolean }>("srm_ack");
+export const steamTracked = callable<[], Record<string, { appid: number; name: string }>>("steam_tracked");
+export const uninstallGame = callable<[string], UninstallResult>("uninstall_game");
+export const toggleFavorite = callable<[Partial<ShelfItem>], ShelvesPayload>("toggle_favorite");
+export const addRecent = callable<[Partial<ShelfItem>], ShelvesPayload>("add_recent");
 export const openFolder = callable<[string], { ok: boolean; error?: string }>("open_folder");
 export const getCover = callable<[string | null, string], string | null>("get_cover");
 export const prefetchCovers = callable<[string[], string], void>("prefetch_covers");

@@ -5,7 +5,8 @@ export const SOURCE_LABELS: Record<string, string> = {
   romspedia: "Romspedia",
   retrostic: "Retrostic",
   romsdl: "RomsDL",
-  dumbroms: "DumbRoms",
+  nswpedia: "Nswpedia",
+  romsfun: "RomsFun",
   myabandonware: "MyAbandonware",
 };
 
@@ -229,6 +230,23 @@ export function isResizedArt(url: string | null | undefined): boolean {
  */
 export function clampArtRatio(ratio: number): number {
   return Math.min(2, Math.max(0.5, ratio));
+}
+
+/**
+ * The backend's match_title(): one key for every way the sites spell a game
+ * ("Pokémon Red", "Pokemon - Red Version (USA)"), used to find a shelf item
+ * again in search results.
+ */
+export function matchKey(title: string): string {
+  return (title || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[([][^)\]]*[)\]]/g, " ")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\b(the|a|an|of|and|version|edition)\b/g, " ")
+    .replace(/\s+/g, "");
 }
 
 /** width / height of each cover once it has loaded, shared by every frame. */

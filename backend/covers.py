@@ -136,7 +136,7 @@ class IgdbCovers:
             return None
 
         body = (
-            f'search "{title.strip()}"; fields name,cover.image_id,screenshots.image_id,'
+            f'search "{title.strip()}"; fields name,cover.image_id,screenshots.image_id,screenshots.width,screenshots.height,artworks.image_id,artworks.width,artworks.height,'
             f"videos.video_id,rating,aggregated_rating,rating_count,total_rating,summary,"
             f"first_release_date,genres.name,platforms.name,involved_companies.company.name; "
             f"limit 6;"
@@ -167,6 +167,13 @@ class IgdbCovers:
                 "rating": rating,
                 "rating_count": best.get("rating_count"),
                 "shots": self._shots(best),
+                # Image ids for Steam library art (backend/artwork.py).
+                "cover_id": cover,
+                # [image id, width, height]: wide ones make Steam heroes.
+                "artworks": [[a["image_id"], a.get("width") or 0, a.get("height") or 0]
+                             for a in (best.get("artworks") or []) if a.get("image_id")][:8],
+                "screenshots": [[x["image_id"], x.get("width") or 0, x.get("height") or 0]
+                                for x in (best.get("screenshots") or []) if x.get("image_id")][:8],
                 "trailer": self._trailer(best),
                 "summary": (best.get("summary") or "")[:600] or None,
                 "genres": [g.get("name") for g in (best.get("genres") or []) if g.get("name")][:4],

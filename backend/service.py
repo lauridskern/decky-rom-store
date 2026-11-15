@@ -6,28 +6,36 @@ import asyncio
 import hashlib
 import json
 import os
+import shutil
 import socket
 import time
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
+from . import bios
+from .artwork import SteamArtwork
+from .boxart import BoxArt
 from .covers import IgdbCovers
 from .dedupe import merge_entries, sort_roms
 from .downloader import DownloadManager
 from .emudeck import detect_rom_roots, list_folders, resolve_folder, system_folders
 from .httpclient import HttpClient
 from .images import ImageCache
+from .library import LibraryIndex, installed_games, uninstall
+from .srm_runner import SrmRunner
+from .steam import SrmConfig, SteamShortcuts, plan as steam_plan
+from .shelves import Shelves
 from .media import SteamMedia
 from .models import MergedRom, RomEntry, RomFile, normalize_title
 from .settings import Settings
 from .sources.base import Source
 from .systems import canonical_system
-from .sources.dumbroms import DumbRomsSource
 from .sources.myabandonware import MyAbandonwareSource
 from .sources.nswpedia import NswpediaSource
 from .sources.retrostic import RetrosticSource
 from .sources.switchroms import SwitchRomsSource
 from .sources.romspedia import CONSOLE_MAP, RomspediaSource
+from .sources.romsfun import RomsFunSource
 
 # id -> (class, label, homepage, default base url)
 SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
@@ -55,18 +63,17 @@ SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
         "homepage": "https://romsdl.com",
         "base_key": "romsdl_base_url",
     },
-    "dumbroms": {
-        "cls": DumbRomsSource,
-        "label": "DumbRoms",
-        "homepage": "https://dumbroms.com",
-        "base_key": "dumbroms_base_url",
-        "search_url_key": "dumbroms_search_url",
-    },
     "nswpedia": {
         "cls": NswpediaSource,
         "label": "Nswpedia",
         "homepage": "https://nswpedia.io",
         "base_key": "nswpedia_base_url",
+    },
+    "romsfun": {
+        "cls": RomsFunSource,
+        "label": "RomsFun",
+        "homepage": "https://romsfun.com",
+        "base_key": "romsfun_base_url",
     },
     "myabandonware": {
         "cls": MyAbandonwareSource,
@@ -75,6 +82,15 @@ SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
         "base_key": "myabandonware_base_url",
     },
 }
+
+
+def _human(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+        value /= 1024
+    return f"{value:.1f} TB"
 
 
 class StoreService:
@@ -94,9 +110,20 @@ class StoreService:
         self._COUNTS_TTL = 24 * 60 * 60
         self._browse_cache: Dict[str, tuple] = {}
         self._unreachable: Dict[str, float] = {}
-        self.downloads = DownloadManager(self.http, max_concurrent=int(settings.get("max_concurrent", 2)))
+        # Per source: last success, last failure and failures in a row.
+        self._health: Dict[str, Dict[str, Any]] = self._read_health()
+        self.downloads = DownloadManager(
+            self.http,
+            max_concurrent=int(settings.get("max_concurrent", 2)),
+            state_path=os.path.join(runtime_dir, "downloads.json") if runtime_dir else None,
+        )
         self.images = ImageCache(self.http, runtime_dir=runtime_dir, plugin_name=plugin_name)
         self.media = SteamMedia(self.http, cache_dir=runtime_dir)
+        self.boxart = BoxArt(self.http, cache_dir=runtime_dir)
+        self.library_index = LibraryIndex()
+        self.srm = SrmRunner(runtime_dir)
+        self.steam_shortcuts = SteamShortcuts(os.path.join(runtime_dir, "steam_shortcuts.json") if runtime_dir else None)
+        self.shelves = Shelves(os.path.join(runtime_dir, "shelves.json") if runtime_dir else None)
         self.covers = IgdbCovers(
             self.http,
             client_id=settings.get("igdb_client_id"),
@@ -293,10 +320,6 @@ class StoreService:
         options = {
             "romspedia": {"base_url": self.settings.get("romspedia_base_url")},
             "myabandonware": {"base_url": self.settings.get("myabandonware_base_url")},
-            "dumbroms": {
-                "base_url": self.settings.get("dumbroms_base_url"),
-                "search_url": self.settings.get("dumbroms_search_url"),
-            },
         }
         sources: List[Source] = []
         for source_id, definition in SOURCE_DEFS.items():
@@ -313,6 +336,46 @@ class StoreService:
             sources.append(definition["cls"](self.http, options))
         return sources
 
+    # ------------------------------------------------------------------ health
+    FAILURES_BEFORE_REST = 3
+    REST_SECONDS = 15 * 60
+
+    def _record(self, source_id: str, error: Optional[str]) -> None:
+        health = self._health.setdefault(source_id, {})
+        if error is None:
+            health["ok_at"] = time.time()
+            health["failures"] = 0
+        else:
+            health["error"] = error[:240]
+            health["error_at"] = time.time()
+            health["failures"] = int(health.get("failures") or 0) + 1
+
+    def _resting_until(self, source_id: str) -> Optional[float]:
+        """When a source that keeps failing gets tried again, or None."""
+        health = self._health.get(source_id) or {}
+        if int(health.get("failures") or 0) < self.FAILURES_BEFORE_REST:
+            return None
+        until = float(health.get("error_at") or 0) + self.REST_SECONDS
+        return until if until > time.time() else None
+
+    def _health_path(self) -> Optional[str]:
+        return os.path.join(self._runtime_dir, "source_health.json") if self._runtime_dir else None
+
+    def _read_health(self) -> Dict[str, Dict[str, Any]]:
+        data = self._read_json(self._health_path())
+        return data if isinstance(data, dict) else {}
+
+    def _write_health(self) -> None:
+        path = self._health_path()
+        if not path:
+            return
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(self._health, fh)
+        except OSError:
+            pass
+
     def describe_sources(self) -> List[Dict[str, Any]]:
         described = []
         enabled = set(self.settings.get("enabled_sources") or [])
@@ -327,6 +390,12 @@ class StoreService:
                 "error": self._errors.get(source_id),
                 "base_url": self.settings.get(definition["base_key"]) or definition["homepage"],
             }
+            health = self._health.get(source_id) or {}
+            info["last_ok"] = health.get("ok_at")
+            info["last_error"] = health.get("error")
+            info["last_error_at"] = health.get("error_at")
+            info["failures"] = int(health.get("failures") or 0)
+            info["resting_until"] = self._resting_until(source_id)
             described.append(info)
         return described
 
@@ -354,6 +423,7 @@ class StoreService:
                 payload = dict(cached.get("payload") or {})
                 payload["cached"] = True
                 payload["cache_age_hours"] = round((time.time() - float(cached.get("at", 0))) / 3600, 1)
+                self._mark_installed(payload.get("results") or [])
                 self._last_search = payload
                 return payload
             except Exception:
@@ -375,8 +445,15 @@ class StoreService:
                 # We already know this source is down - do not wait for it.
                 self._errors[source.id] = "unreachable"
                 return source.id, []
+            resting = self._resting_until(source.id)
+            if resting and not ignore_breaker:
+                # Failed several times in a row: leave it alone for a while
+                # instead of making every search wait for it.
+                self._errors[source.id] = f"skipped after repeated failures: {self._health[source.id].get('error')}"
+                return source.id, []
             try:
                 entries = await source.search(query, limit=per_source, page=page)
+                self._record(source.id, None)
                 self._errors.pop(source.id, None)
                 pages = getattr(source, "_last_page_count", 1)
                 if pages and pages > self._last_page_count:
@@ -385,6 +462,7 @@ class StoreService:
             except Exception as exc:
                 message = f"{type(exc).__name__}: {exc}"
                 self._errors[source.id] = message
+                self._record(source.id, message)
                 if "host not found" in message.lower() or "nodename" in message.lower():
                     # Remember it, so the next search does not wait for DNS -
                     # but only for a short while, the network may come back.
@@ -392,6 +470,7 @@ class StoreService:
                 return source.id, []
 
         results = await asyncio.gather(*(run(source) for source in sources))
+        self._write_health()
         entries: List[RomEntry] = []
         counts: Dict[str, int] = {}
         for source_id, source_entries in results:
@@ -400,7 +479,12 @@ class StoreService:
 
         if system and system != "all":
             entries = [e for e in entries if e.system == system]
+            # The sites search every console at once and return one page, so
+            # "pokemon" on Game Boy finds nothing: the page is all GBA and DS.
+            # The console's own catalogue (the browse view, cached) fills in.
+            entries.extend(await self._catalogue_matches(system, query, {e.key for e in entries}))
 
+        await self._apply_boxart(entries)
         merged = merge_entries(entries, self.settings.get("source_priority"))
         if sort and sort != "relevance":
             merged = sort_roms(merged, sort)
@@ -438,6 +522,7 @@ class StoreService:
             pass
         payload["results"] = [rom.to_dict() for rom in merged]
         payload["cached"] = False
+        self._mark_installed(payload["results"])
         self._last_search = payload
         self._prefetch_covers(entries)
 
@@ -468,12 +553,18 @@ class StoreService:
         for source in self.build_sources():
             if not source.supports_browse:
                 continue
+            if self._resting_until(source.id):
+                continue
             try:
                 found = await source.browse(system, limit=limit)
                 entries.extend(found)
+                self._record(source.id, None)
             except Exception as exc:
                 self._errors[source.id] = f"{type(exc).__name__}: {exc}"
+                self._record(source.id, self._errors[source.id])
+        self._write_health()
 
+        await self._apply_boxart(entries)
         merged = merge_entries(entries, self.settings.get("source_priority"))[:limit]
         self._last_page_count = 1
         for index, rom in enumerate(merged):
@@ -487,6 +578,37 @@ class StoreService:
         self._browse_cache[system] = (time.time(), entries)
         return self._browse_payload(system, entries)
 
+    async def _catalogue_matches(self, system: str, query: str, known: set) -> List[RomEntry]:
+        """Entries of a console's catalogue whose title has every query word."""
+        words = normalize_title(query).split()
+        if not words:
+            return []
+        cached = self._browse_cache.get(system)
+        if cached is None:
+            # Fetch it with the same code as the browse view; this also fills
+            # the cache for the next search on this console.
+            saved_roms, saved_entries = self._roms, self._entries
+            try:
+                await asyncio.wait_for(self.browse(system), timeout=12)
+            except Exception:
+                pass
+            finally:
+                # browse() swaps the session's games out; keep the search's.
+                self._roms, self._entries = saved_roms, saved_entries
+            cached = self._browse_cache.get(system)
+        if not cached:
+            return []
+        def matches(title: str) -> bool:
+            # Every query word starts a word of the title: "poke red" works.
+            title_words = normalize_title(title).split()
+            return all(any(part.startswith(word) for part in title_words) for word in words)
+
+        return [
+            entry
+            for entry in cached[1]
+            if entry.system == system and entry.key not in known and matches(entry.title)
+        ]
+
     def _browse_payload(self, system: str, entries: List[RomEntry]) -> Dict[str, Any]:
         merged = merge_entries(entries, self.settings.get("source_priority"))[:200]
         for index, rom in enumerate(merged):
@@ -495,13 +617,15 @@ class StoreService:
         for rom in merged:
             for entry in rom.entries:
                 self._entries[entry.key] = entry
+        results = [rom.to_dict() for rom in merged]
+        self._mark_installed(results)
         return {
             "query": "",
             "system": system,
             "count": len(merged),
             "page": 1,
             "has_more": False,
-            "results": [rom.to_dict() for rom in merged],
+            "results": results,
             "sources": self.describe_sources(),
             "source_counts": {},
             "systems": [system],
@@ -529,7 +653,7 @@ class StoreService:
                     if cached.get("media"):
                         rom.extra["media"] = cached["media"]
                     self._index_rom(rom)
-                    return rom.to_dict()
+                    return self._with_installed(rom)
             except Exception:
                 pass
 
@@ -537,7 +661,7 @@ class StoreService:
         # not scraped again either.
         pending = [entry for entry in rom.entries if not entry.files]
         if not pending:
-            return rom.to_dict()
+            return self._with_installed(rom)
 
         sources = {source.id: source for source in self.build_sources()}
 
@@ -583,7 +707,7 @@ class StoreService:
             })
         except Exception:
             pass
-        return rom.to_dict()
+        return self._with_installed(rom)
 
     async def _build_media(self, entry: RomEntry) -> Optional[Dict[str, Any]]:
         """Collect artwork for a game.
@@ -643,7 +767,8 @@ class StoreService:
     # ------------------------------------------------------------------ download
     async def start_download(self, rom_id: str, entry_key: str, file_id: str,
                              system: Optional[str] = None,
-                             destination_folder: Optional[str] = None) -> Dict[str, Any]:
+                             destination_folder: Optional[str] = None,
+                             root: Optional[str] = None) -> Dict[str, Any]:
         rom = self._roms.get(rom_id)
         entry = self._entries.get(entry_key)
         if not rom or not entry:
@@ -675,12 +800,29 @@ class StoreService:
             url = rom_file.url
 
         target_system = system or entry.system
-        root = self.roms_root()
+        # A library on another drive (the SD card) can be picked per download.
+        if not root or not os.path.isdir(root):
+            root = self.roms_root()
         folder = destination_folder or resolve_folder(root, target_system, create=True)
         try:
             os.makedirs(folder, exist_ok=True)
         except OSError as exc:
             return {"ok": False, "error": f"Cannot create {folder}: {exc}"}
+
+        # Check the space now when the size is known; extracting an archive
+        # needs room for both copies for a moment.
+        size = rom_file.size or entry.size or 0
+        if size:
+            need = size * (2 if self.settings.get("extract_archives") else 1)
+            try:
+                free = shutil.disk_usage(folder).free
+            except OSError:
+                free = 0
+            if free and need > free:
+                return {
+                    "ok": False,
+                    "error": f"Not enough free space on this drive: needs {_human(need)}, {_human(free)} free.",
+                }
 
         filename = rom_file.filename or url.rsplit("/", 1)[-1] or f"{entry.title}.zip"
         job = self.downloads.enqueue(
@@ -707,6 +849,23 @@ class StoreService:
                 return candidate
         return root or (roots[0] if roots else os.path.expanduser("~/EmuDecky/roms"))
 
+    def _with_installed(self, rom: MergedRom) -> Dict[str, Any]:
+        data = rom.to_dict()
+        self._mark_installed([data])
+        return data
+
+    def _mark_installed(self, results: List[Dict[str, Any]]) -> None:
+        """Flag results that already have a file in their console's folder."""
+        root = self.roms_root()
+        folders: Dict[str, str] = {}
+        for result in results:
+            system = result.get("system") or "unknown"
+            if system not in folders:
+                folders[system] = resolve_folder(root, system)
+            folder = folders[system]
+            titles = [result.get("title") or ""] + [e.get("title") or "" for e in result.get("entries") or []]
+            result["installed"] = any(self.library_index.contains(folder, title) for title in titles if title)
+
     def library(self) -> Dict[str, Any]:
         root = self.roms_root()
         folders = list_folders(root)
@@ -716,7 +875,88 @@ class StoreService:
             "candidates": detect_rom_roots(),
             "folders": folders,
             "systems": system_folders(root),
+            "storage": self.storage(root),
         }
+
+    def installed(self) -> Dict[str, Any]:
+        """Every game in the ROM library, for the Installed games view."""
+        root = self.roms_root()
+        games = installed_games(root)
+        tracked = self.steam_shortcuts.all()
+        for game in games:
+            game["in_steam"] = any(os.path.join(game["folder"], f["name"]) in tracked for f in game["files"])
+        return {"root": root, "games": games, "size": sum(g["size"] for g in games)}
+
+    # ------------------------------------------------------------------ steam
+    def steam_plan(self, paths: Optional[List[str]] = None, add: bool = True) -> Dict[str, Any]:
+        """Shortcuts the Steam library should have (see backend/steam.py)."""
+        enabled = bool(self.settings.get("steam_shortcuts", True))
+        result = steam_plan(self.roms_root(), self.steam_shortcuts.all(), only=paths, add=add and enabled)
+        result["enabled"] = enabled
+        result["collections"] = bool(self.settings.get("steam_collections", True))
+        result["artwork"] = bool(self.settings.get("steam_artwork", True))
+        return result
+
+    async def steam_artwork(self, title: str) -> Dict[str, Any]:
+        """Steam library art for a game, base64 per slot (see artwork.py)."""
+        if not self.settings.get("steam_artwork", True):
+            return {"source": None, "assets": {}}
+        art = SteamArtwork(self.http, self.covers, self.settings.get("steamgriddb_api_key") or "")
+        return await art.assets(title)
+
+    def steam_report(self, added: Dict[str, Any], removed: List[str]) -> Dict[str, Any]:
+        self.steam_shortcuts.report(added or {}, removed or [])
+        return {"ok": True, "tracked": len(self.steam_shortcuts.all())}
+
+    def steam_tracked(self) -> Dict[str, Any]:
+        """Shortcuts the plugin made, to hand over before SRM runs."""
+        return self.steam_shortcuts.all()
+
+    def srm_status(self) -> Dict[str, Any]:
+        return self.srm.status(self.roms_root(), self.settings.get("srm_path") or "")
+
+    def srm_start(self) -> Dict[str, Any]:
+        return self.srm.start(self.roms_root(), self.settings.get("srm_path") or "")
+
+    def srm_ack(self) -> Dict[str, Any]:
+        self.srm.acknowledge()
+        return {"ok": True}
+
+    def steam_status(self) -> Dict[str, Any]:
+        config = SrmConfig.load()
+        consoles = sorted({config.rom_dir(p).rsplit("/", 1)[-1] for p in config.parsers if config.rom_dir(p)})
+        return {
+            "srm": config.folder,
+            "parsers": len(config.parsers),
+            "consoles": consoles,
+            "tracked": len(self.steam_shortcuts.all()),
+            "enabled": bool(self.settings.get("steam_shortcuts", True)),
+        }
+
+    def uninstall(self, game_id: str) -> Dict[str, Any]:
+        return uninstall(self.roms_root(), game_id)
+
+    def check_bios(self, system: str) -> Optional[Dict[str, Any]]:
+        """Whether a console needs a BIOS and whether one is in place."""
+        root = self.roms_root()
+        return bios.check(system, root, resolve_folder(root, system))
+
+    def storage(self, current: Optional[str] = None) -> List[Dict[str, Any]]:
+        """ROM libraries on this Deck that a download can go to, with space."""
+        roots = [current] if current else []
+        roots += [path for path in detect_rom_roots() if os.path.isdir(path) and path not in roots]
+        out: List[Dict[str, Any]] = []
+        for path in roots:
+            try:
+                usage = shutil.disk_usage(path)
+            except OSError:
+                continue
+            if path.startswith("/run/media/"):
+                label = "SD card" if "/mmcblk" in path or path.count("/") >= 4 else "External drive"
+            else:
+                label = "Internal storage"
+            out.append({"root": path, "label": label, "free": usage.free, "total": usage.total})
+        return out
 
     # ------------------------------------------------------------------ images
     def clear_cache(self) -> Dict[str, Any]:
@@ -788,6 +1028,15 @@ class StoreService:
 
     async def prefetch_covers(self, urls: List[Optional[str]], kind: str = "card") -> None:
         await self.images.prefetch(urls, kind)
+
+    async def _apply_boxart(self, entries: List[RomEntry]) -> None:
+        """Real box scans from libretro-thumbnails, before any other art."""
+        if not self.settings.get("libretro_boxart", True):
+            return
+        try:
+            await self.boxart.apply(entries, resize=bool(self.settings.get("boxart_resize", True)))
+        except Exception as exc:  # pragma: no cover - art must never break a search
+            print(f"ROM Store: box art lookup failed: {exc!r}")
 
     async def _enrich_covers(self, roms: List[MergedRom]) -> None:
         """Fill in artwork and ratings from IGDB.

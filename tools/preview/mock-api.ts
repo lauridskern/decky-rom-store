@@ -47,8 +47,7 @@ const SYSTEMS = ["n64", "wii", "3ds", "switch", "snes", "dos", "nes", "gc"];
 const MANY = Number((globalThis as any).__ROM_COUNT ?? 0);
 const ALL_TITLES = [...TITLES, ...Array.from({ length: 48 }, (_, i) => `Test Game ${i + 1}`)];
 
-const roms: MergedRom[] = (MANY ? ALL_TITLES : TITLES).map((title, index) => {
-  const system = SYSTEMS[index % SYSTEMS.length];
+const makeRom = (title: string, index: number, system: string, id: string): MergedRom => {
   const sources =
     index % 3 === 0
       ? ["romspedia", "retrostic", "romsdl"]
@@ -56,7 +55,7 @@ const roms: MergedRom[] = (MANY ? ALL_TITLES : TITLES).map((title, index) => {
         ? ["romspedia", "myabandonware"]
         : ["retrostic"];
   return {
-    id: `rom-${index}`,
+    id,
     title,
     system,
     sources,
@@ -126,7 +125,21 @@ const roms: MergedRom[] = (MANY ? ALL_TITLES : TITLES).map((title, index) => {
           : [],
     })),
   } as MergedRom;
-});
+};
+
+const roms: MergedRom[] = (MANY ? ALL_TITLES : TITLES).map((title, index) =>
+  makeRom(title, index, SYSTEMS[index % SYSTEMS.length], `rom-${index}`),
+);
+
+// Like the backend: browsing a console returns that console's catalogue.
+// Every game made here is registered, so the game panel can find it.
+const known = new Map<string, MergedRom>(roms.map((rom) => [rom.id, rom]));
+const browseConsole = (system: string): MergedRom[] =>
+  TITLES.map((title, index) => {
+    const rom = makeRom(title, index, system, `browse-${system}-${index}`);
+    known.set(rom.id, rom);
+    return rom;
+  });
 
 const jobs: DownloadJob[] = [
   {
@@ -167,11 +180,40 @@ const jobs: DownloadJob[] = [
   },
 ];
 
+// Home screen shelves: a few favourites and recently viewed games.
+const shelves = {
+  favorites: [
+    { key: "n64|supermario64", title: "Super Mario 64", system: "n64", cover: "./covers/sm64.webp", at: 0 },
+    { key: "3ds|mariokart7", title: "Mario Kart 7", system: "3ds", cover: "./covers/mk7.webp", at: 0 },
+  ],
+  recent: [
+    { key: "wii|mariokartwii", title: "Mario Kart Wii", system: "wii", cover: "./covers/mkwii.webp", at: 0 },
+    { key: "snes|pokemonbrilliantdiamond", title: "Pokemon Brilliant Diamond", system: "snes", cover: "./covers/pbd.webp", at: 0 },
+    { key: "n64|supermario64", title: "Super Mario 64", system: "n64", cover: "./covers/sm64.webp", at: 0 },
+  ],
+};
+
+let srmStarted = false;
+
+// Shortcuts "added to Steam" in the preview, by file.
+const steamTracked: Record<string, { appid: number; name: string }> = {};
+
+// Installed games panel: a few games, one with several files.
+let installedGames = [
+  { id: "g1", system: "n64", title: "Super Mario 64 (USA)", folder: "/home/deck/EmuDecky/roms/n64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 3 },
+  { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", folder: "/home/deck/EmuDecky/roms/psx", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }], size: 1_010_000_120, modified: 2 },
+  { id: "g3", system: "gb", title: "Tetris (World) (Rev 1)", folder: "/home/deck/EmuDecky/roms/gb", files: [{ name: "Tetris (World) (Rev 1).gb", size: 32_768, folder: false }], size: 32_768, modified: 1 },
+];
+
 const library: LibraryInfo = {
   root: "/home/deck/EmuDecky/roms",
   root_exists: true,
   candidates: ["/home/deck/EmuDecky/roms", "/home/deck/Emulation/roms"],
   folders: ["n64", "snes", "switch", "dos", "wii", "ps2"],
+  storage: [
+    { root: "/home/deck/EmuDecky/roms", label: "Internal storage", free: 41_200_000_000, total: 512_000_000_000 },
+    { root: "/run/media/mmcblk0p1/Emulation/roms", label: "SD card", free: 188_700_000_000, total: 512_000_000_000 },
+  ],
   systems: [
     { key: "switch", label: "Nintendo Switch", folder: "switch", exists: true, path: "/home/deck/EmuDecky/roms/switch" },
     { key: "n64", label: "Nintendo 64", folder: "n64", exists: true, path: "/home/deck/EmuDecky/roms/n64" },
@@ -185,14 +227,12 @@ const library: LibraryInfo = {
 
 const settings: Settings = {
   roms_root: "/home/deck/EmuDecky/roms",
-  source_priority: ["romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
-  enabled_sources: ["romspedia", "retrostic", "romsdl", "dumbroms", "myabandonware"],
+  source_priority: ["romspedia", "retrostic", "romsdl", "myabandonware"],
+  enabled_sources: ["romspedia", "retrostic", "romsdl", "myabandonware"],
   extract_archives: false,
   keep_archive: true,
   max_concurrent: 2,
   results_per_source: 30,
-  dumbroms_base_url: "https://dumbroms.com",
-  dumbroms_search_url: "{base}/search?q={query}",
   romspedia_base_url: "https://www.romspedia.com",
   retrostic_base_url: "https://www.retrostic.com",
   romsdl_base_url: "https://romsdl.com",
@@ -214,7 +254,6 @@ const handlers: Record<string, (...args: any[]) => any> = {
       { id: "romspedia", label: "Romspedia", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
       { id: "retrostic", label: "Retrostic", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
       { id: "romsdl", label: "RomsDL", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
-      { id: "dumbroms", label: "DumbRoms", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
       { id: "myabandonware", label: "My Abandonware", homepage: "", supports_browse: false, enabled: true, status: "idle", error: null },
     ],
     source_counts: { romspedia: 17, retrostic: 30, romsdl: 30, myabandonware: 13 },
@@ -224,17 +263,20 @@ const handlers: Record<string, (...args: any[]) => any> = {
     errors: {},
     };
   },
-  browse: async () => ({
-    query: "",
-    count: roms.length,
-    page: 1,
-    has_more: false,
-    results: roms,
-    sources: [],
-    source_counts: {},
-    systems: SYSTEMS,
-    errors: {},
-  }),
+  browse: async (system: string) => {
+    const results = browseConsole(system);
+    return {
+      query: "",
+      count: results.length,
+      page: 1,
+      has_more: false,
+      results,
+      sources: [],
+      source_counts: {},
+      systems: [system],
+      errors: {},
+    };
+  },
   get_cover: async (url: string | null) => url,
   prefetch_covers: async () => undefined,
   get_system_counts: async () => ({
@@ -252,7 +294,7 @@ const handlers: Record<string, (...args: any[]) => any> = {
     arcades: 9053,
   }),
   get_details: async (id: string) => {
-    const rom = roms.find((r) => r.id === id);
+    const rom = known.get(id);
     if (!rom) return null;
     return {
       ...rom,
@@ -288,14 +330,104 @@ const handlers: Record<string, (...args: any[]) => any> = {
   get_settings: async () => settings,
   update_settings: async (values: Partial<Settings>) => ({ ...settings, ...values }),
   get_library: async () => library,
+  get_shelves: async () => shelves,
+  // Steam library (backend/steam.py): N64 and PS1 have SRM parsers, Game Boy not.
+  steam_status: async () => ({
+    srm: "/home/deck/.config/steam-rom-manager/userData",
+    parsers: 2,
+    consoles: ["n64", "psx"],
+    tracked: Object.keys(steamTracked).length,
+    enabled: true,
+  }),
+  steam_plan: async (paths: string[] | null, add: boolean) => {
+    const launch: Record<string, [string, string, string]> = {
+      n64: ['"/home/deck/Emulation/tools/launchers/retroarch.sh"', "-L .../mupen64plus_next_libretro.so", "N64"],
+      psx: ['"/home/deck/Emulation/tools/launchers/duckstation.sh"', "-batch", "PS1"],
+    };
+    const items: any[] = [];
+    const missing: Record<string, number> = {};
+    const onDisk = new Set<string>();
+    for (const game of installedGames) {
+      const key = `${game.folder}/${game.files[0].name}`;
+      onDisk.add(key);
+      if (!add || (paths && !paths.includes(key))) continue;
+      const parser = launch[game.system];
+      if (!parser) {
+        missing[game.system] = (missing[game.system] ?? 0) + 1;
+        continue;
+      }
+      items.push({
+        key, name: game.title.replace(/\s*\(.*$/, ""), system: game.system, exe: parser[0],
+        launchOptions: `${parser[1]} "${key}"`, startDir: '"/home/deck/Emulation/tools/launchers"',
+        collection: parser[2], parser: "", appid: steamTracked[key]?.appid ?? null,
+      });
+    }
+    const remove = Object.entries(steamTracked)
+      .filter(([key]) => !onDisk.has(key))
+      .map(([key, info]) => ({ key, appid: info.appid, name: info.name }));
+    return { srm: "/home/deck/.config/steam-rom-manager/userData", parsers: 2, enabled: true, collections: true, artwork: true, items, remove, missing };
+  },
+  // A 1x1 PNG per slot stands in for real art.
+  steam_artwork: async () => {
+    const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+    return { source: "igdb", assets: { capsule: { data: png, ext: "png" }, hero: { data: png, ext: "png" }, header: { data: png, ext: "png" } } };
+  },
+  // Steam ROM Manager run (backend/srm_runner.py): found, never run yet.
+  srm_status: async () => ({
+    found: true,
+    command: "/home/deck/Emulation/tools/srm/Steam-ROM-Manager.AppImage add",
+    running: srmStarted,
+    last: null,
+    log: [],
+  }),
+  srm_start: async () => {
+    srmStarted = true;
+    return { ok: true, command: "/home/deck/Emulation/tools/srm/Steam-ROM-Manager.AppImage add" };
+  },
+  srm_ack: async () => ({ ok: true }),
+  steam_tracked: async () => ({ ...steamTracked }),
+  steam_report: async (added: Record<string, { appid: number; name: string }>, removed: string[]) => {
+    Object.assign(steamTracked, added);
+    removed.forEach((key) => delete steamTracked[key]);
+    installedGames = installedGames.map((g) => ({ ...g, in_steam: Boolean(steamTracked[`${g.folder}/${g.files[0].name}`]) }));
+    return { ok: true };
+  },
+  get_installed: async () => ({ root: "/home/deck/EmuDecky/roms", games: installedGames, size: installedGames.reduce((n, g) => n + g.size, 0) }),
+  uninstall_game: async (id: string) => {
+    const game = installedGames.find((g) => g.id === id);
+    if (!game) return { ok: false, error: "That game is no longer in the library." };
+    installedGames = installedGames.filter((g) => g.id !== id);
+    return { ok: true, removed: game.files.length, freed: game.size, title: game.title, error: null };
+  },
+  toggle_favorite: async (item: { title: string; system: string; cover?: string | null }) => {
+    const key = `${item.system}|${item.title.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+    const had = shelves.favorites.some((f) => f.key === key);
+    shelves.favorites = had
+      ? shelves.favorites.filter((f) => f.key !== key)
+      : [{ key, title: item.title, system: item.system, cover: item.cover ?? null, at: Date.now() / 1000 }, ...shelves.favorites];
+    return { ...shelves, favorite: !had };
+  },
+  add_recent: async (item: { title: string; system: string; cover?: string | null }) => {
+    const key = `${item.system}|${item.title.toLowerCase().replace(/[^a-z0-9]/g, "")}`;
+    shelves.recent = [
+      { key, title: item.title, system: item.system, cover: item.cover ?? null, at: Date.now() / 1000 },
+      ...shelves.recent.filter((r) => r.key !== key),
+    ].slice(0, 24);
+    return shelves;
+  },
+  // Preview only: a missing BIOS on the N64 games, so the note shows up.
+  check_bios: async (system: string) =>
+    system === "n64"
+      ? { system, label: "Example BIOS", files: ["example_a.bin", "example_b.bin"], hint: null, optional: false, found: null, folder: "/home/deck/EmuDecky/bios" }
+      : null,
   get_status: async () => ({
     settings,
+    // One of each health state, so the settings view shows them all.
     sources: [
-      { id: "romspedia", label: "Romspedia", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
-      { id: "retrostic", label: "Retrostic", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
-      { id: "romsdl", label: "RomsDL", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null },
-      { id: "dumbroms", label: "DumbRoms", homepage: "", supports_browse: true, enabled: true, status: "idle", error: "Could not reach https://dumbroms.com" },
-      { id: "myabandonware", label: "My Abandonware", homepage: "", supports_browse: false, enabled: true, status: "idle", error: null },
+      { id: "romspedia", label: "Romspedia", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 240, failures: 0 },
+      { id: "retrostic", label: "Retrostic", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 7200, last_error: "HttpError: HTTP 503", last_error_at: Date.now() / 1000 - 600, failures: 1 },
+      { id: "romsdl", label: "RomsDL", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_error: "Host not found", last_error_at: Date.now() / 1000 - 120, failures: 4, resting_until: Date.now() / 1000 + 780 },
+      { id: "myabandonware", label: "My Abandonware", homepage: "", supports_browse: false, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 30, failures: 0 },
     ],
     library,
     downloads: jobs,

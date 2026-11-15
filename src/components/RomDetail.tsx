@@ -1,6 +1,8 @@
 import { CSSProperties, FC, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
 import {
+  BiosInfo,
+  checkBios,
   getCover,
   getDetails,
   startDownload,
@@ -10,7 +12,7 @@ import {
   RomFile,
 } from "../types";
 import { Button, Dropdown, Focusable, GamepadEvent } from "@decky/ui";
-import { FaDownload, FaFolder, FaStar } from "react-icons/fa";
+import { FaCheck, FaDownload, FaFolder, FaRegStar, FaStar } from "react-icons/fa";
 import { artRatios, clampArtRatio, formatBytes, formatCount, isResizedArt, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import MediaGallery from "./MediaGallery";
@@ -66,9 +68,33 @@ interface Props {
   /** L1/R1: the previous and next game in the results, when there is one. */
   onPrev?: () => void;
   onNext?: () => void;
+  /** "USA", "Europe", "Japan" or "": files of that region are offered first. */
+  preferredRegion?: string;
+  favorite?: boolean;
+  onToggleFavorite?: () => void;
 }
 
-const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext }) => {
+/** Does a file belong to a region? Looks at the region field and the name. */
+function inRegion(file: RomFile, region: string): boolean {
+  if (!region) return false;
+  const needle = region.toLowerCase();
+  const short: Record<string, string[]> = { usa: ["usa", "(u)", "[u]"], europe: ["europe", "(e)", "[e]"], japan: ["japan", "(j)", "[j]"] };
+  const text = `${file.region ?? ""} ${file.label ?? ""} ${file.filename ?? ""}`.toLowerCase();
+  return (short[needle] ?? [needle]).some((token) => text.includes(token)) || text.includes("world");
+}
+
+const RomDetail: FC<Props> = ({
+  rom,
+  library,
+  onClose,
+  onStarted,
+  onPrev,
+  onNext,
+  preferredRegion = "",
+  favorite = false,
+  onToggleFavorite,
+}) => {
+  const [bios, setBios] = useState<BiosInfo | null>(null);
   const [loaded, setLoaded] = useState<MergedRom | null>(null);
   // L1/R1 swap the game without remounting the panel; ignore the last game's
   // details until this one's arrive.
@@ -83,6 +109,20 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
   // The poster frame takes the cover's own shape once it has loaded; until then
   // it holds the usual box shape for the console so the column does not jump.
   const [posterRatio, setPosterRatio] = useState<number | null>(() => (rom.cover ? (artRatios.get(rom.cover) ?? null) : null));
+
+  // Consoles that need a BIOS say so, and whether one is in place.
+  useEffect(() => {
+    let cancelled = false;
+    setBios(null);
+    checkBios(rom.system)
+      .then((info) => {
+        if (!cancelled) setBios(info ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [rom.system]);
 
   // A different game (L1/R1): start from the top with its own defaults.
   useEffect(() => {
@@ -124,17 +164,27 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
     return Array.from(known.entries()).map(([key, label]) => ({ key, label }));
   }, [library, rom.system]);
 
+  // Which ROM library (internal storage, SD card) this download goes to.
+  const storage = library?.storage ?? [];
+  const [drive, setDrive] = useState<string | null>(null);
+  const driveRoot = drive ?? library?.root ?? "";
+
   const destination = useMemo(() => {
     const found = library?.systems?.find((item) => item.key === target);
-    if (found) return found.path;
-    const root = library?.root ?? "";
-    return root ? `${root}/${target}` : target;
-  }, [library, target]);
+    // The folder name is the same on every drive; only the root changes.
+    const folder = found?.folder ?? target;
+    if (found && driveRoot === library?.root) return found.path;
+    return driveRoot ? `${driveRoot}/${folder}` : folder;
+  }, [library, target, driveRoot]);
 
   const genres = media?.genres?.length ? media.genres : (primary?.genres ?? []);
   const developer = media?.developers?.length ? media.developers[0] : primary?.developer;
   const publisher = media?.developers?.length ? media.developers[1] : primary?.publisher;
-  const files = variants.flatMap((entry) => entry.files.map((file) => ({ entry, file })));
+  // The preferred region's files first; otherwise the backend's order.
+  const files = variants
+    .flatMap((entry) => entry.files.map((file) => ({ entry, file })))
+    .map((item, index) => ({ ...item, index, rank: inRegion(item.file, preferredRegion) ? 0 : 1 }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index);
   // The backend ranks the files; the first one is offered as the main action.
   const best = files[0] ?? null;
   const others = files.slice(1);
@@ -149,7 +199,10 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
     ["Found on", sourceNames.join(", ")],
   ].filter((fact): fact is [string, string] => Boolean(fact[1]));
 
-  const fileName = (file: RomFile) => file.filename || file.url.split("/").pop() || "Download";
+  // Some sites only name the file when the download starts (MyAbandonware);
+  // "Rogue (DOS)" reads better than the link's "lfq3-rogue" until then.
+  const fileName = (file: RomFile) =>
+    file.filename || (file.label ? `${rom.title} (${file.label})` : file.url.split("/").pop() || "Download");
   const fileMeta = (entry: RomEntry, file: RomFile) =>
     [
       SOURCE_LABELS[entry.source] ?? entry.source,
@@ -161,7 +214,7 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
   const download = async (entry: RomEntry, file: RomFile) => {
     setBusy(file.id);
     try {
-      const result = await startDownload(rom.id, entry.key, file.id, target, null);
+      const result = await startDownload(rom.id, entry.key, file.id, target, null, drive);
       if (result.ok) {
         toaster.toast({
           title: "Download started",
@@ -215,6 +268,8 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
         onCancelActionDescription="Close"
         onSecondaryButton={best ? () => download(best.entry, best.file) : undefined}
         onSecondaryActionDescription={best ? "Download" : undefined}
+        onOptionsButton={onToggleFavorite}
+        onOptionsActionDescription={onToggleFavorite ? (favorite ? "Unfavourite" : "Favourite") : undefined}
         onButtonDown={onPanelButton}
         actionDescriptionMap={legend}
       >
@@ -287,9 +342,15 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
               {rom.year ? <Stat label="Released" value={String(rom.year)} /> : null}
               {rom.regions.length ? <Stat label="Region" value={rom.regions.join(" · ")} /> : null}
             </div>
+            {rom.installed || details?.installed ? (
+              <div className="rs-owned-note">
+                <FaCheck /> In your library
+              </div>
+            ) : null}
           </header>
 
-          <section className="rs-get">
+          {/* A row: left/right between Download and the star. */}
+          <Focusable className="rs-get" flow-children="row">
             {best ? (
               <>
                 <Button
@@ -325,7 +386,45 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
             ) : (
               <div className="rs-get-wait">No download links were found for this title.</div>
             )}
-          </section>
+            {onToggleFavorite ? (
+              <Focusable
+                className={`rs-fav${favorite ? " on" : ""}`}
+                focusClassName="is-focus"
+                title={favorite ? "Remove from favourites" : "Add to favourites"}
+                onActivate={onToggleFavorite}
+                onClick={onToggleFavorite}
+                onOKActionDescription={favorite ? "Unfavourite" : "Favourite"}
+              >
+                {favorite ? <FaStar /> : <FaRegStar />}
+              </Focusable>
+            ) : null}
+          </Focusable>
+
+          {bios ? (
+            <div className={`rs-bios${bios.found ? " ok" : bios.optional ? " optional" : " missing"}`}>
+              {bios.found ? (
+                <>
+                  <b>{bios.label}</b> found: <span className="rs-path">{bios.found}</span>
+                </>
+              ) : (
+                <>
+                  <b>
+                    {bios.optional ? `${bios.label} (optional)` : `Needs a ${bios.label}`}
+                  </b>
+                  {bios.hint ? ` · ${bios.hint}. ` : ". "}
+                  {bios.files.length ? (
+                    <>
+                      Put {bios.files.length > 1 ? "one of " : ""}
+                      <span className="rs-path">{bios.files.slice(0, 3).join(", ")}</span> in{" "}
+                    </>
+                  ) : (
+                    <>Put it in </>
+                  )}
+                  <span className="rs-path">{bios.folder}</span>. ROM Store does not download BIOS files.
+                </>
+              )}
+            </div>
+          ) : null}
 
           {others.length > 0 || failures.length > 0 ? (
             <section className="rs-detail-section">
@@ -399,6 +498,19 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
                   menuLabel="Save to"
                 />
               </div>
+              {storage.length > 1 ? (
+                <div className="rs-dest-select drive">
+                  <Dropdown
+                    rgOptions={storage.map((item) => ({
+                      label: `${item.label} · ${formatBytes(item.free)} free`,
+                      data: item.root,
+                    }))}
+                    selectedOption={driveRoot}
+                    onChange={(option) => setDrive(option.data)}
+                    menuLabel="Drive"
+                  />
+                </div>
+              ) : null}
               <span className="rs-dest-path" title={destination}>
                 {destination}
               </span>

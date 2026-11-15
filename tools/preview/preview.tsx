@@ -66,12 +66,67 @@ const DeckFrame: FC<{ children: ReactNode }> = ({ children }) => {
         </div>
       </div>
       <div className="deck-caption">
-        Steam Deck · 1280 × 800 · {Math.round(scale * 100)}% · arrows = d-pad · Enter = A · Esc = B · X · Y · Q/E = L1/R1 ·
+        Steam Deck · 1280 × 800 · {Math.round(scale * 100)}% · arrows = d-pad · Enter = A · Esc = B · X · Y · Q/E = L1/R1 · Z/C = L2/R2 ·
         controllers work · ?full fills the window
       </div>
     </div>
   );
 };
+
+/**
+ * A stand-in for the Steam client's shortcut API (SteamClient.Apps) and the
+ * app store, so "add to Steam" can be tried here. Shortcuts live in memory
+ * and are logged to the console.
+ */
+if (!(window as any).SteamClient) {
+  type Shortcut = { appid: number; app_type: number; display_name: string; exe: string; options: string; art: Set<number>; BHasCustomImages: () => boolean };
+  const shortcuts = new Map<number, Shortcut>();
+  let next = 3_000_000_000;
+  (window as any).SteamClient = {
+    User: {
+      StartShutdown: (force: boolean) => {
+        (window as any).steamMockShutdown = true;
+        console.info("[steam mock] StartShutdown", force);
+      },
+    },
+    Apps: {
+      AddShortcut: async (name: string, exe: string, _dir: string, options: string) => {
+        const appid = next++;
+        const art = new Set<number>();
+        shortcuts.set(appid, { appid, app_type: 1073741824, display_name: name, exe, options, art, BHasCustomImages: () => art.size > 0 });
+        console.info("[steam mock] AddShortcut", appid, name);
+        return appid;
+      },
+      RemoveShortcut: (appid: number) => {
+        shortcuts.delete(appid);
+        console.info("[steam mock] RemoveShortcut", appid);
+      },
+      SetShortcutName: (appid: number, name: string) => {
+        const item = shortcuts.get(appid);
+        if (item) item.display_name = name;
+      },
+      SetShortcutExe: () => undefined,
+      SetCustomArtworkForApp: async (appid: number, _data: string, _ext: string, slot: number) => {
+        shortcuts.get(appid)?.art.add(slot);
+      },
+      SetShortcutStartDir: () => undefined,
+      SetShortcutLaunchOptions: () => undefined,
+    },
+  };
+  (window as any).appStore = {
+    get allApps() {
+      return Array.from(shortcuts.values());
+    },
+    GetAppOverviewByAppID: (appid: number) => shortcuts.get(appid) ?? null,
+  };
+  (window as any).appDetailsStore = {
+    GetAppDetails: (appid: number) => {
+      const item = shortcuts.get(appid);
+      return item ? { strShortcutExe: item.exe, strShortcutLaunchOptions: item.options } : null;
+    },
+  };
+  (window as any).steamMockShortcuts = shortcuts;
+}
 
 const container = document.getElementById("root");
 if (container) {

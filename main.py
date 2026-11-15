@@ -1,7 +1,7 @@
 """ROM Store - Decky plugin backend.
 
-Searches ROM indexes (Romspedia, Retrostic, RomsDL, DumbRoms,
-MyAbandonware), merges and de-duplicates the results, and downloads the chosen
+Searches ROM indexes (Romspedia, Retrostic, RomsDL, MyAbandonware and two
+Switch catalogues), merges and de-duplicates the results, and downloads the chosen
 file straight into the matching EmuDecky ROM folder.
 """
 
@@ -114,6 +114,24 @@ class Plugin:
             await plugin.service.probe_sources()
         except Exception as exc:
             _log(f"source probe failed: {exc!r}")
+        # A finished download goes to the frontend, which adds it to Steam.
+        emit = getattr(decky, "emit", None) if decky is not None else None
+        if emit is not None:
+            import asyncio
+
+            loop = asyncio.get_running_loop()
+
+            def finished(job) -> None:
+                loop.create_task(emit("rom_store_download_done", job.to_dict()))
+
+            plugin.service.downloads.on_done = finished
+        # Downloads that were running when the plugin last stopped continue.
+        try:
+            resumed = plugin.service.downloads.resume_pending()
+            if resumed:
+                _log(f"resuming {resumed} interrupted download(s)")
+        except Exception as exc:
+            _log(f"could not resume downloads: {exc!r}")
         # Keep checking, so a source that was offline comes back on its own.
         try:
             plugin.service.start_background_tasks()
@@ -123,7 +141,8 @@ class Plugin:
     async def _unload(self) -> None:
         plugin = self._self()
         _log("ROM Store backend unloading")
-        await plugin.service.downloads.wait_all()
+        # Pause instead of waiting: the partial files continue on the next start.
+        await plugin.service.downloads.suspend_all()
 
     async def _uninstall(self) -> None:
         _log("ROM Store backend uninstalled")
@@ -163,8 +182,9 @@ class Plugin:
 
     async def start_download(self, rom_id: str, entry_key: str, file_id: str,
                              system: Optional[str] = None,
-                             destination_folder: Optional[str] = None) -> Dict[str, Any]:
-        return await self._self().service.start_download(rom_id, entry_key, file_id, system, destination_folder)
+                             destination_folder: Optional[str] = None,
+                             root: Optional[str] = None) -> Dict[str, Any]:
+        return await self._self().service.start_download(rom_id, entry_key, file_id, system, destination_folder, root)
 
     # ------------------------------------------------------------------ downloads
     async def get_downloads(self) -> List[Dict[str, Any]]:
@@ -187,6 +207,55 @@ class Plugin:
         updated = plugin.settings.update(values or {})
         plugin.service.downloads.set_max_concurrent(int(updated.get("max_concurrent", 2)))
         return updated
+
+    # ------------------------------------------------------------------ shelves
+    async def get_shelves(self) -> Dict[str, Any]:
+        return self._self().service.shelves.all()
+
+    async def toggle_favorite(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        return self._self().service.shelves.toggle_favorite(item)
+
+    async def add_recent(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        return self._self().service.shelves.add_recent(item)
+
+    # ------------------------------------------------------------------ steam
+    async def steam_plan(self, paths: Optional[List[str]] = None, add: bool = True) -> Dict[str, Any]:
+        import asyncio
+        return await asyncio.to_thread(self._self().service.steam_plan, paths, add)
+
+    async def steam_report(self, added: Dict[str, Any], removed: List[str]) -> Dict[str, Any]:
+        return self._self().service.steam_report(added, removed)
+
+    async def steam_artwork(self, title: str) -> Dict[str, Any]:
+        return await self._self().service.steam_artwork(title)
+
+    async def steam_tracked(self) -> Dict[str, Any]:
+        return self._self().service.steam_tracked()
+
+    async def srm_status(self) -> Dict[str, Any]:
+        return self._self().service.srm_status()
+
+    async def srm_start(self) -> Dict[str, Any]:
+        return self._self().service.srm_start()
+
+    async def srm_ack(self) -> Dict[str, Any]:
+        return self._self().service.srm_ack()
+
+    async def steam_status(self) -> Dict[str, Any]:
+        import asyncio
+        return await asyncio.to_thread(self._self().service.steam_status)
+
+    async def get_installed(self) -> Dict[str, Any]:
+        import asyncio
+        # Sizing folders walks the disk; keep it off the event loop.
+        return await asyncio.to_thread(self._self().service.installed)
+
+    async def uninstall_game(self, game_id: str) -> Dict[str, Any]:
+        import asyncio
+        return await asyncio.to_thread(self._self().service.uninstall, game_id)
+
+    async def check_bios(self, system: str) -> Optional[Dict[str, Any]]:
+        return self._self().service.check_bios(system)
 
     async def get_library(self) -> Dict[str, Any]:
         return self._self().service.library()

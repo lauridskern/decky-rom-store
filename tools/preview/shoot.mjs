@@ -26,7 +26,14 @@ await page.screenshot({ path: out("downloads.png") });
 await page.locator(".rs-panel.drawer .rs-panel-head .rs-btn").last().click({ force: true });
 await page.waitForTimeout(400);
 
+// Header buttons: downloads, installed games, settings (last).
 await page.locator(".rs-header .rs-steam-btn").nth(1).click({ force: true });
+await page.waitForTimeout(700);
+await page.screenshot({ path: out("installed.png") });
+await page.locator(".rs-panel.library .rs-lib-close").click({ force: true });
+await page.waitForTimeout(400);
+
+await page.locator(".rs-header .rs-steam-btn").last().click({ force: true });
 await page.waitForTimeout(900);
 await page.screenshot({ path: out("settings.png") });
 await page.locator(".rs-panel.settings .rs-panel-head .rs-btn").click({ force: true });

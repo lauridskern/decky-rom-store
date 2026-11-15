@@ -1,9 +1,18 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
 import { Button, Dropdown, Focusable, GamepadEvent, TextField } from "@decky/ui";
-import { FaCog, FaDownload } from "react-icons/fa";
+import { FaCog, FaDownload, FaHdd } from "react-icons/fa";
 import {
+  addRecent,
   browseRoms,
+  getInstalled,
+  InstalledGame,
+  InstalledPayload,
+  uninstallGame,
+  getShelves,
+  ShelfItem,
+  ShelvesPayload,
+  toggleFavorite,
   DownloadJob,
   getDownloads,
   getLibrary,
@@ -15,12 +24,15 @@ import {
   Settings,
   SourceInfo,
 } from "../types";
-import { SOURCE_LABELS, systemLabel } from "./common";
+import { formatBytes, matchKey, SOURCE_LABELS, systemLabel } from "./common";
 import { childFocus, focusElement, PAD } from "./gamepad";
 import StoreStyles from "./StoreStyles";
 import { useChromeInsets } from "./useChromeInsets";
 import { searchState } from "../state";
 import RomGrid from "./RomGrid";
+import HomeView from "./HomeView";
+import { syncWithSteam } from "../steam";
+import LibraryPanel from "./LibraryPanel";
 import RomDetail from "./RomDetail";
 import DownloadsDrawer from "./DownloadsDrawer";
 import SettingsModal from "./SettingsModal";
@@ -63,6 +75,15 @@ const Store: FC = () => {
   const [cached, setCached] = useState(false);
   const [searched, setSearched] = useState(false);
   const [showIssues, setShowIssues] = useState(false);
+  const [shelves, setShelves] = useState<ShelvesPayload>({ favorites: [], recent: [] });
+  // The ROM library's games (Installed games panel and home shelf).
+  const [installed, setInstalled] = useState<InstalledPayload | null>(null);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [libraryFocus, setLibraryFocus] = useState<string | null>(null);
+  // Games uninstalled this session: their "In library" badge goes at once.
+  const [uninstalled, setUninstalled] = useState<Set<string>>(() => new Set());
+  // A shelf item waiting for its search to finish, so it can be opened.
+  const pendingOpen = useRef<Pick<ShelfItem, "title" | "system"> | null>(null);
 
   const requestId = useRef(0);
   const showDownloadsRef = useRef(false);
@@ -91,6 +112,8 @@ const Store: FC = () => {
 
   useEffect(() => {
     getSettings().then(setSettings).catch(() => undefined);
+    getShelves().then(setShelves).catch(() => undefined);
+    getInstalled().then(setInstalled).catch(() => undefined);
     const loadCounts = () =>
       getSystemCounts()
         .then((counts) => {
@@ -184,11 +207,89 @@ const Store: FC = () => {
     };
   }, [query, system, source, sort, runSearch]);
 
+  // Games downloaded in this session count as in the library right away,
+  // before the next search asks the backend again.
+  const downloaded = useMemo(
+    () => new Set(jobs.filter((job) => job.status === "done").map((job) => `${job.system}|${job.title}`)),
+    [jobs],
+  );
+
+  // A finished download or an uninstall changes what is in the library.
+  const doneCount = useMemo(() => jobs.filter((job) => job.status === "done").length, [jobs]);
+  const refreshInstalled = useCallback(() => {
+    getInstalled().then(setInstalled).catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    if (doneCount) refreshInstalled();
+  }, [doneCount, refreshInstalled]);
+
+  // Fallback for loaders without backend events (index.tsx handles those):
+  // downloads that finish while the store is open go to Steam from here.
+  // Both paths share one queue and skip games that already have a shortcut.
+  const announced = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const done = jobs.filter((job) => job.status === "done");
+    if (announced.current === null) {
+      announced.current = new Set(done.map((job) => job.id));
+      return;
+    }
+    const fresh = done.filter((job) => !announced.current!.has(job.id));
+    if (!fresh.length) return;
+    fresh.forEach((job) => announced.current!.add(job.id));
+    const paths = fresh.flatMap((job) => [job.path, job.extracted_to]).filter((path): path is string => Boolean(path));
+    if (paths.length) syncWithSteam(paths).catch(() => undefined);
+  }, [jobs]);
+
   const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
   const visible = useMemo(
-    () => results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [results, page],
+    () =>
+      results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((rom) => {
+        if (uninstalled.has(`${rom.system}|${matchKey(rom.title)}`)) return rom.installed ? { ...rom, installed: false } : rom;
+        return !rom.installed && rom.entries.some((entry) => downloaded.has(`${rom.system}|${entry.title}`))
+          ? { ...rom, installed: true }
+          : rom;
+      }),
+    [results, page, downloaded, uninstalled],
   );
+
+  const openLibrary = (focusId: string | null = null) => {
+    remember();
+    setLibraryFocus(focusId);
+    setShowLibrary(true);
+    refreshInstalled();
+  };
+
+  const removeGame = async (game: InstalledGame): Promise<boolean> => {
+    try {
+      const result = await uninstallGame(game.id);
+      if (!result.ok && !result.removed) {
+        toaster.toast({ title: "Could not uninstall", body: result.error ?? game.title, icon: "Error" });
+        return false;
+      }
+      toaster.toast({
+        title: result.ok ? "Uninstalled" : "Partly uninstalled",
+        body: result.ok ? `${game.title} · ${formatBytes(result.freed ?? 0)} freed` : (result.error ?? game.title),
+        icon: "Trash",
+      });
+      setUninstalled((current) => new Set(current).add(`${game.system}|${matchKey(game.title)}`));
+      // Its Steam shortcut goes with it.
+      syncWithSteam(null, false)
+        .then((sync) => {
+          if (sync.removed.length) {
+            toaster.toast({ title: "Removed from your Steam library", body: sync.removed.join(", "), icon: "Steam" });
+          }
+        })
+        .catch(() => undefined);
+      setInstalled((current) =>
+        current ? { ...current, games: current.games.filter((item) => item.id !== game.id) } : current,
+      );
+      refreshInstalled();
+      return true;
+    } catch (error) {
+      toaster.toast({ title: "Could not uninstall", body: String(error), icon: "Error" });
+      return false;
+    }
+  };
 
   const goPage = useCallback((next: number) => {
     setPage(Math.max(0, next));
@@ -219,9 +320,52 @@ const Store: FC = () => {
     (rom: MergedRom) => {
       returnFocus.current = document.activeElement;
       setSelectedIndex(results.indexOf(rom));
+      addRecent({ title: rom.title, system: rom.system, cover: rom.cover })
+        .then(setShelves)
+        .catch(() => undefined);
     },
     [results],
   );
+
+  /** A game from a home shelf: search for it, then open it when it shows up. */
+  const openShelfItem = useCallback((item: Pick<ShelfItem, "title" | "system">) => {
+    pendingOpen.current = item;
+    setQuery(item.title);
+    setSystem(item.system);
+  }, []);
+
+  useEffect(() => {
+    const wanted = pendingOpen.current;
+    if (!wanted || loading) return;
+    if (!searched) return;
+    pendingOpen.current = null;
+    const key = matchKey(wanted.title);
+    const index = results.findIndex(
+      (rom) =>
+        rom.system === wanted.system &&
+        (matchKey(rom.title) === key || rom.entries.some((entry) => matchKey(entry.title) === key)),
+    );
+    if (index >= 0) {
+      setPage(Math.floor(index / PAGE_SIZE));
+      setSelectedIndex(index);
+    }
+  }, [results, loading, searched]);
+
+  const isFavorite = (rom: MergedRom | null) =>
+    !!rom && shelves.favorites.some((item) => item.key === `${rom.system}|${matchKey(rom.title)}`);
+
+  const flipFavorite = (rom: MergedRom) => {
+    toggleFavorite({ title: rom.title, system: rom.system, cover: rom.cover })
+      .then((value) => {
+        setShelves(value);
+        toaster.toast({
+          title: value.favorite ? "Added to favourites" : "Removed from favourites",
+          body: rom.title,
+          icon: "Favorite",
+        });
+      })
+      .catch(() => undefined);
+  };
 
   /** L1/R1 in the game panel; the grid behind it follows across pages. */
   const stepGame = (delta: number) => {
@@ -253,9 +397,33 @@ const Store: FC = () => {
 
   const focusSearch = () => focusElement(storeRef.current?.querySelector(".rs-search-wrap input"));
 
+  /**
+   * Picking a console swaps the home screen or the grid out, taking the
+   * focused element with it. Focus goes to that console's chip, so the d-pad
+   * and L2/R2 keep working from a known place.
+   */
+  const pickConsole = useCallback((key: string) => {
+    setSystem(key);
+    window.requestAnimationFrame(() =>
+      window.requestAnimationFrame(() =>
+        focusElement(storeRef.current?.querySelector(".rs-chip-btn.active")),
+      ),
+    );
+  }, []);
+
+  /** L2/R2: the previous or next console chip. */
+  const stepConsole = (delta: number) => {
+    const index = Math.max(0, chips.indexOf(system));
+    const next = chips[(index + delta + chips.length) % chips.length];
+    if (next) pickConsole(next);
+  };
+
   const onStoreButton = (event: GamepadEvent) => {
-    if (event.detail.button === PAD.BUMPER_LEFT) turnPage(-1);
-    else if (event.detail.button === PAD.BUMPER_RIGHT) turnPage(1);
+    const button = event.detail.button;
+    if (button === PAD.BUMPER_LEFT) turnPage(-1);
+    else if (button === PAD.BUMPER_RIGHT) turnPage(1);
+    else if (button === PAD.TRIGGER_LEFT) stepConsole(-1);
+    else if (button === PAD.TRIGGER_RIGHT) stepConsole(1);
   };
 
   useEffect(() => {
@@ -283,8 +451,28 @@ const Store: FC = () => {
     return Array.from(keys).sort((a, b) => (systemCounts[b] ?? 0) - (systemCounts[a] ?? 0));
   }, [systems, systemCounts]);
 
+  // Console chips under the header: everything, then the biggest consoles.
+  // The one that is selected stays in the row even if it is a small one.
+  const chips = useMemo(() => {
+    const top = consoleOptions.slice(0, 12);
+    if (system !== "all" && !top.includes(system)) top.push(system);
+    return ["all", ...top];
+  }, [consoleOptions, system]);
+
+  const consoleTiles = useMemo(
+    () => consoleOptions.map((key) => ({ key, count: systemCounts[key] ?? 0 })),
+    [consoleOptions, systemCounts],
+  );
+
+  const recentDownloads = useMemo(
+    () => jobs.filter((job) => job.status === "done").sort((a, b) => (b.finished ?? 0) - (a.finished ?? 0)),
+    [jobs],
+  );
+
+  const home = !query.trim() && system === "all";
+
   const selected = selectedIndex !== null ? (results[selectedIndex] ?? null) : null;
-  const overlayOpen = selected !== null || showDownloads || showSettings;
+  const overlayOpen = selected !== null || showDownloads || showSettings || showLibrary;
 
   return (
     <div className="rs-store" ref={storeRef}>
@@ -303,9 +491,11 @@ const Store: FC = () => {
         }}
         onOptionsActionDescription="Downloads"
         onButtonDown={onStoreButton}
-        actionDescriptionMap={
-          pageCount > 1 ? { [PAD.BUMPER_LEFT]: "Previous page", [PAD.BUMPER_RIGHT]: "Next page" } : undefined
-        }
+        actionDescriptionMap={{
+          ...(pageCount > 1 ? { [PAD.BUMPER_LEFT]: "Previous page", [PAD.BUMPER_RIGHT]: "Next page" } : {}),
+          [PAD.TRIGGER_LEFT]: "Previous console",
+          [PAD.TRIGGER_RIGHT]: "Next console",
+        }}
       >
       <Focusable className="rs-header" flow-children="row">
         <div className="rs-search-wrap">
@@ -363,6 +553,9 @@ const Store: FC = () => {
           </Button>
           {activeDownloads > 0 && <span className="rs-badge-count">{activeDownloads}</span>}
         </div>
+        <Button className="rs-steam-btn" onClick={() => openLibrary()} onOKActionDescription="Installed games">
+          <FaHdd />
+        </Button>
         <Button
           className="rs-steam-btn"
           onClick={() => {
@@ -375,10 +568,26 @@ const Store: FC = () => {
         </Button>
       </Focusable>
 
+      {/* Console chips: A picks one, L2/R2 step through them from anywhere. */}
+      <Focusable className="rs-chips" flow-children="row">
+        {chips.map((key) => (
+          <Focusable
+            key={key}
+            className={`rs-chip-btn${system === key ? " active" : ""}`}
+            focusClassName="is-focus"
+            onActivate={() => setSystem(key)}
+            onClick={() => setSystem(key)}
+            onOKActionDescription={key === "all" ? "All consoles" : `Only ${systemLabel(key)}`}
+          >
+            {key === "all" ? "All" : systemLabel(key)}
+          </Focusable>
+        ))}
+      </Focusable>
+
       <div
         ref={mainRef}
         className={`rs-main${loading && results.length === 0 ? " is-loading" : ""}${
-          !loading && results.length === 0 ? " is-empty" : ""
+          !loading && results.length === 0 && !home ? " is-empty" : ""
         }`}
       >
         {loading && results.length === 0 ? (
@@ -390,21 +599,33 @@ const Store: FC = () => {
         {!loading && results.length === 0 && searched ? (
           <div className="rs-empty">
             <h2>Nothing found</h2>
-            <p>
-              No games matched “{query}”. Try a different title, clear the system filter, or check the source
-              settings — one of the sources may be unreachable.
-            </p>
+            {query.trim() ? (
+              <p>
+                No games matched “{query.trim()}”
+                {system !== "all" ? ` on ${systemLabel(system)}` : ""}. Try a different title
+                {system !== "all" ? ", pick All consoles" : ""}, or check the sources in Settings: one of them
+                may be unreachable.
+              </p>
+            ) : (
+              <p>
+                No {systemLabel(system)} games came back from the sources. Not every site lists every console,
+                and one may be unreachable right now: Settings shows how each source is doing.
+              </p>
+            )}
           </div>
         ) : null}
 
-        {!searched && !loading && results.length === 0 ? (
-          <div className="rs-empty">
-            <h2>Search the ROM indexes</h2>
-            <p>
-              Type a game title to search Romspedia, DumbRoms and MyAbandonware at once. Duplicate titles are
-              merged, and every download lands in the matching EmuDecky ROM folder.
-            </p>
-          </div>
+        {home && !loading && results.length === 0 ? (
+          <HomeView
+            consoles={consoleTiles}
+            favorites={shelves.favorites}
+            recent={shelves.recent}
+            downloads={recentDownloads}
+            installed={installed?.games ?? []}
+            onConsole={pickConsole}
+            onItem={openShelfItem}
+            onInstalled={openLibrary}
+          />
         ) : null}
 
         {results.length > 0 ? (
@@ -472,6 +693,9 @@ const Store: FC = () => {
         <RomDetail
           rom={selected}
           library={library}
+          preferredRegion={settings?.preferred_region ?? ""}
+          favorite={isFavorite(selected)}
+          onToggleFavorite={() => flipFavorite(selected)}
           onClose={closeGame}
           onPrev={selectedIndex! > 0 ? () => stepGame(-1) : undefined}
           onNext={selectedIndex! < results.length - 1 ? () => stepGame(1) : undefined}
@@ -486,6 +710,16 @@ const Store: FC = () => {
               setShowDownloads(true);
             });
           }}
+        />
+      )}
+
+      {showLibrary && (
+        <LibraryPanel
+          games={installed?.games ?? null}
+          root={installed?.root ?? library?.root ?? ""}
+          focusId={libraryFocus}
+          onClose={() => closeOverlay(() => setShowLibrary(false))}
+          onUninstall={removeGame}
         />
       )}
 
