@@ -26,7 +26,7 @@ from .srm_runner import SrmRunner
 from .steam import SrmConfig, SteamShortcuts, plan as steam_plan
 from .shelves import Shelves
 from .media import SteamMedia
-from .models import MergedRom, RomEntry, RomFile, normalize_title
+from .models import MergedRom, RomEntry, RomFile, match_title, normalize_title
 from .settings import Settings
 from .sources.base import Source
 from .systems import canonical_system
@@ -485,6 +485,7 @@ class StoreService:
             entries.extend(await self._catalogue_matches(system, query, {e.key for e in entries}))
 
         await self._apply_boxart(entries)
+        await self._switch_covers(entries)
         merged = merge_entries(entries, self.settings.get("source_priority"))
         if sort and sort != "relevance":
             merged = sort_roms(merged, sort)
@@ -547,6 +548,8 @@ class StoreService:
         cached = self._browse_cache.get(system)
         if cached and time.time() - cached[0] < ttl and len(cached[1]) >= min(limit, len(cached[1])):
             entries = cached[1][:limit]
+            # Covers looked up in the background since (IGDB) fill in now.
+            await self._switch_covers(entries)
             return self._browse_payload(system, entries)
         entries: List[RomEntry] = []
         self._errors = {}
@@ -565,6 +568,7 @@ class StoreService:
         self._write_health()
 
         await self._apply_boxart(entries)
+        await self._switch_covers(entries)
         merged = merge_entries(entries, self.settings.get("source_priority"))[:limit]
         self._last_page_count = 1
         for index, rom in enumerate(merged):
@@ -1113,6 +1117,55 @@ class StoreService:
                 entry.rating_count = info.get("rating_count") or entry.rating_count
             except (TypeError, ValueError):
                 pass
+
+    async def _switch_covers(self, entries: List[RomEntry]) -> None:
+        """Portrait box art for Switch games.
+
+        libretro has no Switch art, and the Switch sources disagree: Switch
+        ROMs publishes wide banners (1.7-1.9:1), Nswpedia real box covers
+        (about 0.61, like the case) behind a 3:4 crop in its listings. So:
+        Nswpedia's full cover, else the cover index, else IGDB's official
+        cover; a banner is never used as a cover (the placeholder is, with
+        the title).
+        """
+        switch = [entry for entry in entries if entry.system == "switch"]
+        if not switch:
+            return
+        index = self._cover_source().cached_index()
+        if not index:
+            self._build_cover_index_in_background()
+        by_title = {match_title(title): url for title, url in (index or {}).items()}
+        missing: List[RomEntry] = []
+        for entry in switch:
+            if entry.source == "nswpedia" and entry.cover_full:
+                entry.cover = entry.cover_full
+                continue
+            url = by_title.get(match_title(entry.title))
+            if url:
+                entry.cover = entry.cover_full = url
+                continue
+            if entry.cover and "static.romspedia.com" in entry.cover:
+                continue  # resized box art; drawn back in the box shape
+            if entry.cover:
+                entry.extra["banner"] = entry.cover
+            entry.cover = entry.cover_full = None
+            missing.append(entry)
+        if not missing or not self.covers.enabled:
+            return
+        titles = list(dict.fromkeys(entry.title for entry in missing))
+        known = {title: self.covers.cached(title) for title in titles}
+        wanted = [title for title, info in known.items() if info is None]
+        if wanted:
+            # A short wait on the first search; the rest comes in the next one.
+            try:
+                found = await asyncio.wait_for(asyncio.shield(self.covers.lookup_many(wanted, limit=14)), 3.0)
+                known.update(found)
+            except (asyncio.TimeoutError, Exception):
+                pass
+        for entry in missing:
+            cover = (known.get(entry.title) or {}).get("cover")
+            if cover:
+                entry.cover = entry.cover_full = cover
 
     async def _apply_portrait_covers(self, roms: List[MergedRom]) -> None:
         """Give Switch games the portrait box art from the cover index."""

@@ -844,6 +844,7 @@ export const CSS = `
   font-weight: 600 !important;
 }
 .rs-version-error { font-size: 11.5px; color: #ff8f6b; }
+.rs-versions-more { align-self: flex-start; }
 
 .rs-detail-section .rs-gallery { margin: 0; padding: 0; gap: 10px; }
 .rs-detail-section .rs-shot { flex: 0 0 204px; width: 204px; height: 115px; border-radius: 8px; }
@@ -1019,7 +1020,9 @@ export const CSS = `
   position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,0.88);
   display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px;
 }
-.rs-lightbox-image { max-width: 92vw; max-height: 78vh; object-fit: contain; border-radius: 6px; }
+.rs-lightbox-frame { display: flex; align-items: center; justify-content: center; min-width: 200px; min-height: 120px; }
+.rs-lightbox-image { width: min(92vw, 1280px); max-height: 78vh; object-fit: contain; border-radius: 6px; }
+.rs-lightbox-note { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: #8b949d; }
 .rs-lightbox-video { width: min(1000px, 92vw); }
 .rs-lightbox-video iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 8px; }
 .rs-lightbox-close {

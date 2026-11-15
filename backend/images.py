@@ -57,6 +57,10 @@ def best_variant(url: Optional[str], kind: str = "card") -> Optional[str]:
     """
     if not url:
         return None
+    # Up to v1.16.0 screenshots were stored as .../upload/screenshot_huge/...,
+    # which IGDB answers with a 404 (size names start with "t_"). Cached
+    # searches and details still hold such links.
+    url = url.replace("/upload/screenshot_huge/", "/upload/t_screenshot_huge/")
     if kind == "detail":
         return url
     # Romspedia: <base>-cover.webp -> <base>-cover-280x398.webp
@@ -64,8 +68,8 @@ def best_variant(url: Optional[str], kind: str = "card") -> Optional[str]:
         return url[: -len("-cover.webp")] + "-cover-280x398.webp"
     # IGDB screenshots: the full 1920x1080 file is ~500 kB, the medium one
     # is around 50 kB and plenty for a thumbnail.
-    if "images.igdb.com" in url and "/screenshot_huge/" in url:
-        return url.replace("/screenshot_huge/", "/t_screenshot_med/")
+    if "images.igdb.com" in url and "/t_screenshot_huge/" in url:
+        return url.replace("/t_screenshot_huge/", "/t_screenshot_med/")
     # IGDB covers: 264x374 decoded to 4 bytes per pixel is 400 kB of texture
     # for a 130 px card. The 180x256 variant is indistinguishable at that size
     # and halves both the download and the memory the client has to hold.

@@ -29,7 +29,8 @@ def _clean(title: str) -> str:
 IGDB_TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 IGDB_API_URL = "https://api.igdb.com/v4/games"
 IGDB_IMAGE_BASE = "https://images.igdb.com/igdb/image/upload/t_cover_big/"
-IGDB_SCREENSHOT_BASE = "https://images.igdb.com/igdb/image/upload/screenshot_huge/"
+# IGDB size names start with "t_"; without it the image is a 404.
+IGDB_SCREENSHOT_BASE = "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/"
 
 # Words that make a title unsearchable on IGDB.
 _NOISE = ("the ", "a ", "an ")

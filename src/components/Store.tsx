@@ -24,7 +24,7 @@ import {
   Settings,
   SourceInfo,
 } from "../types";
-import { formatBytes, matchKey, SOURCE_LABELS, systemLabel } from "./common";
+import { formatBytes, inRegion, matchKey, REGIONS, SOURCE_LABELS, systemLabel } from "./common";
 import { childFocus, focusElement, PAD } from "./gamepad";
 import StoreStyles from "./StoreStyles";
 import { useChromeInsets } from "./useChromeInsets";
@@ -56,7 +56,10 @@ const Store: FC = () => {
   const [system, setSystem] = useState("all");
   const [source, setSource] = useState("all");
   const [sort, setSort] = useState("relevance");
-  const [results, setResults] = useState<MergedRom[]>([]);
+  const [allResults, setResults] = useState<MergedRom[]>([]);
+  // Header region filter ("all", "USA", "Europe", "Japan").
+  const [region, setRegion] = useState("all");
+  const results = useMemo(() => allResults.filter((rom) => inRegion(rom, region)), [allResults, region]);
   const [sources, setSources] = useState<SourceInfo[]>([]);
   const [systems, setSystems] = useState<string[]>([]);
   const [sourceCounts, setSourceCounts] = useState<Record<string, number>>({});
@@ -522,6 +525,20 @@ const Store: FC = () => {
           />
           <Dropdown
             rgOptions={[
+              { label: "All regions", data: "all" },
+              ...REGIONS.map((item) => ({ label: item, data: item })),
+            ]}
+            selectedOption={region}
+            onChange={(option) => {
+              setRegion(option.data);
+              setPage(0);
+              setSelectedIndex(null);
+              if (mainRef.current) mainRef.current.scrollTop = 0;
+            }}
+            menuLabel="Region"
+          />
+          <Dropdown
+            rgOptions={[
               { label: "All sources", data: "all" },
               ...sourceOptions.map((item) => ({
                 label: SOURCE_LABELS[item.id] ?? item.label,
@@ -596,7 +613,17 @@ const Store: FC = () => {
           </div>
         ) : null}
 
-        {!loading && results.length === 0 && searched ? (
+        {!loading && results.length === 0 && allResults.length > 0 ? (
+          <div className="rs-empty">
+            <h2>No {region} games here</h2>
+            <p>
+              {allResults.length} {allResults.length === 1 ? "game was" : "games were"} found, all from other
+              regions. Pick All regions in the header to see them.
+            </p>
+          </div>
+        ) : null}
+
+        {!loading && allResults.length === 0 && searched ? (
           <div className="rs-empty">
             <h2>Nothing found</h2>
             {query.trim() ? (
@@ -693,7 +720,8 @@ const Store: FC = () => {
         <RomDetail
           rom={selected}
           library={library}
-          preferredRegion={settings?.preferred_region ?? ""}
+          // A region picked in the header also picks the file to offer first.
+          preferredRegion={region !== "all" ? region : (settings?.preferred_region ?? "")}
           favorite={isFavorite(selected)}
           onToggleFavorite={() => flipFavorite(selected)}
           onClose={closeGame}

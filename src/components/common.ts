@@ -249,5 +249,49 @@ export function matchKey(title: string): string {
     .replace(/\s+/g, "");
 }
 
+/** Regions the header filter offers. */
+export const REGIONS = ["USA", "Europe", "Japan"] as const;
+export type Region = (typeof REGIONS)[number];
+
+const REGION_WORDS: Record<string, Region | "World"> = {
+  usa: "USA", us: "USA", u: "USA", america: "USA", "north america": "USA", canada: "USA",
+  europe: "Europe", eu: "Europe", e: "Europe", uk: "Europe", "united kingdom": "Europe", germany: "Europe",
+  france: "Europe", spain: "Europe", italy: "Europe", netherlands: "Europe", sweden: "Europe",
+  scandinavia: "Europe", australia: "Europe", pal: "Europe",
+  // Language tags of European releases: "(ES)", "(De)", "(En,Fr,De)".
+  es: "Europe", de: "Europe", fr: "Europe", it: "Europe", nl: "Europe", sv: "Europe",
+  japan: "Japan", jp: "Japan", j: "Japan", jpn: "Japan", ntsc_j: "Japan",
+  world: "World", w: "World",
+};
+
+/**
+ * The regions a game is known to exist in, from the sites' region fields and
+ * the tags in their titles: "(USA)", "(U)", "(USA, Europe)", "[J]". Empty when
+ * no source says.
+ */
+export function regionsOf(rom: { regions: string[]; entries: { title: string; region: string | null }[] }): Set<string> {
+  const found = new Set<string>();
+  const add = (word: string) => {
+    const region = REGION_WORDS[word.trim().toLowerCase().replace(/-/g, "_")];
+    if (region) found.add(region);
+  };
+  rom.regions.forEach((region) => region.split(/[,/]/).forEach(add));
+  for (const entry of rom.entries) {
+    if (entry.region) entry.region.split(/[,/]/).forEach(add);
+    for (const tag of entry.title.match(/[([][^)\]]+[)\]]/g) ?? []) tag.slice(1, -1).split(/[,/]/).forEach(add);
+  }
+  return found;
+}
+
+/**
+ * Region filter: hides games only known from other regions. Games no source
+ * gives a region for stay (most sites do not tag their titles); "World" fits all.
+ */
+export function inRegion(rom: Parameters<typeof regionsOf>[0], region: string): boolean {
+  if (region === "all") return true;
+  const regions = regionsOf(rom);
+  return regions.size === 0 || regions.has("World") || regions.has(region);
+}
+
 /** width / height of each cover once it has loaded, shared by every frame. */
 export const artRatios = new Map<string, number>();

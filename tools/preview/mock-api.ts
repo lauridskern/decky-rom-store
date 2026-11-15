@@ -80,7 +80,8 @@ const makeRom = (title: string, index: number, system: string, id: string): Merg
       downloads: 50000 + index * 7300,
       year: 1996 + index,
       size: 5_970_000,
-      region: "USA",
+      // Like the real sources: most entries do not say.
+      region: index % 4 === 0 ? "USA" : null,
       developer: "Nintendo EAD",
       publisher: "Nintendo",
       genres: ["Action", "Platform"],
@@ -120,6 +121,19 @@ const makeRom = (title: string, index: number, system: string, id: string): Merg
                       source_url: "https://example.invalid",
                     },
                   ]
+                : []),
+              // The first game has many dumps, like popular games on the real
+              // sites, so "Show all versions" can be tried.
+              ...(index === 0
+                ? ["Japan", "Japan (Rev 1)", "Europe (Rev A)", "Brazil", "Korea", "Beta", "Demo"].map((tag, n) => ({
+                    id: `${source}:${index}:extra${n}`,
+                    filename: `${title} (${tag}).zip`,
+                    url: `https://example.invalid/extra${n}.zip`,
+                    size: 5_900_000 + n * 10_000,
+                    region: tag.split(" ")[0],
+                    label: null,
+                    source_url: "https://example.invalid",
+                  }))
                 : []),
             ]
           : [],

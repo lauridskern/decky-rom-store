@@ -28,18 +28,22 @@ import { focusElement, PAD } from "./gamepad";
 const HeroBackdrop: FC<{ url: string | null }> = ({ url }) => {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
+    // The backdrop first shows the cover, then switches to a screenshot once
+    // the details are in. It keeps the picture it has until the next one has
+    // really loaded, and only uses files from the Deck's image cache: a remote
+    // URL is often blocked by the Steam client and left the backdrop empty.
     let cancelled = false;
-    if (!url) {
-      setSrc(null);
-      return;
-    }
+    if (!url) return;
     getCover(url, "detail")
       .then((resolved) => {
-        if (!cancelled) setSrc(resolved ?? url);
+        if (cancelled || !resolved) return;
+        const image = new Image();
+        image.onload = () => {
+          if (!cancelled) setSrc(resolved);
+        };
+        image.src = resolved;
       })
-      .catch(() => {
-        if (!cancelled) setSrc(url);
-      });
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -96,6 +100,8 @@ const RomDetail: FC<Props> = ({
 }) => {
   const [bios, setBios] = useState<BiosInfo | null>(null);
   const [loaded, setLoaded] = useState<MergedRom | null>(null);
+  // Some games list dozens of dumps; the first few, then "Show all".
+  const [allVersions, setAllVersions] = useState(false);
   // L1/R1 swap the game without remounting the panel; ignore the last game's
   // details until this one's arrive.
   const details = loaded?.id === rom.id ? loaded : null;
@@ -127,6 +133,7 @@ const RomDetail: FC<Props> = ({
   // A different game (L1/R1): start from the top with its own defaults.
   useEffect(() => {
     setTarget(rom.system);
+    setAllVersions(false);
     setPosterRatio(rom.cover ? (artRatios.get(rom.cover) ?? null) : null);
     if (contentRef.current) contentRef.current.scrollTop = 0;
   }, [rom.id]);
@@ -188,6 +195,16 @@ const RomDetail: FC<Props> = ({
   // The backend ranks the files; the first one is offered as the main action.
   const best = files[0] ?? null;
   const others = files.slice(1);
+  const VERSIONS_SHOWN = 5;
+  const shownOthers = allVersions ? others : others.slice(0, VERSIONS_SHOWN);
+
+  const showAllVersions = () => {
+    setAllVersions(true);
+    // Focus moves on to the first version that was hidden.
+    window.requestAnimationFrame(() =>
+      focusElement(contentRef.current?.querySelectorAll(".rs-version .rs-version-btn")[VERSIONS_SHOWN]),
+    );
+  };
   const failures = variants.filter((entry) => entry.error && entry.files.length === 0);
   const systemName = library?.systems?.find((item) => item.key === rom.system)?.label ?? systemLabel(rom.system);
   const sourceNames = Array.from(new Set(variants.map((entry) => SOURCE_LABELS[entry.source] ?? entry.source)));
@@ -323,7 +340,8 @@ const RomDetail: FC<Props> = ({
 
         {/* Right: one scroll area, ordered by what people come here to do. */}
         <Focusable ref={contentRef} className="rs-detail-content" flow-children="column">
-          <HeroBackdrop url={hero} />
+          {/* Keyed by game: L1/R1 must not keep the last game's backdrop. */}
+          <HeroBackdrop key={rom.id} url={hero} />
 
           <header className="rs-detail-head">
             <div className="rs-detail-eyebrow">{systemName}</div>
@@ -433,7 +451,7 @@ const RomDetail: FC<Props> = ({
                 {others.length > 0 ? <span className="rs-section-count">{others.length}</span> : null}
               </div>
               <div className="rs-versions">
-                {others.map(({ entry, file }) => (
+                {shownOthers.map(({ entry, file }) => (
                   <div className="rs-version" key={file.id}>
                     <div className="rs-version-main">
                       <div className="rs-version-name" title={fileName(file)}>
@@ -459,6 +477,11 @@ const RomDetail: FC<Props> = ({
                   </div>
                 ))}
               </div>
+              {others.length > shownOthers.length ? (
+                <Button className="rs-btn ghost rs-versions-more" onClick={showAllVersions} onOKActionDescription="Show all">
+                  Show all {others.length} versions
+                </Button>
+              ) : null}
               {failures.map((entry) => (
                 <div key={entry.key} className="rs-version-error">
                   {SOURCE_LABELS[entry.source] ?? entry.source}: {entry.error}

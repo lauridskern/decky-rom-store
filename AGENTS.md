@@ -163,9 +163,9 @@ Expected results on a healthy build:
 | check | expected |
 |---|---|
 | `npm run shots` | 8 cards per row at 1280 wide, 12 total, **0 console errors** |
-| `npm run soak` | nodes flat at **291**, heap levels off ≈ 7.4 MB (`SOAK_ROUNDS=200` to see it), 95th-percentile frame ≈ **18 ms** |
+| `npm run soak` | nodes flat at **296**, heap levels off ≈ 7.4 MB (`SOAK_ROUNDS=200` to see it), 95th-percentile frame ≈ **18 ms** |
 | `npm run back` | modal opens, history grows by one, back closes it, `historyLength` stops growing |
-| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 153 nodes |
+| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 158 nodes |
 | `npm run aspects` | each frame takes its test image's shape; white border visible on all four sides |
 
 The harness is Chromium on macOS, not Steam's CEF on a Deck. Use it for layout
@@ -399,6 +399,12 @@ Steam only reads at start), so the plugin does its job live:
   a row. Three in a row rest the source for 15 minutes. Shown in Settings.
 - With a console filter, search also matches that console's catalogue (the
   cached browse list), because the sites return one page across all consoles.
+- Switch covers (`_switch_covers`): libretro has no Switch art; Nswpedia's
+  full cover, else its cover index, else IGDB's cover. Switch ROMs' wide
+  banners are never used as covers (kept in `extra.banner`).
+- Region filter (header): `regionsOf()` reads region fields and title tags;
+  games known to be only from other regions are hidden, unknown ones stay
+  (most sources do not tag titles). It also picks the file offered first.
 - Favourites and recently viewed live in `shelves.json`; opening one searches
   for it and opens the game once it shows up (`openShelfItem`).
 - Installed games (`library.installed_games`): every console folder of the

@@ -39,6 +39,10 @@ interface Props {
 const MediaGallery: FC<Props> = ({ media }) => {
   const [index, setIndex] = useState<number | null>(null);
   const [full, setFull] = useState<string | null>(null);
+  // The thumbnail (already on the Deck) stands in until the full image is
+  // there, and stays if the full image cannot be loaded.
+  const [preview, setPreview] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const opener = useRef<Element | null>(null);
 
@@ -69,16 +73,28 @@ const MediaGallery: FC<Props> = ({ media }) => {
     setIndex((index + delta + items.length) % items.length);
   };
 
-  // Resolve the full size image through the image cache.
+  // Resolve the full size image through the image cache. Only local files
+  // are shown: a remote URL is often blocked by the Steam client.
   useEffect(() => {
     setFull(null);
+    setPreview(null);
+    setFailed(false);
     if (!current || current.kind !== "image") return;
     let cancelled = false;
-    getCover(current.full, "detail")
-      .then((proxied) => {
-        if (!cancelled && proxied) setFull(proxied);
+    getCover(current.thumb, "card")
+      .then((local) => {
+        if (!cancelled && local) setPreview(local);
       })
       .catch(() => undefined);
+    getCover(current.full, "detail")
+      .then((local) => {
+        if (cancelled) return;
+        if (local) setFull(local);
+        else setFailed(true);
+      })
+      .catch(() => {
+        if (!cancelled) setFailed(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -160,7 +176,19 @@ const MediaGallery: FC<Props> = ({ media }) => {
               ) : null}
             </div>
           ) : (
-            <img className="rs-lightbox-image" src={full || current.full} alt="Media" />
+            <div className="rs-lightbox-frame">
+              {full && !failed ? (
+                <img className="rs-lightbox-image" src={full} alt="Screenshot" onError={() => setFailed(true)} />
+              ) : preview ? (
+                <img className="rs-lightbox-image" src={preview} alt="Screenshot" />
+              ) : failed ? (
+                <div className="rs-lightbox-note">This image could not be loaded.</div>
+              ) : (
+                <div className="rs-lightbox-note">
+                  <div className="rs-spinner" />
+                </div>
+              )}
+            </div>
           )}
           <div className="rs-lightbox-bar">
             {items.length > 1 ? (

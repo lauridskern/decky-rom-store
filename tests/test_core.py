@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend import bios  # noqa: E402
 from backend.boxart import BoxArt, SYSTEMS  # noqa: E402
+from backend.images import best_variant  # noqa: E402
 from backend.dedupe import merge_entries  # noqa: E402
 from backend.library import LibraryIndex, installed_games, uninstall  # noqa: E402
 from backend.models import RomEntry, match_title  # noqa: E402
@@ -65,6 +66,43 @@ class BoxArtMatching(unittest.TestCase):
         self.assertTrue(entry.cover.startswith("https://wsrv.nl/"))
         self.assertTrue(entry.cover_full.startswith("https://thumbnails.libretro.com/"))
         self.assertIn("gb", SYSTEMS)
+
+
+class ImageLinks(unittest.TestCase):
+    def test_igdb_screenshot_links_are_valid(self):
+        # IGDB size names start with "t_"; links cached before v1.16.1 lack it.
+        for url in ("https://images.igdb.com/igdb/image/upload/screenshot_huge/abc.jpg",
+                    "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/abc.jpg"):
+            self.assertIn("/upload/t_screenshot_huge/abc.jpg", best_variant(url, "detail"))
+            self.assertIn("/upload/t_screenshot_med/abc.jpg", best_variant(url, "card"))
+        from backend.covers import IGDB_SCREENSHOT_BASE
+        self.assertTrue(IGDB_SCREENSHOT_BASE.endswith("/upload/t_screenshot_huge/"))
+
+
+class SwitchCovers(unittest.TestCase):
+    def test_portrait_art_never_a_banner(self):
+        from backend.service import StoreService
+        tmp = tempfile.mkdtemp()
+        svc = StoreService(Settings(os.path.join(tmp, "s.json")), plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
+        svc.covers._client_id = ""  # no IGDB in tests
+        svc._build_cover_index_in_background = lambda: None  # no network
+        entries = [
+            RomEntry(source="switchroms", source_id="1", title="Some Game", system="switch",
+                     cover="https://nintendo-switch-roms.com/banner.jpg"),
+            RomEntry(source="nswpedia", source_id="2", title="Kirby", system="switch",
+                     cover="https://nswpedia.io/k-200x300.jpg", cover_full="https://nswpedia.io/k.jpg"),
+            RomEntry(source="romspedia", source_id="3", title="Sonic", system="switch",
+                     cover="https://static.romspedia.com/webp/roms/sonic-cover.webp"),
+            RomEntry(source="romspedia", source_id="4", title="Mario", system="n64",
+                     cover="https://nintendo-switch-roms.com/not-switch.jpg"),
+        ]
+        asyncio.run(svc._switch_covers(entries))
+        banner, kirby, sonic, n64 = entries
+        self.assertIsNone(banner.cover, "a wide banner is not a cover")
+        self.assertEqual(banner.extra.get("banner"), "https://nintendo-switch-roms.com/banner.jpg")
+        self.assertEqual(kirby.cover, "https://nswpedia.io/k.jpg", "the full cover, not the 3:4 crop")
+        self.assertTrue(sonic.cover.startswith("https://static.romspedia.com/"))
+        self.assertEqual(n64.cover, "https://nintendo-switch-roms.com/not-switch.jpg", "only Switch games")
 
 
 class Library(unittest.TestCase):
