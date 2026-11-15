@@ -8,3 +8,6 @@ tools/preview/cover-preview.js
 tools/preview/cover-preview.html
 .DS_Store
 rom-store-decky.zip
+
+# Stray unpacked copies of the release zip must never be committed
+/rom-store-decky/
