@@ -458,16 +458,11 @@ export const CSS = `
 }
 .rs-close:hover, .rs-close.is-focus { background: rgba(255, 255, 255, 0.2); }
 
-/* A size container, so the poster can be measured against the column's height. */
-.rs-page-side { position: relative; display: flex; flex-direction: column; gap: 22px; min-width: 0; min-height: 0; overflow: hidden; padding: 66px 0 28px 40px; container-type: size; }
-/* The poster has its art's shape (--rs-ratio, width / height). A tall cover
-   is made narrower rather than shorter: capping the height of a full-width
-   frame would squash it towards a square and letterbox the art. */
-.rs-poster {
-  position: relative; flex: 0 0 auto; overflow: hidden; background: #05070a; box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
-  width: 100%;
-  width: min(100%, calc(66cqh * var(--rs-ratio, 0.714)));
-}
+.rs-page-side { position: relative; display: flex; flex-direction: column; gap: 22px; min-width: 0; min-height: 0; overflow: hidden; padding: 66px 0 28px 40px; }
+/* The poster fills the column's width and has its art's shape. Its height is
+   never capped: a capped full-width frame squashes the art towards a square.
+   The facts under it take what is left of the column. */
+.rs-poster { position: relative; flex: 0 0 auto; width: 100%; overflow: hidden; background: #05070a; box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6); }
 /* Two columns: five facts under a tall poster still fit the 720px screen. */
 .rs-facts { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; align-content: start; min-height: 0; overflow: hidden; }
 .rs-fact { min-width: 0; }
@@ -505,14 +500,14 @@ export const CSS = `
   flex: 0 0 auto !important; width: auto !important; min-width: 232px !important;
   height: 58px !important; padding: 0 30px !important;
   border: none !important; border-radius: 16px !important;
-  background: linear-gradient(100deg, var(--rs-accent) 0%, var(--rs-accent-2) 100%) !important;
+  background: var(--rs-accent) !important;
   color: #fff !important; font-size: 18px !important; font-weight: 800 !important; line-height: 1 !important;
   cursor: pointer;
 }
 .rs-store .rs-cta-btn.gpfocus, .rs-store .rs-cta-btn:focus-visible { outline-offset: 3px; }
 .rs-store .rs-cta-btn.busy, .rs-store .rs-cta-btn.quiet { background: var(--rs-surface-2) !important; }
 .rs-store .rs-cta-btn:disabled { opacity: 0.6; }
-.rs-cta-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(100deg, var(--rs-accent), var(--rs-accent-2)); transition: width 200ms linear; }
+.rs-cta-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--rs-accent); transition: width 200ms linear; }
 .rs-cta-label { position: relative; display: inline-flex; align-items: center; gap: 11px; }
 .rs-icon-btn {
   flex: 0 0 auto; width: 58px; height: 58px; border-radius: 16px;

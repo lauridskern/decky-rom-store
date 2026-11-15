@@ -432,7 +432,10 @@ Steam only reads at start), so the plugin does its job live:
   download of the game had, else IGDB (cached; uncached titles are looked up
   in the background, so they have art the next time)): every
   console folder of the library, files of one game grouped by `match_title()` (discs + .m3u), EmuDeck
-  notes, saves and media folders skipped. `uninstall(root, id)` looks the game
+  notes, saves and media folders skipped. Emulator storage is not a game
+  either: links to folders (Vita3K's `InstalledGames`), known emulator
+  folders (`mlc01`, Cemu's `roms`, `nand`, `keys`, `updates`, ...; see
+  `_EMULATOR_FOLDERS`), and anything under 1 KB of game data. `uninstall(root, id)` looks the game
   up again by id (the UI never sends paths) and deletes only entries directly
   inside a console folder that is itself a direct child of the library; a
   symlink is removed, never its target. The UI asks first, Keep focused.

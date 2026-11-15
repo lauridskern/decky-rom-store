@@ -191,7 +191,7 @@ class Library(unittest.TestCase):
 
 
 class Installed(unittest.TestCase):
-    def make(self, root, rel, data=b"x" * 10):
+    def make(self, root, rel, data=b"x" * 2048):
         path = os.path.join(root, rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "wb") as fh:
@@ -200,11 +200,32 @@ class Installed(unittest.TestCase):
     def test_lists_games_not_notes_or_saves(self):
         root = os.path.join(tempfile.mkdtemp(), "roms")
         for rel in ("gb/Tetris (World).gb", "gb/systeminfo.txt", "gb/Tetris (World).srm", "gb/media/box.png",
-                    "psx/FF7 (USA) (Disc 1).chd", "psx/FF7 (USA) (Disc 2).chd", "psx/FF7 (USA).m3u"):
+                    "psx/FF7 (USA) (Disc 1).chd", "psx/FF7 (USA) (Disc 2).chd"):
             self.make(root, rel)
+        self.make(root, "psx/FF7 (USA).m3u", b"x" * 60)  # tiny, but part of the game
         games = {g["title"]: g for g in installed_games(root)}
         self.assertEqual(set(games), {"Tetris (World)", "FF7 (USA)"})
         self.assertEqual(len(games["FF7 (USA)"]["files"]), 3)
+
+    def test_emulator_folders_are_not_games(self):
+        home = tempfile.mkdtemp()
+        root = os.path.join(home, "roms")
+        # Vita3K: EmuDeck links the emulator's installed games into the folder.
+        self.make(home, "Emulation/storage/Vita3K/ux0/app/PCSE00000/eboot.bin")
+        os.makedirs(os.path.join(root, "psvita"))
+        os.symlink(os.path.join(home, "Emulation/storage/Vita3K/ux0/app"), os.path.join(root, "psvita", "InstalledGames"))
+        # Cemu: its storage, its (empty) games path, a broken link.
+        self.make(root, "wiiu/mlc01/sys/title/data.bin")
+        self.make(root, "wiiu/roms/systeminfo.txt", b"x" * 521)
+        os.symlink(os.path.join(home, "gone"), os.path.join(root, "wiiu", "Broken"))
+        # A stub file and a folder with only notes in it.
+        self.make(root, "gb/placeholder.gb", b"x" * 100)
+        self.make(root, "gb/Notes/readme.txt")
+        # Real games: a file, and a game that is a folder.
+        self.make(root, "gb/Tetris (World).gb")
+        self.make(root, "dos/Doom/DOOM.EXE")
+        games = {g["title"] for g in installed_games(root)}
+        self.assertEqual(games, {"Tetris (World)", "Doom"})
 
     def test_uninstall_removes_the_game_only(self):
         home = tempfile.mkdtemp()

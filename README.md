@@ -207,7 +207,8 @@ first, largest first or A to Z. On top it shows how full each drive is.
 **A** on a game asks before it removes anything ("Delete 3 files, 963 MB? This
 cannot be undone.", with *Keep* selected; **B** also keeps) and then removes
 that game's files: all discs of a multi-disc game together. **Y** opens the
-game's store page. Saves, EmuDeck's notes and artwork folders are never
+game's store page. Saves, EmuDeck's notes, artwork folders and emulator storage (Vita3K's
+`InstalledGames`, Cemu's `mlc01`, ...) are not listed and never
 touched, and nothing outside the ROM folders can be deleted.
 
 ## Steam library

@@ -23,7 +23,8 @@ class SteamPlan(unittest.TestCase):
                     "psx/FF7 (USA) (Disc 1).chd", "psx/FF7 (USA) (Disc 2).chd", "psx/FF7 (USA).m3u"):
             path = os.path.join(self.roms, rel)
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            open(path, "w").close()
+            with open(path, "wb") as fh:
+                fh.write(b"x" * 2048)  # nothing under 1 KB counts as a game
         srm = os.path.join(self.home, ".config/steam-rom-manager/userData")
         os.makedirs(srm)
         with open(os.path.join(srm, "userSettings.json"), "w") as fh:

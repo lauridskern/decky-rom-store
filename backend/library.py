@@ -66,15 +66,62 @@ _SKIP_EXTENSIONS = {
     ".part", ".tmp",
 }
 _SKIP_FOLDERS = {"media", "images", "videos", "manuals", "screenshots", "saves", "states", "snap", "downloaded_images"}
+# Emulator storage EmuDeck and the emulators keep inside console folders:
+# Vita3K's InstalledGames, Cemu's mlc01 and its games path "roms", Yuzu /
+# Ryujinx's nand and keys, shader caches, updates, DLC, ...
+_EMULATOR_FOLDERS = {
+    "installedgames", "mlc01", "roms", "nand", "sys", "usr", "sdcard", "ux0",
+    "bios", "firmware", "keys", "shaders", "shadercache", "cache", "content",
+    "update", "updates", "dlc", "patches", "textures", "cheats", "mods",
+    "config", "configs", "logs", "temp", "tmp",
+}
+# No game is smaller, all its files together (a .m3u or .cue alone is tiny,
+# but it comes with its discs), while what emulators leave behind (an empty
+# games path, a stub) often is.
+_MIN_GAME_BYTES = 1024
+
+
+def _counts(name: str) -> bool:
+    """A file name that can belong to a game (not a note, save or picture)."""
+    lower = name.lower()
+    return not (lower.startswith(".") or lower in _SKIP_NAMES or os.path.splitext(lower)[1] in _SKIP_EXTENSIONS)
+
+
+def _has_game_data(path: str) -> bool:
+    """A folder holds at least _MIN_GAME_BYTES of files that can be a game."""
+    total = 0
+    for folder, dirs, files in os.walk(path):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for name in files:
+            if not _counts(name):
+                continue
+            try:
+                total += os.path.getsize(os.path.join(folder, name))
+            except OSError:
+                continue
+            if total >= _MIN_GAME_BYTES:
+                return True
+    return False
 
 
 def _is_game(entry: os.DirEntry) -> bool:
     name = entry.name.lower()
-    if name.startswith(".") or name in _SKIP_NAMES:
+    if not _counts(name):
         return False
-    if entry.is_dir(follow_symlinks=False):
-        return name not in _SKIP_FOLDERS
-    return os.path.splitext(name)[1] not in _SKIP_EXTENSIONS
+    try:
+        if entry.is_symlink():
+            # EmuDeck links emulator storage (Vita3K's InstalledGames, Cemu's
+            # mlc01) into the console folders. A link to a folder is that,
+            # never a game, and a broken link is nothing at all.
+            if not os.path.exists(entry.path) or os.path.isdir(entry.path):
+                return False
+        elif entry.is_dir(follow_symlinks=False):
+            if name in _SKIP_FOLDERS or name in _EMULATOR_FOLDERS:
+                return False
+            return _has_game_data(entry.path)
+        return True
+    except OSError:
+        return False
 
 
 def _size(path: str) -> int:
@@ -126,6 +173,8 @@ def installed_games(root: str) -> List[Dict[str, Any]]:
         for key, entries in grouped.items():
             entries.sort(key=lambda e: (len(e.name), e.name))
             files = [{"name": e.name, "size": _size(e.path), "folder": e.is_dir(follow_symlinks=False)} for e in entries]
+            if sum(f["size"] for f in files) < _MIN_GAME_BYTES:
+                continue
             try:
                 newest = max(e.stat(follow_symlinks=False).st_mtime for e in entries)
             except OSError:
