@@ -173,9 +173,11 @@ class HttpClient:
         return urllib.request.Request(url, data=data, headers=hdrs, method=method.upper())
 
     def _open(self, url: str, method: str = "GET", data: Optional[bytes] = None,
-              headers: Optional[Dict[str, str]] = None, allow_redirects: bool = True) -> Response:
+              headers: Optional[Dict[str, str]] = None, allow_redirects: bool = True,
+              polite: bool = True) -> Response:
         host = urllib.request.Request(url).host or ""
-        self._throttle(host)
+        if polite:
+            self._throttle(host)
         try:
             return self._open_once(url, method, data, headers, allow_redirects)
         except urllib.error.URLError as exc:
@@ -225,8 +227,15 @@ class HttpClient:
     # --------------------------------------------------------------- public API
     async def request(self, url: str, method: str = "GET", data: Optional[bytes] = None,
                       headers: Optional[Dict[str, str]] = None, allow_redirects: bool = True,
-                      max_bytes: int = 8 * 1024 * 1024, retries: int = 2) -> Response:
-        """Fetch a URL, retrying transient failures."""
+                      max_bytes: int = 8 * 1024 * 1024, retries: int = 2,
+                      polite: bool = True) -> Response:
+        """Fetch a URL, retrying transient failures.
+
+        ``polite`` keeps the per-host gap that the scrapers need. Image CDNs do
+        not: a page of covers is meant to be fetched in parallel, and queueing
+        them at four requests per second per host left the grid loading for ten
+        seconds while the CPU chewed through the backlog.
+        """
         last_error: Optional[HttpError] = None
         if not await self._host_alive(url):
             # The host does not exist - do not waste time on retries.
@@ -234,7 +243,7 @@ class HttpClient:
         for attempt in range(retries + 1):
             try:
                 resp = await asyncio.wait_for(
-                    asyncio.to_thread(self._open, url, method, data, headers, allow_redirects),
+                    asyncio.to_thread(self._open, url, method, data, headers, allow_redirects, polite),
                     timeout=max(self._timeout * 2, 45),
                 )
             except asyncio.TimeoutError as exc:

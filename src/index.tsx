@@ -3,18 +3,14 @@ import { definePlugin, routerHook } from "@decky/api";
 import { ButtonItem, Navigation, PanelSection, PanelSectionRow, staticClasses, TextField } from "@decky/ui";
 import { FaStore } from "react-icons/fa";
 
-import Store from "./components/Store";
+import StoreHost from "./components/StoreHost";
 import { injectStyles } from "./styles";
 import { requestSearch } from "./state";
 import { getDownloads, getStatus } from "./types";
 import StoreStyles from "./components/StoreStyles";
 import ErrorBoundary from "./components/ErrorBoundary";
 
-const StoreRoute = () => (
-  <ErrorBoundary label="store">
-    <Store />
-  </ErrorBoundary>
-);
+const StoreRoute = StoreHost;
 
 function PanelContent() {
   const [query, setQuery] = useState("");

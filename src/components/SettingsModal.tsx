@@ -5,6 +5,8 @@ import { CacheStats, clearCache, getCacheStats, getImageDiagnostics, ImageDiagno
 import { toaster } from "@decky/api";
 import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
 import { SOURCE_LABELS } from "./common";
+import { measurePerformance, PerfSample } from "./perf";
+import { reloadStore } from "../state";
 
 interface Props {
   onClose: () => void;
@@ -36,6 +38,8 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
   const [customRoot, setCustomRoot] = useState("");
   const [diagnostics, setDiagnostics] = useState<ImageDiagnostics | null>(null);
   const [cache, setCache] = useState<CacheStats | null>(null);
+  const [perf, setPerf] = useState<PerfSample | null>(null);
+  const [perfBusy, setPerfBusy] = useState(false);
 
   useEffect(() => {
     getCacheStats()
@@ -289,6 +293,44 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               Search results are stored on the Deck, so repeating a search is instant even after a
               restart. {cache ? `${cache.entries} entries, ${Math.round((cache.bytes ?? 0) / 1024)} kB.` : ""}
             </div>
+          </div>
+
+          <div className="rs-section-title">Performance</div>
+          <div className="rs-form-row">
+            <label>Measure the client</label>
+            <button
+              className="rs-btn ghost"
+              disabled={perfBusy}
+              onClick={() => {
+                setPerfBusy(true);
+                measurePerformance(1500)
+                  .then(setPerf)
+                  .catch(() => setPerf(null))
+                  .finally(() => setPerfBusy(false));
+              }}
+            >
+              {perfBusy ? "Measuring…" : "Run a sample"}
+            </button>
+          </div>
+          {perf ? (
+            <pre className="rs-diagnostics">
+{`frame time    : ${perf.frameMs} ms  (worst ${perf.worstMs} ms)
+frames        : ~${perf.fps} fps
+dom nodes     : ${perf.nodes}
+images        : ${perf.images}
+js heap       : ${perf.heapMB === null ? "unknown" : `${perf.heapMB} MB`}
+search cache  : ${cache ? `${cache.entries} entries, ${Math.round(cache.bytes / 1024)} kB` : "unknown"}`}
+            </pre>
+          ) : null}
+          <div className="rs-form-row">
+            <label>Store view</label>
+            <button className="rs-btn ghost" onClick={reloadStore}>
+              Reload the view
+            </button>
+          </div>
+          <div className="rs-hint">
+            Reloading rebuilds the store UI from scratch. If a session has become sluggish, this
+            recovers it without restarting Steam.
           </div>
 
           <div className="rs-section-title">Diagnostics</div>

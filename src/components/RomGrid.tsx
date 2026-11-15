@@ -21,8 +21,11 @@ interface Props {
  */
 const RomGrid: FC<Props> = ({ items, onOpen }) => (
   <div className="rs-grid">
-    {items.map((rom) => (
-      <RomCard key={rom.id} rom={rom} onOpen={onOpen} />
+    {items.map((rom, slot) => (
+      // Keyed by slot, not by game: paging then reuses the same 30 card
+      // components (and the same Steam focus nodes) instead of destroying and
+      // recreating all of them for every page.
+      <RomCard key={slot} rom={rom} onOpen={onOpen} />
     ))}
   </div>
 );

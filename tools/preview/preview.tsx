@@ -1,10 +1,10 @@
 import { createRoot } from "react-dom/client";
-import Store from "../../src/components/Store";
+import StoreHost from "../../src/components/StoreHost";
 import { injectStyles } from "../../src/styles";
 
 injectStyles();
 
 const container = document.getElementById("root");
 if (container) {
-  createRoot(container).render(<Store />);
+  createRoot(container).render(<StoreHost />);
 }

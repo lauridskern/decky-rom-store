@@ -262,6 +262,16 @@ The store is built to stay quiet on a device that is also running a game:
 - **Cached detail views.** Download links and the gallery are cached for the
   same 72 hours as searches, so opening a game (or closing it again) starts no
   scraping at all.
+- **One cache file per query.** Cached searches and detail views used to share
+  a single growing JSON document that was read, parsed and rewritten on every
+  search - after a long session that is tens of megabytes of work per keystroke
+  and it blocks everything else while it runs. Each query now has its own small
+  file, pruned to the 300 most recent.
+- **Artwork is fetched in parallel**, not queued behind the scraper's
+  per-host politeness delay, so a page of covers arrives in one burst.
+- **Settings → Performance** shows a live sample (frame time, DOM nodes, image
+  count, JS heap) and has a *Reload the view* button that rebuilds the UI
+  without restarting Steam.
 
 ## Gamepad
 

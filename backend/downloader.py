@@ -115,6 +115,7 @@ class DownloadManager:
             )
             self._jobs[job_id] = job
             self._cancels[job_id] = threading.Event()
+            self._forget_finished()
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # pragma: no cover - defensive
@@ -122,6 +123,21 @@ class DownloadManager:
         if loop is not None:
             self._tasks[job_id] = loop.create_task(self._run(job, extract, keep_archive))
         return job
+
+    def _forget_finished(self, keep: int = 40) -> None:
+        """Do not hold every completed job for the life of the plugin."""
+        if len(self._jobs) <= keep * 2:
+            return
+        finished = [
+            (job.finished or 0.0, job_id)
+            for job_id, job in self._jobs.items()
+            if job.status in (STATUS_DONE, STATUS_CANCELLED, STATUS_ERROR)
+        ]
+        finished.sort()
+        for _when, job_id in finished[: max(0, len(self._jobs) - keep)]:
+            self._jobs.pop(job_id, None)
+            self._cancels.pop(job_id, None)
+            self._tasks.pop(job_id, None)
 
     def cancel(self, job_id: str) -> bool:
         cancel = self._cancels.get(job_id)

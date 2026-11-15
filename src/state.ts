@@ -10,3 +10,28 @@ export function requestSearch(query: string, system = "all"): void {
   searchState.system = system;
   searchState.version += 1;
 }
+
+/**
+ * A counter the store view is keyed on. Bumping it throws the whole React tree
+ * away and builds it again - the escape hatch for a UI that has been open for
+ * hours and slowed down, and a diagnostic: if this fixes it, the slowdown is
+ * in the view, not in the data.
+ */
+let viewEpoch = 0;
+const reloadListeners = new Set<() => void>();
+
+export function reloadStore(): void {
+  viewEpoch += 1;
+  reloadListeners.forEach((listener) => listener());
+}
+
+export function subscribeStoreReload(listener: () => void): () => void {
+  reloadListeners.add(listener);
+  return () => {
+    reloadListeners.delete(listener);
+  };
+}
+
+export function getStoreEpoch(): number {
+  return viewEpoch;
+}

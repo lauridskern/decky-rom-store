@@ -125,44 +125,115 @@ class StoreService:
                 self._errors[source.id] = "host not found"
 
     # ------------------------------------------------------------------ cache
-    def _cache_path(self) -> Optional[str]:
+    #
+    # Every cached query and every cached detail view lives in its own small
+    # file. They used to share one big JSON document, which meant every single
+    # search read, parsed and re-wrote the whole thing on the event loop - a
+    # file that grows with every query you make. After a long session that
+    # alone was tens of megabytes of JSON per search, and it blocked every
+    # other call (including image loading) while it was serialised.
+    MAX_CACHED_SEARCHES = 300
+    MAX_CACHED_DETAILS = 300
+
+    def _cache_dir(self, kind: str) -> Optional[str]:
         if not self._runtime_dir:
             return None
-        return os.path.join(self._runtime_dir, "search_cache.json")
+        return os.path.join(self._runtime_dir, "cache", kind)
 
-    def _details_path(self) -> Optional[str]:
-        if not self._runtime_dir:
+    def _cache_file(self, kind: str, key: str) -> Optional[str]:
+        folder = self._cache_dir(kind)
+        if not folder:
             return None
-        return os.path.join(self._runtime_dir, "details_cache.json")
+        return os.path.join(folder, f"{key}.json")
 
-    def _read_details_cache(self) -> Dict[str, Any]:
-        path = self._details_path()
+    @staticmethod
+    def _read_json(path: Optional[str]) -> Optional[Dict[str, Any]]:
         if not path or not os.path.isfile(path):
-            return {}
+            return None
         try:
             with open(path, "r", encoding="utf-8") as fh:
-                return json.load(fh) or {}
+                value = json.load(fh)
+            return value if isinstance(value, dict) else None
         except (OSError, ValueError):
-            return {}
+            return None
 
-    def _write_details_cache(self, data: Dict[str, Any]) -> None:
-        path = self._details_path()
+    def _cache_read(self, kind: str, key: str) -> Optional[Dict[str, Any]]:
+        return self._read_json(self._cache_file(kind, key))
+
+    def _cache_write(self, kind: str, key: str, value: Dict[str, Any]) -> None:
+        path = self._cache_file(kind, key)
         if not path:
             return
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
-            if len(data) > 300:
-                oldest = sorted(data.items(), key=lambda item: float(item[1].get("at", 0)))
-                for key, _value in oldest[: len(data) - 300]:
-                    data.pop(key, None)
-            with open(path, "w", encoding="utf-8") as fh:
-                json.dump(data, fh)
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(value, fh)
+            os.replace(tmp, path)
+        except OSError:
+            return
+        self._cache_prune(kind)
+
+    def _cache_prune(self, kind: str) -> None:
+        """Keep the cache folder to a sane number of files."""
+        folder = self._cache_dir(kind)
+        if not folder:
+            return
+        limit = self.MAX_CACHED_SEARCHES if kind == "search" else self.MAX_CACHED_DETAILS
+        try:
+            entries = []
+            with os.scandir(folder) as scan:
+                for item in scan:
+                    try:
+                        entries.append((item.stat().st_mtime, item.path))
+                    except OSError:
+                        continue
+            if len(entries) <= limit:
+                return
+            entries.sort()
+            for _mtime, path in entries[: len(entries) - limit]:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
         except OSError:
             pass
 
+    def _cache_totals(self) -> Dict[str, int]:
+        files = 0
+        size = 0
+        for kind in ("search", "details"):
+            folder = self._cache_dir(kind)
+            if not folder:
+                continue
+            try:
+                with os.scandir(folder) as scan:
+                    for item in scan:
+                        try:
+                            size += item.stat().st_size
+                            files += 1
+                        except OSError:
+                            continue
+            except OSError:
+                continue
+        return {"files": files, "bytes": size}
+
+    def _drop_legacy_caches(self) -> None:
+        """Remove the old single-file caches from earlier versions."""
+        if not self._runtime_dir:
+            return
+        for name in ("search_cache.json", "details_cache.json"):
+            path = os.path.join(self._runtime_dir, name)
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+            except OSError:
+                pass
+
     @staticmethod
     def _details_key(title: str, system: str) -> str:
-        return f"{(title or '').strip().lower()}|{system or 'unknown'}"
+        raw = f"{(title or '').strip().lower()}|{system or 'unknown'}"
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
 
     def _index_rom(self, rom: MergedRom) -> None:
         self._roms[rom.id] = rom
@@ -172,31 +243,6 @@ class StoreService:
     def _cache_key(self, query: str, system: Optional[str], sources: Optional[List[str]], sort: str) -> str:
         raw = f"{query.strip().lower()}|{system or 'all'}|{','.join(sorted(sources or [])) or 'all'}|{sort}"
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
-
-    def _read_cache(self) -> Dict[str, Any]:
-        path = self._cache_path()
-        if not path or not os.path.isfile(path):
-            return {}
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                return json.load(fh) or {}
-        except (OSError, ValueError):
-            return {}
-
-    def _write_cache(self, data: Dict[str, Any]) -> None:
-        path = self._cache_path()
-        if not path:
-            return
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            # Keep the cache from growing without bound.
-            if len(data) > 400:
-                for key in list(data)[: len(data) - 400]:
-                    data.pop(key, None)
-            with open(path, "w", encoding="utf-8") as fh:
-                json.dump(data, fh)
-        except OSError:
-            pass
 
     @staticmethod
     def _entry_from_dict(data: Dict[str, Any]) -> RomEntry:
@@ -301,8 +347,7 @@ class StoreService:
         # made a few days ago is served straight from disk.
         ttl = float(self.settings.get("search_cache_hours", 72)) * 3600
         cache_key = self._cache_key(query, system, source_ids, sort)
-        cache = self._read_cache()
-        cached = cache.get(cache_key)
+        cached = self._cache_read("search", cache_key)
         if cached and (time.time() - float(cached.get("at", 0))) < ttl:
             try:
                 self._restore(cached)
@@ -313,7 +358,7 @@ class StoreService:
                 return payload
             except Exception:
                 # A broken cache entry must never stop a search.
-                cache.pop(cache_key, None)
+                pass
 
         blocked = [
             source
@@ -396,9 +441,8 @@ class StoreService:
         self._last_search = payload
         self._prefetch_covers(entries)
 
-        # Remember it for the next few days.
-        cache = self._read_cache()
-        cache[cache_key] = {
+        # Remember it for the next few days - one small file for this query.
+        self._cache_write("search", cache_key, {
             "at": time.time(),
             "payload": payload,
             "roms": [
@@ -410,8 +454,7 @@ class StoreService:
                 }
                 for rom in merged
             ],
-        }
-        self._write_cache(cache)
+        })
         return payload
 
     async def browse(self, system: str, limit: int = 200) -> Dict[str, Any]:
@@ -476,8 +519,7 @@ class StoreService:
         # running in the background.
         ttl = float(self.settings.get("search_cache_hours", 72)) * 3600
         key = self._details_key(rom.title, rom.system)
-        cache = self._read_details_cache()
-        cached = cache.get(key)
+        cached = self._cache_read("details", key)
         if cached and time.time() - float(cached.get("at", 0)) < ttl:
             try:
                 entries = [self._entry_from_dict(item) for item in cached.get("entries") or []]
@@ -489,7 +531,7 @@ class StoreService:
                     self._index_rom(rom)
                     return rom.to_dict()
             except Exception:
-                cache.pop(key, None)
+                pass
 
         # Entries that already have their links resolved (this session) are
         # not scraped again either.
@@ -534,12 +576,11 @@ class StoreService:
                 rom.extra["media"] = media
 
         try:
-            cache[key] = {
+            self._cache_write("details", key, {
                 "at": time.time(),
                 "entries": [entry.to_dict() for entry in rom.entries],
                 "media": media or (rom.extra or {}).get("media"),
-            }
-            self._write_details_cache(cache)
+            })
         except Exception:
             pass
         return rom.to_dict()
@@ -680,43 +721,31 @@ class StoreService:
     # ------------------------------------------------------------------ images
     def clear_cache(self) -> Dict[str, Any]:
         """Throw away the cached searches and detail views."""
-        path = self._cache_path()
         removed = 0
-        if path and os.path.isfile(path):
+        for kind in ("search", "details"):
+            folder = self._cache_dir(kind)
+            if not folder:
+                continue
             try:
-                removed = len(self._read_cache())
-                os.remove(path)
+                with os.scandir(folder) as scan:
+                    for item in scan:
+                        try:
+                            os.remove(item.path)
+                            removed += 1
+                        except OSError:
+                            continue
             except OSError:
-                removed = 0
-        details = self._details_path()
-        if details and os.path.isfile(details):
-            try:
-                os.remove(details)
-            except OSError:
-                pass
+                continue
+        self._drop_legacy_caches()
         self._browse_cache = {}
         return {"ok": True, "removed": removed}
 
     def cache_stats(self) -> Dict[str, Any]:
-        path = self._cache_path()
-        data = self._read_cache()
-        size = 0
-        if path and os.path.isfile(path):
-            try:
-                size = os.path.getsize(path)
-            except OSError:
-                size = 0
-        details_path = self._details_path()
-        details_size = 0
-        if details_path and os.path.isfile(details_path):
-            try:
-                details_size = os.path.getsize(details_path)
-            except OSError:
-                details_size = 0
+        totals = self._cache_totals()
         return {
-            "entries": len(data),
-            "bytes": size + details_size,
-            "path": path or "",
+            "entries": totals["files"],
+            "bytes": totals["bytes"],
+            "path": self._cache_dir("search") or "",
             "ttl_hours": float(self.settings.get("search_cache_hours", 72)),
         }
 
@@ -879,6 +908,9 @@ class StoreService:
     def start_background_tasks(self) -> None:
         """Re-check the sources now and then, so a source that comes back
         (or a network that was not up yet) is picked up automatically."""
+        # The single-file caches from earlier versions are a liability: they
+        # were re-read and re-written on every search.
+        self._drop_legacy_caches()
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # pragma: no cover - defensive

@@ -25,7 +25,7 @@ from urllib.parse import quote
 from .httpclient import HttpClient, HttpError
 
 DEFAULT_BASE_URL = "http://localhost:1337"
-MAX_CACHE_BYTES = 400 * 1024 * 1024  # keep the runtime folder sane
+MAX_CACHE_BYTES = 250 * 1024 * 1024  # keep the runtime folder sane
 CONTENT_TYPES = {
     "image/webp": "webp",
     "image/png": "png",
@@ -120,10 +120,15 @@ class ImageCache:
 
         lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
+            if len(self._locks) > 4000:
+                # Only a de-duplication aid; dropping them costs at most one
+                # redundant download.
+                self._locks.clear()
+                self._locks[key] = lock
             if os.path.exists(path) and os.path.getsize(path) > 0:
                 return self._local_url(key, ext)
             if self._semaphore is None:
-                self._semaphore = asyncio.Semaphore(6)
+                self._semaphore = asyncio.Semaphore(8)
             try:
                 async with self._semaphore:
                     await self._download(target, path)
@@ -163,6 +168,8 @@ class ImageCache:
             "GET",
             headers={"Accept": "image/webp,image/apng,image/*,*/*;q=0.8", "Referer": _referer_for(url)},
             max_bytes=12 * 1024 * 1024,
+            polite=False,
+            retries=1,
         )
         body = response.body
         if not body:
@@ -176,20 +183,34 @@ class ImageCache:
         os.replace(tmp, path)
 
     def _prune(self) -> None:
+        # Walking a folder with thousands of covers costs real time, so this
+        # runs at most every five minutes - and on a worker thread, because it
+        # must never block the plugin while it stats the cache.
         now = time.time()
-        if now - self._last_prune < 60:
+        if now - self._last_prune < 300:
             return
         self._last_prune = now
         try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self._prune_sync()
+            return
+        loop.create_task(asyncio.to_thread(self._prune_sync))
+
+    def _prune_sync(self) -> None:
+        try:
             entries = []
             total = 0
-            for name in os.listdir(self.folder):
-                full = os.path.join(self.folder, name)
-                if not os.path.isfile(full):
-                    continue
-                size = os.path.getsize(full)
-                total += size
-                entries.append((os.path.getmtime(full), size, full))
+            with os.scandir(self.folder) as scan:
+                for item in scan:
+                    try:
+                        stat = item.stat()
+                    except OSError:
+                        continue
+                    if not item.is_file():
+                        continue
+                    total += stat.st_size
+                    entries.append((stat.st_mtime, stat.st_size, item.path))
             if total <= MAX_CACHE_BYTES:
                 return
             entries.sort()
