@@ -106,6 +106,7 @@ export const CSS = `
   /* No transform, no transition and no big blur shadow: each of those forced
      the Steam client to promote and repaint every cover while moving through
      the grid. A border and an outline are almost free. */
+  contain: layout paint style;
   transition: border-color 100ms ease, background 100ms ease;
   outline: none;
 }
