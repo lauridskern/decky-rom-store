@@ -48,10 +48,12 @@ library, so there is nothing to compile and nothing to install on the Deck.
 
 ### Install from the Deck (easiest)
 
-Decky Loader → **Settings → Plugins → Install from URL**, then paste:
+Decky Loader → **Settings → Plugins → Install from URL**, then paste (this
+always points at the newest release; pin a version by replacing `latest` with a
+tag and `download` with `download/vX.Y.Z`):
 
 ```
-https://github.com/lauridskern/decky-rom-store/releases/download/v1.0.4/ROM-Store.zip
+https://github.com/lauridskern/decky-rom-store/releases/latest/download/ROM-Store.zip
 ```
 
 > Decky derives the plugin name from the **file name at the end of the URL** and
@@ -102,6 +104,9 @@ npm install
 npm run build          # bundles src/ into dist/index.js
 npm run typecheck      # tsc --noEmit
 ```
+
+`AGENTS.md` (and `CLAUDE.md`) document the architecture, the browser preview
+harness under `tools/preview`, the test expectations and the release checklist.
 
 Useful extras:
 

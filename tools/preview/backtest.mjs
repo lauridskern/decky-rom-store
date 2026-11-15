@@ -1,7 +1,11 @@
 import { chromium } from "playwright";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const pluginDir = process.env.PLUGIN_DIR;
+// Defaults to this checkout, so the scripts run without any environment.
+const here = path.dirname(fileURLToPath(import.meta.url));
+const pluginDir = process.env.PLUGIN_DIR ?? path.resolve(here, "../..");
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 await page.goto(`file://${path.join(pluginDir, "tools/preview/index.html")}`);
