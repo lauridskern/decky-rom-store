@@ -1,5 +1,7 @@
 import { FC, memo } from "react";
+import { Focusable } from "@decky/ui";
 import { MergedRom } from "../types";
+import { ENTER_KEEP_X } from "./gamepad";
 import RomCard from "./RomCard";
 
 interface Props {
@@ -18,16 +20,20 @@ interface Props {
  *
  * The store now shows one page of results at a time and renders it once. The
  * browser decodes each cover a single time and scrolling is only paint work.
+ *
+ * Gamepad: a "grid" focus group, so the d-pad moves by where the covers are on
+ * screen (left/right along a row, up/down between rows). Coming down from the
+ * header it lands on the cover under the control that had focus.
  */
 const RomGrid: FC<Props> = ({ items, onOpen }) => (
-  <div className="rs-grid">
+  <Focusable className="rs-grid" flow-children="grid" navEntryPreferPosition={ENTER_KEEP_X}>
     {items.map((rom, slot) => (
       // Keyed by slot, not by game: paging then reuses the same 30 card
       // components (and the same Steam focus nodes) instead of destroying and
       // recreating all of them for every page.
       <RomCard key={slot} rom={rom} onOpen={onOpen} />
     ))}
-  </div>
+  </Focusable>
 );
 
 export default memo(RomGrid);

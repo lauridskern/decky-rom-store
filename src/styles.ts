@@ -76,6 +76,8 @@ export const CSS = `
   /* The grid is rebuilt only when the page changes; let the browser keep the
      scroll position where the user left it instead of re-anchoring. */
   overflow-anchor: none;
+  /* A cover the d-pad scrolls to stops short of the edge, focus ring visible. */
+  scroll-padding: 14px 0 24px;
 }
 .rs-main::-webkit-scrollbar { width: 10px; }
 .rs-main::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); }
@@ -89,59 +91,76 @@ export const CSS = `
 }
 .rs-pager-label { font-size: 12px; color: #8b949d; }
 
+/* Same column width for every cover, each in its own shape. Covers hang from
+   a common top edge, so a shorter one (a near-square DS box, say) leaves its
+   gap below rather than above. */
 .rs-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
-  gap: 14px;
+  column-gap: 14px;
+  row-gap: 22px;
+  align-items: start;
 }
 
 /* ---------------------------------------------------------------- grid item */
 .rs-card {
   position: relative;
+  width: 100%;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
-  overflow: hidden;
   cursor: pointer;
   outline: none;
-  /* No transform, no animated artwork and no big blur shadow: each of those
-     forced the Steam client to promote and repaint every cover while moving
-     through the grid. A border, a background colour and an outline are cheap. */
-  contain: layout paint style;
-  transition: border-color 110ms ease, background-color 110ms ease;
+  /* Own stacking context, so the shadow below can sit behind the art. No
+     paint containment here: it would clip that shadow. The art inside is
+     contained instead. */
+  isolation: isolate;
+  contain: layout style;
 }
-.rs-card:hover, .rs-card:focus, .rs-card--focus {
-  border-color: rgba(102, 192, 244, 0.75);
-  background-color: rgba(255, 255, 255, 0.05);
-}
-.rs-card--focus {
-  outline: 2px solid #66c0f4;
-  outline-offset: -2px;
-  background-color: rgba(102, 192, 244, 0.08);
-}
-
-/* Every console gets the same poster frame so the rows stay even. 5:7 is the
-   shape IGDB publishes cover art in, so most artwork fills it exactly. Art
-   that is shaped differently is fitted inside the frame, never cropped. */
-.rs-card-art {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 5 / 7;
-  overflow: hidden;
-  background: #05070a;
-}
-/* A soft top-and-bottom scrim sits over the artwork so white covers still
-   separate from the card body. It does not touch the picture. */
-.rs-card-art::after {
+/* The soft shadow. A real blurred box-shadow on 30 covers made the Steam
+   client repaint every one of them while scrolling (AGENTS.md §10), so this
+   is a plain gradient painted once behind the cover: same look, no blur. */
+.rs-card::before {
   content: "";
   position: absolute;
-  inset: 0;
-  z-index: 2;
+  inset: 6px -7px -12px;
+  z-index: -1;
+  border-radius: 18px;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0) 26%, rgba(0, 0, 0, 0.28) 100%);
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.62) 0%, rgba(0, 0, 0, 0.32) 58%, rgba(0, 0, 0, 0) 100%);
+}
+.rs-card:hover, .rs-card:focus, .rs-card--focus {
+  outline: 2px solid #66c0f4;
+  outline-offset: 2px;
+}
+.rs-card:hover:not(.rs-card--focus):not(:focus) { outline-color: rgba(102, 192, 244, 0.55); }
+
+/* The cover is the whole item. Art that is not the console's box shape is
+   fitted inside the frame, never cropped (see CoverImage). */
+.rs-card-art {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #05070a;
+  contain: paint;
+}
+
+/* No art: the placeholder carries the title instead. */
+.rs-card-noart {
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  text-align: center;
+}
+.rs-card-noart-title {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #c9ced3;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
 }
 
 .rs-cover-img {
@@ -191,26 +210,6 @@ export const CSS = `
   background: linear-gradient(135deg, #0d1116, #080a0d);
 }
 
-.rs-card-body {
-  padding: 9px 10px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  min-width: 0;
-}
-.rs-title {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: #f2f3f3;
-  line-height: 1.25;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 31px;
-  word-break: break-word;
-}
-.rs-card-meta { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 14px; }
 .rs-chip {
   position: absolute;
   top: 7px;
@@ -230,10 +229,6 @@ export const CSS = `
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rs-card-stats { display: inline-flex; gap: 8px; font-size: 10.5px; color: #8b949d; }
-.rs-stat { white-space: nowrap; }
-.rs-stat.rating { color: #ffd766; }
-
 .rs-pill {
   border-radius: 6px;
   padding: 2px 8px;
@@ -276,8 +271,6 @@ export const CSS = `
 }
 .rs-footer .rs-path { font-family: monospace; }
 .rs-error { color: #ff8f6b; }
-.rs-foot-hint { color: #79838c; }
-.rs-foot-hint b { color: #c9ced3; font-weight: 600; }
 
 .rs-hintbar {
   display: flex; gap: 14px; align-items: center; justify-content: flex-end;
@@ -285,17 +278,35 @@ export const CSS = `
 }
 .rs-hintbar b { color: #c9ced3; font-weight: 600; }
 
-/* The Steam controller moves focus with the d-pad - make it obvious where
-   the focus currently is. */
-.rs-btn:focus-visible,
-.rs-close:focus-visible,
-.rs-shot:focus-visible,
+/* Where the focus is. The Steam client marks the gamepad-focused element with
+   .gpfocus (and our own Focusables with .is-focus); a browser marks keyboard
+   focus with :focus-visible. Several of these controls override Steam's
+   button colours, which also hides Steam's own focus look, so every one of
+   them gets an explicit ring. */
+.rs-btn:focus-visible, .rs-btn.gpfocus,
+.rs-close:focus-visible, .rs-close.is-focus,
+.rs-shot:focus-visible, .rs-shot.is-focus,
 .rs-browse-tile:focus-visible,
-.rs-steam-btn:focus-visible,
-.rs-icon-btn:focus-visible {
+.rs-steam-btn:focus-visible, .rs-steam-btn.gpfocus,
+.rs-icon-btn:focus-visible,
+.rs-version-btn:focus-visible, .rs-version-btn.gpfocus,
+.rs-switch:focus-visible, .rs-switch.is-focus,
+.rs-issues:focus-visible, .rs-issues.is-focus {
   outline: 2px solid #66c0f4;
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
+.rs-close.is-focus { background: rgba(255, 255, 255, 0.18); color: #fff; }
+
+/* Wraps everything behind the overlays (one focus group for the d-pad). */
+.rs-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rs-panel-actions { display: flex; align-items: center; gap: 8px; }
+.rs-panel-actions.end { justify-content: flex-end; gap: 10px; margin-top: 18px; }
 
 .rs-diagnostics {
   background: #0d0f12; border: 1px solid rgba(255,255,255,0.12); border-radius: 8px;
@@ -335,7 +346,6 @@ export const CSS = `
   display: flex; flex-direction: column; overflow: hidden;
   box-sizing: border-box;
 }
-.rs-panel.detail { width: min(1060px, 100%); max-height: min(760px, 100%); }
 .rs-panel.settings { width: min(720px, 100%); }
 .rs-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; min-width: 0; }
 .rs-detail-grid { min-width: 0; }
@@ -353,90 +363,56 @@ export const CSS = `
 .rs-panel-body { padding: 16px 18px; overflow-y: auto; }
 
 /* ------------------------------------------------------------ game detail */
-.rs-detail-hero {
+/* A fixed size, so the panel does not jump when the links finish loading.
+   On the Deck the store area is 1280 x 720, which leaves about 1250 x 690. */
+.rs-panel.detail {
   position: relative;
-  flex: 0 0 auto;
-  padding: 20px 22px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  overflow: hidden;
+  width: min(1140px, 100%);
+  height: min(720px, 100%);
+  display: grid;
+  grid-template-columns: 252px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  background: #181b20;
 }
-.rs-detail-hero-art {
+
+/* Floats over the scroll area, so it is always reachable. */
+.rs-panel.detail > .rs-close {
   position: absolute;
-  inset: 0;
-  background-position: center 30%;
-  background-size: cover;
-  opacity: 0.28;
-  pointer-events: none;
+  top: 14px;
+  right: 16px;
+  z-index: 6;
 }
-.rs-detail-hero::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: linear-gradient(100deg, rgba(27, 31, 36, 0.97) 0%, rgba(27, 31, 36, 0.88) 42%, rgba(27, 31, 36, 0.55) 100%);
-}
-.rs-detail-hero-inner {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-.rs-detail-heading { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
-.rs-detail-title {
-  flex: 1 1 auto;
-  min-width: 0;
-  margin: 0;
-  font-size: 26px;
-  line-height: 1.15;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  color: #fff;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.rs-detail-sub { font-size: 12px; color: #9aa4ad; min-height: 15px; }
-.rs-detail-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .rs-close {
   flex: 0 0 auto;
-  width: 30px; height: 30px;
+  width: 32px; height: 32px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(10, 12, 15, 0.6);
   color: #d6d7d8;
   font-size: 14px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
 .rs-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
 
-/* One scroll area for the whole body: poster, links and screenshots together. */
-.rs-detail-body {
-  flex: 1 1 auto;
+/* ---- left column: poster edge to edge from the top, credits below */
+.rs-detail-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 208px minmax(0, 1fr);
-  align-items: start;
-  gap: 22px;
-  padding: 18px 22px 20px;
   overflow-y: auto;
   overflow-x: hidden;
-  overscroll-behavior: contain;
+  background: #121418;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
-.rs-detail-body::-webkit-scrollbar { width: 8px; }
-.rs-detail-body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
-.rs-detail-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 4px; }
-
-.rs-detail-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rs-detail-side::-webkit-scrollbar { width: 0; }
+/* The panel's rounded corner clips the top-left of the art. */
 .rs-detail-poster {
   position: relative;
+  flex: 0 0 auto;
   width: 100%;
-  border-radius: 10px;
   overflow: hidden;
   background: #05070a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
   contain: paint;
 }
 .rs-detail-cover-placeholder {
@@ -445,113 +421,296 @@ export const CSS = `
   font-size: 40px; font-weight: 800; color: rgba(255, 255, 255, 0.12);
   background: #05070a;
 }
+.rs-facts {
+  margin: 0;
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rs-fact dt {
+  margin: 0 0 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #646e78;
+}
+.rs-fact dd {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: #c9ced3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
 
-.rs-save {
+/* ---- right column: one scroll area */
+.rs-detail-content {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  padding-bottom: 24px;
+}
+.rs-detail-content > * { position: relative; }
+.rs-detail-content::-webkit-scrollbar { width: 8px; }
+.rs-detail-content::-webkit-scrollbar-track { background: transparent; }
+.rs-detail-content::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 4px; }
+
+/* Screenshot behind the title and the download card, faded out downwards. */
+.rs-detail-content > .rs-detail-backdrop {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 300px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.rs-detail-backdrop-art {
+  position: absolute;
+  inset: 0;
+  background-position: center 25%;
+  background-size: cover;
+  opacity: 0.32;
+}
+.rs-detail-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(24, 27, 32, 0.2) 0%, rgba(24, 27, 32, 0.75) 55%, #181b20 100%),
+    linear-gradient(90deg, rgba(24, 27, 32, 0.85) 0%, rgba(24, 27, 32, 0) 70%);
+}
+
+.rs-detail-head {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.035);
+  padding: 26px 64px 0 28px;
   min-width: 0;
 }
-.rs-save > * { max-width: 100%; }
-.rs-save-label {
+.rs-detail-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: #66c0f4;
+}
+.rs-detail-title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rs-kvs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin-top: 10px;
+}
+.rs-kv { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rs-kv-label {
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.9px;
   text-transform: uppercase;
-  color: #79838c;
+  color: #7d8790;
 }
-.rs-save-path {
-  font-family: monospace;
-  font-size: 10px;
-  line-height: 1.4;
+.rs-kv-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #e6e8ea;
+  white-space: nowrap;
+}
+.rs-kv-value.rating { color: #ffd766; }
+.rs-kv-value svg { font-size: 12px; }
+
+/* ---- the main action */
+.rs-get {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  min-height: 48px;
+  margin: 22px 28px 0;
+  padding: 12px 16px 12px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(14, 16, 20, 0.72);
+}
+.rs-get-btn {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: auto !important;
+  min-width: 170px !important;
+  height: 46px !important;
+  padding: 0 24px !important;
+  border: none !important;
+  border-radius: 8px !important;
+  background: linear-gradient(90deg, #4fb8ff 0%, #2b7bf0 100%) !important;
+  color: #fff !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.2px;
+}
+.rs-get-btn:hover { background: linear-gradient(90deg, #6cc6ff 0%, #3d8bff 100%) !important; }
+.rs-get-btn:focus-visible, .rs-get-btn.gpfocus { outline: 2px solid #fff; outline-offset: 3px; }
+.rs-get-file { flex: 1 1 auto; min-width: 0; }
+.rs-get-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e6e8ea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rs-get-meta,
+.rs-version-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 3px;
+  font-size: 11.5px;
   color: #8b949d;
-  word-break: break-all;
-  max-height: 2.8em;
-  overflow: hidden;
 }
-
-.rs-detail-main { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.rs-detail-loading {
+.rs-get-meta > span + span::before,
+.rs-version-meta > span + span::before {
+  content: "•";
+  margin: 0 7px;
+  color: rgba(255, 255, 255, 0.22);
+}
+.rs-file-source { color: #66c0f4; }
+.rs-get-wait {
   display: flex; align-items: center; gap: 10px;
-  font-size: 12px; color: #8b949d; padding: 4px 0;
-}
-.rs-summary {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: #a9b2ba;
-  display: -webkit-box;
-  -webkit-line-clamp: 5;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  padding: 0 4px;
+  font-size: 13px; color: #8b949d;
 }
 
-.rs-file-head {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  font-size: 10px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase;
-  color: #79838c;
+/* ---- sections below the main action */
+.rs-detail-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 26px 28px 0;
+  min-width: 0;
 }
-.rs-file-count { font-weight: 500; letter-spacing: 0.4px; color: #6f7a83; }
-.rs-file-group { display: flex; flex-direction: column; gap: 8px; }
-.rs-file {
+.rs-section-head {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase;
+  color: #8b949d;
+}
+.rs-section-count {
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 600; letter-spacing: 0; color: #a9b2ba;
+}
+
+.rs-versions {
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+.rs-version {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
-  border-radius: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(255, 255, 255, 0.035);
   min-width: 0;
+  padding: 8px 8px 8px 14px;
+  background: rgba(255, 255, 255, 0.025);
 }
-.rs-file:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(102, 192, 244, 0.35); }
-.rs-file-main { flex: 1 1 0; min-width: 0; }
-.rs-file-name {
-  font-size: 12.5px; font-weight: 600; color: #e6e8ea;
+.rs-version + .rs-version { border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.rs-version:hover { background: rgba(255, 255, 255, 0.05); }
+.rs-version-main { flex: 1 1 0; min-width: 0; }
+.rs-version-name {
+  font-size: 12.5px; font-weight: 600; color: #d6d9dc;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.rs-file-meta {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
-  margin-top: 3px; font-size: 11px; color: #8b949d;
-}
-.rs-file-source { color: #66c0f4; }
-.rs-sep { color: rgba(255, 255, 255, 0.22); }
-.rs-file-btn {
+.rs-version-meta { margin-top: 1px; font-size: 11px; }
+.rs-version-btn {
   flex: 0 0 auto !important;
   display: inline-flex !important;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px !important;
-  font-size: 12px !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: 30px !important;
+  padding: 0 12px !important;
   border-radius: 7px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+.rs-version-error { font-size: 11.5px; color: #ff8f6b; }
+
+.rs-detail-section .rs-gallery { margin: 0; padding: 0; gap: 10px; }
+.rs-detail-section .rs-shot { flex: 0 0 204px; width: 204px; height: 115px; border-radius: 8px; }
+.rs-detail-section .rs-summary {
+  margin: 0;
+  max-width: 78ch;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #a9b2ba;
+  display: block;
+  overflow: visible;
 }
 
-.rs-detail-foot {
-  flex: 0 0 auto;
+/* Where the file goes: one quiet line at the end. */
+.rs-dest {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 9px 22px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.22);
-  font-size: 11px;
-  color: #79838c;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px 6px 6px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.025);
 }
-.rs-detail-foot b { color: #c9ced3; font-weight: 600; }
-.rs-detail-foot-dest {
+.rs-dest-icon { flex: 0 0 auto; color: #79838c; font-size: 12px; }
+.rs-dest-label { flex: 0 0 auto; font-size: 12px; font-weight: 600; color: #c9ced3; }
+.rs-dest-select { flex: 0 0 220px; min-width: 0; }
+.rs-dest-select > * { width: 100%; max-width: 100%; margin: 0 !important; }
+/* Only the preview renders a native select; Steam draws its own button. */
+.rs-dest-select select {
+  height: 28px; padding: 0 8px; border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #0f1216; color: #e6e8ea; font-size: 12px;
+}
+.rs-dest-path {
+  flex: 1 1 auto;
+  min-width: 0;
   font-family: monospace;
   font-size: 10.5px;
-  color: #8b949d;
-  max-width: 55%;
+  color: #79838c;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+/* Narrow windows: a slimmer poster column, smaller title, no path. */
+@media (max-width: 900px) {
+  .rs-panel.detail { grid-template-columns: 190px minmax(0, 1fr); }
+  .rs-detail-title { font-size: 24px; }
+  .rs-get { flex-wrap: wrap; }
+  .rs-dest-path { display: none; }
 }
 
 .rs-btn {
@@ -590,8 +749,10 @@ export const CSS = `
   border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.35); color: #fff; font-size: 13px;
 }
 .rs-form-row input:focus { outline: none; border-color: #66c0f4; }
+/* Steam's TextField and Dropdown take the rest of the row; a switch does not. */
+.rs-form-row > div:not(.rs-switch):not(.rs-hint) { flex: 1 1 auto; min-width: 0; }
 .rs-form-row .rs-hint { flex: 1 1 100%; font-size: 11px; color: #79838c; margin-top: -6px; }
-.rs-switch { position: relative; width: 40px; height: 22px; border-radius: 11px; background: rgba(255,255,255,0.15); cursor: pointer; transition: background 150ms; }
+.rs-switch { position: relative; flex: 0 0 auto; width: 40px; height: 22px; border-radius: 11px; background: rgba(255,255,255,0.15); cursor: pointer; transition: background 150ms; }
 .rs-switch.on { background: #66c0f4; }
 .rs-switch > span { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left 150ms; }
 .rs-switch.on > span { left: 21px; }
@@ -673,6 +834,9 @@ export const CSS = `
   border-radius: 50%; border: 1px solid rgba(255,255,255,0.25);
   background: rgba(0,0,0,0.5); color: #fff; font-size: 16px; cursor: pointer;
 }
+.rs-lightbox:focus { outline: none; }
+.rs-lightbox-bar { display: flex; align-items: center; gap: 14px; }
+.rs-lightbox-count { font-size: 12px; font-weight: 700; color: #e6e8ea; }
 .rs-lightbox-hint { font-size: 11px; color: #8f98a0; display: flex; align-items: center; gap: 6px; }
 .rs-lightbox-link { color: #66c0f4; font-size: 12px; }
 

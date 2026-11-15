@@ -40,6 +40,8 @@ const grid = await page.evaluate(() => {
   const row = document.querySelector(".rs-grid");
   if (!row) return null;
   const cards = [...row.children];
+  // Covers in a row differ in height (each takes its art's shape) but share
+  // a top edge, so count the row by its tops.
   const top = cards[0]?.getBoundingClientRect().top;
   return {
     perRow: cards.filter((c) => Math.round(c.getBoundingClientRect().top) === Math.round(top)).length,

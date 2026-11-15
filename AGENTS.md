@@ -126,6 +126,10 @@ cd tools/preview
 npm install                       # once (esbuild, playwright, react 18)
 npx playwright install chromium   # once per machine
 
+npm run dev        # http://localhost:5174, rebuilds + reloads on save; drawn in a
+                   # 1280x800 Deck frame with Steam's bars (append ?full to fill).
+                   # Gamepad emulation: arrows = d-pad, Enter = A, Esc = B, X, Y,
+                   # Q/E = L1/R1, or a real controller; the bar shows the hints
 npm run build      # bundle preview.tsx -> preview.js
 npm run shots      # store.png, detail.png, settings.png, downloads.png
 npm run soak       # 70 rounds of search/page/open/close, samples frames+heap
@@ -143,10 +147,10 @@ Expected results on a healthy build:
 | check | expected |
 |---|---|
 | `npm run shots` | 8 cards per row at 1280 wide, 12 total, **0 console errors** |
-| `npm run soak` | nodes flat at **429**, heap flat ≈ 6.8 MB, 95th-percentile frame ≈ **18 ms** |
+| `npm run soak` | nodes flat at **275**, heap flat ≈ 6.8 MB, 95th-percentile frame ≈ **18 ms** |
 | `npm run back` | modal opens, history grows by one, back closes it, `historyLength` stops growing |
-| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 205 nodes |
-| `npm run aspects` | each test image keeps its white border on all four sides |
+| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 137 nodes |
+| `npm run aspects` | each frame takes its test image's shape; white border visible on all four sides |
 
 The harness is Chromium on macOS, not Steam's CEF on a Deck. Use it for layout
 and regression signal, not for absolute frame rates. Image rasterisation
@@ -289,8 +293,10 @@ minutes.
 `CoverImage` measures the decoded image against its frame and switches
 `object-fit` from cover to contain when the aspect differs by more than 4%;
 contained art gets a dimmed, blown-up copy of itself behind it. **Artwork is
-never cropped.** Grid frames are 5:7 (the shape IGDB publishes); the detail
-poster uses `systemAspect()` from `common.ts`.
+never cropped.** Grid covers and the detail
+poster take the art's own shape once it has loaded (`onRatio`, remembered per
+url in `artRatios`, clamped by `clampArtRatio()`); before that they hold the
+console's box shape from `systemAspect()`. Covers are top-aligned in their grid row.
 
 ### Downloads
 
@@ -306,7 +312,25 @@ extracts archives, and keeps only the 40 most recent jobs in memory. The UI poll
 which is both the escape hatch for a stale view and a diagnostic. The grid
 renders **one page of 30 cards**, keyed by slot so paging reuses the same card
 components and Steam focus nodes. `useBackGuard` pushes a history entry so the
-Steam back button closes overlays instead of leaving the plugin.
+Steam back button closes overlays instead of leaving the plugin; guards stack,
+so B closes only the top overlay (a screenshot over the game panel).
+
+### Gamepad
+
+Navigation is Steam's focus tree (see `src/components/gamepad.ts`). Every
+`Focusable` that groups several controls sets `flow-children` (`row`, `column`,
+`grid`); without it every direction steps through the children in order, which
+is the "left moves up" bug. Overlays trap focus by disabling child focus on
+`.rs-body` behind them, and focus goes back to the control (or cover) that
+opened them. Hints come from `on…ActionDescription` / `actionDescriptionMap`.
+
+| where | buttons |
+|---|---|
+| store | d-pad header row ↔ grid ↔ pager · A details · X search · Y downloads · L1/R1 page |
+| game panel | starts on Download · A/X download · L1/R1 previous/next game · B close |
+| screenshot viewer | ◀ ▶ / A next · B back to the panel |
+| downloads | X clear finished · B close |
+| settings | A flips switches · X save · B cancel |
 
 ## 10. Hard-won constraints — do not regress these
 
@@ -320,7 +344,10 @@ Steam back button closes overlays instead of leaving the plugin.
 - **One cache file per query**, never one growing document (see §9).
 - **Only `TextField`, `Dropdown`, `Button`, `Focusable` from `@decky/ui`.**
   Anything else does not open the on-screen keyboard or does not take gamepad
-  focus.
+  focus. A plain `<button>`, `<input>` or clickable `<div>` cannot be reached
+  with the d-pad at all.
+- **Every focus group needs `flow-children`**, and every overlay keeps focus
+  inside itself (see §9 Gamepad). Check new UI with the d-pad in `npm run dev`.
 - **Poll downloads only while something is happening.**
 - **Keep the frontend free of `setInterval` work that runs while idle.**
 - **`plugin.json.name`, the zip asset name and the folder name are coupled.**

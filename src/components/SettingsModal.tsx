@@ -1,6 +1,7 @@
-import { FC, useEffect, useState } from "react";
-import { Dropdown, TextField } from "@decky/ui";
+import { FC, useEffect, useRef, useState } from "react";
+import { Button, Dropdown, Focusable, TextField } from "@decky/ui";
 import { useBackGuard } from "./useBackGuard";
+import { focusElement } from "./gamepad";
 import { CacheStats, clearCache, getCacheStats, getImageDiagnostics, ImageDiagnostics } from "../types";
 import { toaster } from "@decky/api";
 import { getLibrary, getSettings, LibraryInfo, Settings, updateSettings } from "../types";
@@ -24,11 +25,20 @@ const SOURCE_HINTS: Record<string, string> = {
   myabandonware: "TypeSense backed search for older PC and console titles.",
 };
 
+/** A switch the d-pad can reach: A flips it. */
 function Toggle({ on, onChange }: { on: boolean; onChange: (value: boolean) => void }) {
   return (
-    <div className={`rs-switch${on ? " on" : ""}`} onClick={() => onChange(!on)} role="switch" aria-checked={on}>
+    <Focusable
+      className={`rs-switch${on ? " on" : ""}`}
+      focusClassName="is-focus"
+      role="switch"
+      aria-checked={on}
+      onActivate={() => onChange(!on)}
+      onClick={() => onChange(!on)}
+      onOKActionDescription={on ? "Turn off" : "Turn on"}
+    >
       <span />
-    </div>
+    </Focusable>
   );
 }
 
@@ -40,6 +50,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
   const [cache, setCache] = useState<CacheStats | null>(null);
   const [perf, setPerf] = useState<PerfSample | null>(null);
   const [perfBusy, setPerfBusy] = useState(false);
+  const panelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     getCacheStats()
@@ -56,6 +67,16 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
     });
     getLibrary().then(setLibrary).catch(() => undefined);
   }, []);
+
+  // Start on the first setting rather than on Cancel.
+  const ready = settings !== null;
+  useEffect(() => {
+    if (!ready) return;
+    window.requestAnimationFrame(() => {
+      const body = panelRef.current?.querySelector(".rs-panel-body");
+      focusElement(body?.querySelector("input, .rs-switch, button, [tabindex]"));
+    });
+  }, [ready]);
 
   if (!settings) {
     return (
@@ -95,12 +116,24 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
 
   return (
     <div className="rs-overlay" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="rs-panel settings" role="dialog" aria-modal="true" aria-label="Settings">
+      {/* Gamepad: one column from Cancel at the top to Save at the bottom.
+          B cancels (useBackGuard), X saves from anywhere. */}
+      <Focusable
+        ref={panelRef}
+        className="rs-panel settings"
+        flow-children="column"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Settings"
+        onCancelActionDescription="Cancel"
+        onSecondaryButton={save}
+        onSecondaryActionDescription="Save"
+      >
         <div className="rs-panel-head">
           <h3>Settings</h3>
-          <button className="rs-btn ghost" onClick={onClose}>
+          <Button className="rs-btn ghost" onClick={onClose}>
             Cancel
-          </button>
+          </Button>
         </div>
         <div className="rs-panel-body">
           <div className="rs-section-title">ROM library</div>
@@ -147,8 +180,8 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               {(id === "romspedia" || id === "retrostic" || id === "romsdl" || id === "switchroms") && (
                 <div className="rs-form-row">
                   <label>Base URL</label>
-                  <input
-                    type="text"
+                  <TextField
+                    label=""
                     value={(settings as unknown as Record<string, string>)[`${id}_base_url`] ?? ""}
                     onChange={(event) =>
                       update({ [`${id}_base_url`]: event.target.value } as unknown as Partial<Settings>)
@@ -160,8 +193,8 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
                 <>
                   <div className="rs-form-row">
                     <label>Base URL</label>
-                    <input
-                      type="text"
+                    <TextField
+                      label=""
                       value={settings.dumbroms_base_url}
                       onChange={(event) => update({ dumbroms_base_url: event.target.value })}
                     />
@@ -250,16 +283,16 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           </div>
           <div className="rs-form-row">
             <label>Results per source</label>
-            <input
-              type="text"
+            <TextField
+              label=""
               value={String(settings.results_per_source)}
               onChange={(event) => update({ results_per_source: Number(event.target.value) || 20 })}
             />
           </div>
           <div className="rs-form-row">
             <label>Parallel downloads</label>
-            <input
-              type="text"
+            <TextField
+              label=""
               value={String(settings.max_concurrent)}
               onChange={(event) => update({ max_concurrent: Number(event.target.value) || 1 })}
             />
@@ -276,7 +309,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           </div>
           <div className="rs-form-row">
             <label>Cached searches</label>
-            <button
+            <Button
               className="rs-btn ghost"
               onClick={() =>
                 clearCache()
@@ -286,7 +319,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               }
             >
               Clear cache ({cache?.entries ?? 0})
-            </button>
+            </Button>
           </div>
           <div className="rs-form-row">
             <div className="rs-hint">
@@ -298,7 +331,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
           <div className="rs-section-title">Performance</div>
           <div className="rs-form-row">
             <label>Measure the client</label>
-            <button
+            <Button
               className="rs-btn ghost"
               disabled={perfBusy}
               onClick={() => {
@@ -310,7 +343,7 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
               }}
             >
               {perfBusy ? "Measuring…" : "Run a sample"}
-            </button>
+            </Button>
           </div>
           {perf ? (
             <pre className="rs-diagnostics">
@@ -324,9 +357,9 @@ search cache  : ${cache ? `${cache.entries} entries, ${Math.round(cache.bytes / 
           ) : null}
           <div className="rs-form-row">
             <label>Store view</label>
-            <button className="rs-btn ghost" onClick={reloadStore}>
+            <Button className="rs-btn ghost" onClick={reloadStore}>
               Reload the view
-            </button>
+            </Button>
           </div>
           <div className="rs-hint">
             Reloading rebuilds the store UI from scratch. If a session has become sluggish, this
@@ -336,7 +369,7 @@ search cache  : ${cache ? `${cache.entries} entries, ${Math.round(cache.bytes / 
           <div className="rs-section-title">Diagnostics</div>
           <div className="rs-form-row">
             <label>Artwork proxy</label>
-            <button
+            <Button
               className="rs-btn ghost"
               onClick={() =>
                 getImageDiagnostics(null)
@@ -345,7 +378,7 @@ search cache  : ${cache ? `${cache.entries} entries, ${Math.round(cache.bytes / 
               }
             >
               Test image pipeline
-            </button>
+            </Button>
           </div>
           {diagnostics ? (
             <pre className="rs-diagnostics">
@@ -358,16 +391,16 @@ error         : ${diagnostics.error ?? "none"}`}
             </pre>
           ) : null}
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
-            <button className="rs-btn ghost" onClick={onClose}>
+          <Focusable className="rs-panel-actions end" flow-children="row">
+            <Button className="rs-btn ghost" onClick={onClose}>
               Cancel
-            </button>
-            <button className="rs-btn" onClick={save}>
+            </Button>
+            <Button className="rs-btn rs-save-btn" onClick={save} onOKActionDescription="Save">
               Save
-            </button>
-          </div>
+            </Button>
+          </Focusable>
         </div>
-      </div>
+      </Focusable>
     </div>
   );
 };

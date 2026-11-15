@@ -9,7 +9,8 @@
     "soak": "node build.mjs && node soak.mjs",
     "aspects": "node build.mjs && node aspects.mjs",
     "back": "node build.mjs && node backtest.mjs",
-    "perf": "node build.mjs && node perf.mjs"
+    "perf": "node build.mjs && node perf.mjs",
+    "dev": "node dev.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

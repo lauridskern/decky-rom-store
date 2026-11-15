@@ -189,3 +189,16 @@ export const SYSTEM_ASPECTS: Record<string, string> = {
 export function systemAspect(system: string): string {
   return SYSTEM_ASPECTS[system] ?? "5 / 7";
 }
+
+/**
+ * Frames that take the art's own shape (grid covers, the detail poster) are
+ * kept inside this range, so a banner or a sliver cannot make one absurdly
+ * tall or flat. Real box art is well inside it and keeps its exact shape;
+ * anything outside is fitted with its own colours behind it.
+ */
+export function clampArtRatio(ratio: number): number {
+  return Math.min(2, Math.max(0.5, ratio));
+}
+
+/** width / height of each cover once it has loaded, shared by every frame. */
+export const artRatios = new Map<string, number>();

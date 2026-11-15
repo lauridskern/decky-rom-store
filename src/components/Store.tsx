@@ -1,6 +1,6 @@
 import { FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
-import { Button, Dropdown, TextField } from "@decky/ui";
+import { Button, Dropdown, Focusable, GamepadEvent, TextField } from "@decky/ui";
 import { FaCog, FaDownload } from "react-icons/fa";
 import {
   browseRoms,
@@ -16,6 +16,7 @@ import {
   SourceInfo,
 } from "../types";
 import { SOURCE_LABELS, systemLabel } from "./common";
+import { childFocus, focusElement, PAD } from "./gamepad";
 import StoreStyles from "./StoreStyles";
 import { useChromeInsets } from "./useChromeInsets";
 import { searchState } from "../state";
@@ -53,7 +54,9 @@ const Store: FC = () => {
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [selected, setSelected] = useState<MergedRom | null>(null);
+  // The open game, as an index into the results, so L1/R1 in the game panel
+  // can step through them and closing it can return focus to its cover.
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [showDownloads, setShowDownloads] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [page, setPage] = useState(0);
@@ -71,6 +74,8 @@ const Store: FC = () => {
     settings?.chrome_bottom_offset ?? 0,
   );
   const mainRef = useRef<HTMLDivElement | null>(null);
+  // What had focus before an overlay opened; it gets focus back on close.
+  const returnFocus = useRef<Element | null>(null);
 
   const refreshDownloads = useCallback(() => {
     getDownloads()
@@ -190,6 +195,69 @@ const Store: FC = () => {
     if (mainRef.current) mainRef.current.scrollTop = 0;
   }, []);
 
+  const cardAt = (slot: number) =>
+    mainRef.current?.querySelectorAll(".rs-grid .rs-card")[Math.max(0, slot)] ?? null;
+
+  /** L1/R1 on the store: turn the page and keep focus on the same slot. */
+  const turnPage = (delta: number) => {
+    const next = Math.min(pageCount - 1, Math.max(0, page + delta));
+    if (next === page) return;
+    const cards = Array.from(mainRef.current?.querySelectorAll(".rs-grid .rs-card") ?? []);
+    const slot = cards.indexOf(document.activeElement as Element);
+    goPage(next);
+    if (slot >= 0) {
+      const count = Math.min(PAGE_SIZE, results.length - next * PAGE_SIZE);
+      window.requestAnimationFrame(() => focusElement(cardAt(Math.min(slot, count - 1))));
+    }
+  };
+
+  const remember = () => {
+    returnFocus.current = document.activeElement;
+  };
+
+  const openGame = useCallback(
+    (rom: MergedRom) => {
+      returnFocus.current = document.activeElement;
+      setSelectedIndex(results.indexOf(rom));
+    },
+    [results],
+  );
+
+  /** L1/R1 in the game panel; the grid behind it follows across pages. */
+  const stepGame = (delta: number) => {
+    if (selectedIndex === null) return;
+    const next = selectedIndex + delta;
+    if (next < 0 || next >= results.length) return;
+    setSelectedIndex(next);
+    const nextPage = Math.floor(next / PAGE_SIZE);
+    if (nextPage !== page) goPage(nextPage);
+  };
+
+  const closeGame = () => {
+    if (selectedIndex !== null) {
+      // Return to the cover of the game that was open last, which is not the
+      // one that opened the panel if L1/R1 moved on.
+      const slot = selectedIndex % PAGE_SIZE;
+      window.requestAnimationFrame(() => focusElement(cardAt(slot)));
+    }
+    returnFocus.current = null;
+    setSelectedIndex(null);
+  };
+
+  const closeOverlay = (close: () => void) => {
+    const target = returnFocus.current;
+    returnFocus.current = null;
+    close();
+    window.requestAnimationFrame(() => focusElement(target));
+  };
+
+  const focusSearch = () => focusElement(storeRef.current?.querySelector(".rs-search-wrap input"));
+
+  const onStoreButton = (event: GamepadEvent) => {
+    if (event.detail.button === PAD.BUMPER_LEFT) turnPage(-1);
+    else if (event.detail.button === PAD.BUMPER_RIGHT) turnPage(1);
+  };
+
   useEffect(() => {
     showDownloadsRef.current = showDownloads;
   }, [showDownloads]);
@@ -215,10 +283,31 @@ const Store: FC = () => {
     return Array.from(keys).sort((a, b) => (systemCounts[b] ?? 0) - (systemCounts[a] ?? 0));
   }, [systems, systemCounts]);
 
+  const selected = selectedIndex !== null ? (results[selectedIndex] ?? null) : null;
+  const overlayOpen = selected !== null || showDownloads || showSettings;
+
   return (
     <div className="rs-store" ref={storeRef}>
       <StoreStyles />
-      <div className="rs-header">
+      {/* Everything behind the overlays. While one is open the d-pad cannot
+          wander back here. X, Y and the bumpers work from anywhere inside. */}
+      <Focusable
+        className="rs-body"
+        flow-children="column"
+        {...childFocus(!overlayOpen)}
+        onSecondaryButton={focusSearch}
+        onSecondaryActionDescription="Search"
+        onOptionsButton={() => {
+          remember();
+          setShowDownloads(true);
+        }}
+        onOptionsActionDescription="Downloads"
+        onButtonDown={onStoreButton}
+        actionDescriptionMap={
+          pageCount > 1 ? { [PAD.BUMPER_LEFT]: "Previous page", [PAD.BUMPER_RIGHT]: "Next page" } : undefined
+        }
+      >
+      <Focusable className="rs-header" flow-children="row">
         <div className="rs-search-wrap">
           <TextField
             label=""
@@ -264,16 +353,27 @@ const Store: FC = () => {
         <div className="rs-icon-btn-wrap">
           <Button
             className={`rs-steam-btn${showDownloads ? " active" : ""}`}
-            onClick={() => setShowDownloads(true)}
+            onClick={() => {
+              remember();
+              setShowDownloads(true);
+            }}
+            onOKActionDescription="Downloads"
           >
             <FaDownload />
           </Button>
           {activeDownloads > 0 && <span className="rs-badge-count">{activeDownloads}</span>}
         </div>
-        <Button className="rs-steam-btn" onClick={() => setShowSettings(true)}>
+        <Button
+          className="rs-steam-btn"
+          onClick={() => {
+            remember();
+            setShowSettings(true);
+          }}
+          onOKActionDescription="Settings"
+        >
           <FaCog />
         </Button>
-      </div>
+      </Focusable>
 
       <div
         ref={mainRef}
@@ -309,12 +409,12 @@ const Store: FC = () => {
 
         {results.length > 0 ? (
           <>
-            <RomGrid items={visible} onOpen={setSelected} />
+            <RomGrid items={visible} onOpen={openGame} />
 
             <div className="rs-bottom-space" />
 
             {pageCount > 1 ? (
-              <div className="rs-pager">
+              <Focusable className="rs-pager" flow-children="row">
                 <Button className="rs-steam-btn" disabled={page <= 0} onClick={() => goPage(page - 1)}>
                   ‹ Prev
                 </Button>
@@ -328,16 +428,13 @@ const Store: FC = () => {
                 >
                   Next ›
                 </Button>
-              </div>
+              </Focusable>
             ) : null}
           </>
         ) : null}
       </div>
 
       <div className="rs-footer">
-        <span className="rs-foot-hint">
-          <b>D-pad</b> browse · <b>A</b> open · <b>B</b> back
-        </span>
         <span className="rs-count">
           {cached ? "cached · " : ""}
           {results.length} titles
@@ -346,15 +443,19 @@ const Store: FC = () => {
             .join("")}
         </span>
         {Object.keys(errors).length > 0 && (
-          <button
+          <Focusable
             className="rs-issues rs-issues-icon"
+            focusClassName="is-focus"
             title={`${Object.keys(errors).length} source(s) unavailable`}
+            onActivate={() => setShowIssues((value) => !value)}
             onClick={() => setShowIssues((value) => !value)}
+            onOKActionDescription={showIssues ? "Hide problems" : "Show problems"}
           >
             ⚠
-          </button>
+          </Focusable>
         )}
       </div>
+      </Focusable>
 
       {showIssues && Object.keys(errors).length > 0 && (
         <div className="rs-issue-list">
@@ -371,22 +472,34 @@ const Store: FC = () => {
         <RomDetail
           rom={selected}
           library={library}
-          onClose={() => setSelected(null)}
+          onClose={closeGame}
+          onPrev={selectedIndex! > 0 ? () => stepGame(-1) : undefined}
+          onNext={selectedIndex! < results.length - 1 ? () => stepGame(1) : undefined}
           onStarted={() => {
             refreshDownloads();
-            setShowDownloads(true);
-            setSelected(null);
+            // The drawer opens over the grid; closing it lands on this game's cover.
+            const slot = selectedIndex! % PAGE_SIZE;
+            setSelectedIndex(null);
+            returnFocus.current = null;
+            window.requestAnimationFrame(() => {
+              returnFocus.current = cardAt(slot);
+              setShowDownloads(true);
+            });
           }}
         />
       )}
 
       {showDownloads && (
-        <DownloadsDrawer jobs={jobs} onClose={() => setShowDownloads(false)} onRefresh={refreshDownloads} />
+        <DownloadsDrawer
+          jobs={jobs}
+          onClose={() => closeOverlay(() => setShowDownloads(false))}
+          onRefresh={refreshDownloads}
+        />
       )}
 
       {showSettings && (
         <SettingsModal
-          onClose={() => setShowSettings(false)}
+          onClose={() => closeOverlay(() => setShowSettings(false))}
           onSaved={(value) => {
             setSettings(value);
             refreshLibrary();

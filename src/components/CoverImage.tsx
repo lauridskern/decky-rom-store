@@ -12,6 +12,13 @@ interface Props {
   alt?: string;
   className?: string;
   eager?: boolean;
+  /**
+   * Called with the art's width / height once it has decoded. A caller that
+   * sizes the frame to that shape (the detail poster) gets a frame the art
+   * fills exactly, so the image is never letterboxed or cropped. Return false
+   * when the frame will not take that shape, and the art is fitted as usual.
+   */
+  onRatio?: (ratio: number) => boolean;
 }
 
 /**
@@ -23,7 +30,7 @@ interface Props {
  * fitted inside and the frame is filled with its own colours instead of
  * cutting the picture off at the edges.
  */
-const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className }) => {
+const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRatio }) => {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [fit, setFit] = useState<"cover" | "contain">("cover");
@@ -65,6 +72,11 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className }) => {
     const image = event.currentTarget;
     const box = frame.current;
     if (!box || !image.naturalWidth || !image.naturalHeight) return;
+    if (onRatio?.(image.naturalWidth / image.naturalHeight)) {
+      // The frame is about to take the art's own shape, so the art fills it.
+      setFit("cover");
+      return;
+    }
     const boxRatio = box.clientWidth / Math.max(box.clientHeight, 1);
     if (!boxRatio) return;
     const artRatio = image.naturalWidth / image.naturalHeight;

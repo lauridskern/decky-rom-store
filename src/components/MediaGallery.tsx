@@ -1,7 +1,10 @@
-import { FC, useEffect, useState } from "react";
-import { FaExpand, FaPlay } from "react-icons/fa";
+import { FC, useEffect, useRef, useState } from "react";
+import { Focusable, GamepadEvent } from "@decky/ui";
+import { FaPlay } from "react-icons/fa";
 import { getCover } from "../types";
 import ProxiedImage from "./ProxiedImage";
+import { focusElement, PAD, stopNav } from "./gamepad";
+import { useBackGuard } from "./useBackGuard";
 
 export interface MediaShot {
   kind: "image" | "video";
@@ -25,88 +28,151 @@ interface Props {
 }
 
 /**
- * A shelf of artwork above the download list: the game's own art, its trailer
- * and a few screenshots. The thumbnails are small (the Steam capsules are
- * around 100 kB), the full size media is only fetched when it is opened.
+ * A shelf of artwork in the game panel: the trailer and a few screenshots. The
+ * thumbnails are small (the Steam capsules are around 100 kB), the full size
+ * media is only fetched when it is opened.
+ *
+ * Gamepad: the strip is a row (left/right), A opens an item full screen. In
+ * there left/right step through the items, A goes to the next one and B closes
+ * it without closing the game panel behind it.
  */
 const MediaGallery: FC<Props> = ({ media }) => {
-  const [lightbox, setLightbox] = useState<MediaShot | null>(null);
+  const [index, setIndex] = useState<number | null>(null);
   const [full, setFull] = useState<string | null>(null);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const opener = useRef<Element | null>(null);
 
-  const open = async (shot: MediaShot) => {
-    setLightbox(shot);
-    setFull(null);
-    if (shot.kind === "image") {
-      try {
-        const proxied = await getCover(shot.full, "detail");
-        if (proxied) setFull(proxied);
-      } catch {
-        /* fall back to the remote url */
-      }
-    }
+  const shots = media?.shots ?? [];
+  const trailer = media?.trailer ?? null;
+  // The capsule is the game's portrait cover, which is already on screen in
+  // the detail panel; cropped into a 16:9 thumbnail it only looks wrong.
+  const items: MediaShot[] = [...(trailer ? [trailer] : []), ...shots.slice(0, 5)];
+  const current = index !== null ? items[index] : null;
+
+  const close = () => {
+    setIndex(null);
+    const back = opener.current;
+    opener.current = null;
+    window.requestAnimationFrame(() => focusElement(back));
   };
 
+  // The back button closes the viewer, not the game panel behind it.
+  useBackGuard(index !== null, close);
+
+  const open = (at: number) => {
+    opener.current = document.activeElement;
+    setIndex(at);
+  };
+
+  const step = (delta: number) => {
+    if (index === null || items.length < 2) return;
+    setIndex((index + delta + items.length) % items.length);
+  };
+
+  // Resolve the full size image through the image cache.
   useEffect(() => {
-    if (!lightbox) return;
+    setFull(null);
+    if (!current || current.kind !== "image") return;
+    let cancelled = false;
+    getCover(current.full, "detail")
+      .then((proxied) => {
+        if (!cancelled && proxied) setFull(proxied);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [current?.full]);
+
+  // The viewer takes focus so the d-pad drives it, not the panel behind.
+  useEffect(() => {
+    if (index !== null) window.requestAnimationFrame(() => focusElement(boxRef.current));
+  }, [index !== null]);
+
+  // Keyboard and mouse: Escape closes, arrows step (Steam sends the d-pad as
+  // gamepad events, handled on the viewer itself).
+  useEffect(() => {
+    if (index === null) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setLightbox(null);
+      if (event.key === "Escape") close();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightbox]);
+  }, [index]);
 
-  if (!media) return null;
-  const shots = media.shots ?? [];
-  const trailer = media.trailer ?? null;
-  // The capsule is the game's portrait cover, which is already on screen in
-  // the detail panel; cropped into a 16:9 thumbnail it only looks wrong.
-  if (!shots.length && !trailer) return null;
+  if (!items.length) return null;
+
+  const onDirection = (event: GamepadEvent) => {
+    if (event.detail.button === PAD.DIR_LEFT) step(-1);
+    else if (event.detail.button === PAD.DIR_RIGHT) step(1);
+    // Up and down are swallowed too: focus stays in the viewer until B.
+    stopNav(event);
+  };
 
   return (
     <>
-      <div className="rs-gallery">
-        {trailer ? (
-          <button className="rs-shot rs-shot-video" onClick={() => open(trailer)}>
-            <ProxiedImage url={trailer.thumb} alt={trailer.name || "Trailer"} eager />
-            <span className="rs-play">
-              <FaPlay />
-            </span>
-          </button>
-        ) : null}
-
-        {shots.slice(0, 5).map((shot, index) => (
-          <button className="rs-shot" key={`${shot.thumb}-${index}`} onClick={() => open(shot)}>
-            <ProxiedImage url={shot.thumb} alt={`Screenshot ${index + 1}`} eager />
-          </button>
+      <Focusable className="rs-gallery" flow-children="row">
+        {items.map((item, at) => (
+          <Focusable
+            key={`${item.thumb}-${at}`}
+            className={`rs-shot${item.kind === "video" ? " rs-shot-video" : ""}`}
+            focusClassName="is-focus"
+            onActivate={() => open(at)}
+            onClick={() => open(at)}
+            onOKActionDescription={item.kind === "video" ? "Play trailer" : "View"}
+          >
+            <ProxiedImage url={item.thumb} alt={item.name || (item.kind === "video" ? "Trailer" : `Screenshot ${at + 1}`)} eager />
+            {item.kind === "video" ? (
+              <span className="rs-play">
+                <FaPlay />
+              </span>
+            ) : null}
+          </Focusable>
         ))}
-      </div>
+      </Focusable>
 
-      {lightbox ? (
-        <div className="rs-lightbox" onClick={() => setLightbox(null)}>
-          <button className="rs-lightbox-close" onClick={() => setLightbox(null)}>
+      {current ? (
+        <Focusable
+          ref={boxRef}
+          className="rs-lightbox"
+          noFocusRing
+          onActivate={() => step(1)}
+          onOKActionDescription={items.length > 1 ? "Next" : undefined}
+          onCancelActionDescription="Close"
+          onGamepadDirection={onDirection}
+          onClick={(event) => event.target === event.currentTarget && close()}
+        >
+          <button className="rs-lightbox-close" onClick={close} tabIndex={-1} aria-label="Close">
             ✕
           </button>
-          {lightbox.kind === "video" ? (
-            <div className="rs-lightbox-video" onClick={(event) => event.stopPropagation()}>
+          {current.kind === "video" ? (
+            <div className="rs-lightbox-video">
               <iframe
-                src={lightbox.full}
-                title={lightbox.name || "Trailer"}
+                src={current.full}
+                title={current.name || "Trailer"}
                 allow="autoplay; encrypted-media; picture-in-picture"
                 allowFullScreen
               />
-              {lightbox.watch ? (
-                <a className="rs-lightbox-link" href={lightbox.watch} target="_blank" rel="noreferrer">
+              {current.watch ? (
+                <a className="rs-lightbox-link" href={current.watch} target="_blank" rel="noreferrer">
                   Watch on YouTube
                 </a>
               ) : null}
             </div>
           ) : (
-            <img className="rs-lightbox-image" src={full || lightbox.full} alt="Media" onClick={(event) => event.stopPropagation()} />
+            <img className="rs-lightbox-image" src={full || current.full} alt="Media" />
           )}
-          <span className="rs-lightbox-hint">
-            <FaExpand /> Click anywhere to close
-          </span>
-        </div>
+          <div className="rs-lightbox-bar">
+            {items.length > 1 ? (
+              <span className="rs-lightbox-count">
+                {index! + 1} / {items.length}
+              </span>
+            ) : null}
+            <span className="rs-lightbox-hint">
+              {items.length > 1 ? "◀ ▶ browse · " : ""}B close
+            </span>
+          </div>
+        </Focusable>
       ) : null}
     </>
   );

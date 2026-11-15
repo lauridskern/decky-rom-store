@@ -1,4 +1,4 @@
-import { CSSProperties, FC, useEffect, useMemo, useState } from "react";
+import { CSSProperties, FC, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
 import {
   getCover,
@@ -9,12 +9,13 @@ import {
   RomEntry,
   RomFile,
 } from "../types";
-import { Button, Dropdown } from "@decky/ui";
-import { FaDownload } from "react-icons/fa";
-import { formatBytes, formatCount, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
+import { Button, Dropdown, Focusable, GamepadEvent } from "@decky/ui";
+import { FaDownload, FaFolder, FaStar } from "react-icons/fa";
+import { artRatios, clampArtRatio, formatBytes, formatCount, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import MediaGallery from "./MediaGallery";
 import { useBackGuard } from "./useBackGuard";
+import { focusElement, PAD } from "./gamepad";
 
 /**
  * The washed-out artwork behind the title. It is a screenshot when the game
@@ -43,34 +44,59 @@ const HeroBackdrop: FC<{ url: string | null }> = ({ url }) => {
   }, [url]);
   if (!src) return null;
   return (
-    <div
-      className="rs-detail-hero-art"
-      style={{ backgroundImage: `url("${src}")` } as CSSProperties}
-    />
+    <div className="rs-detail-backdrop" aria-hidden="true">
+      <div className="rs-detail-backdrop-art" style={{ backgroundImage: `url("${src}")` } as CSSProperties} />
+    </div>
   );
 };
+
+/** One labelled figure in the row under the title. */
+const Stat: FC<{ label: string; value: ReactNode; tone?: "rating" }> = ({ label, value, tone }) => (
+  <div className="rs-kv">
+    <span className="rs-kv-label">{label}</span>
+    <span className={`rs-kv-value${tone ? ` ${tone}` : ""}`}>{value}</span>
+  </div>
+);
 
 interface Props {
   rom: MergedRom;
   library: LibraryInfo | null;
   onClose: () => void;
   onStarted: () => void;
+  /** L1/R1: the previous and next game in the results, when there is one. */
+  onPrev?: () => void;
+  onNext?: () => void;
 }
 
-const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
-  const [details, setDetails] = useState<MergedRom | null>(null);
+const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext }) => {
+  const [loaded, setLoaded] = useState<MergedRom | null>(null);
+  // L1/R1 swap the game without remounting the panel; ignore the last game's
+  // details until this one's arrive.
+  const details = loaded?.id === rom.id ? loaded : null;
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   // The Steam back button closes this overlay instead of leaving the plugin.
   useBackGuard(true, onClose);
   const [target, setTarget] = useState<string>(rom.system);
+  // The poster frame takes the cover's own shape once it has loaded; until then
+  // it holds the usual box shape for the console so the column does not jump.
+  const [posterRatio, setPosterRatio] = useState<number | null>(() => (rom.cover ? (artRatios.get(rom.cover) ?? null) : null));
+
+  // A different game (L1/R1): start from the top with its own defaults.
+  useEffect(() => {
+    setTarget(rom.system);
+    setPosterRatio(rom.cover ? (artRatios.get(rom.cover) ?? null) : null);
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+  }, [rom.id]);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     getDetails(rom.id)
       .then((result) => {
-        if (!cancelled) setDetails(result);
+        if (!cancelled) setLoaded(result);
       })
       .catch(() => undefined)
       .finally(() => {
@@ -106,8 +132,29 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
   const genres = media?.genres?.length ? media.genres : (primary?.genres ?? []);
   const developer = media?.developers?.length ? media.developers[0] : primary?.developer;
   const publisher = media?.developers?.length ? media.developers[1] : primary?.publisher;
-  const year = rom.year;
   const files = variants.flatMap((entry) => entry.files.map((file) => ({ entry, file })));
+  // The backend ranks the files; the first one is offered as the main action.
+  const best = files[0] ?? null;
+  const others = files.slice(1);
+  const failures = variants.filter((entry) => entry.error && entry.files.length === 0);
+  const systemName = library?.systems?.find((item) => item.key === rom.system)?.label ?? systemLabel(rom.system);
+  const sourceNames = Array.from(new Set(variants.map((entry) => SOURCE_LABELS[entry.source] ?? entry.source)));
+
+  const facts: [string, string][] = [
+    ["Developer", developer ?? ""],
+    ["Publisher", publisher && publisher !== developer ? publisher : ""],
+    ["Genre", genres.slice(0, 3).join(", ")],
+    ["Found on", sourceNames.join(", ")],
+  ].filter((fact): fact is [string, string] => Boolean(fact[1]));
+
+  const fileName = (file: RomFile) => file.filename || file.url.split("/").pop() || "Download";
+  const fileMeta = (entry: RomEntry, file: RomFile) =>
+    [
+      SOURCE_LABELS[entry.source] ?? entry.source,
+      file.size ? formatBytes(file.size) : "size unknown",
+      file.region,
+      file.label && file.label !== file.region ? file.label : null,
+    ].filter(Boolean) as string[];
 
   const download = async (entry: RomEntry, file: RomFile) => {
     setBusy(file.id);
@@ -130,140 +177,224 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted }) => {
     }
   };
 
+  // Focus lands on the main Download button as soon as there is one. Until the
+  // links have loaded it sits on the close button, and it is never taken away
+  // from something the player has already moved to.
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const active = document.activeElement;
+    const idle = !active || !panel.contains(active) || active.classList.contains("rs-close");
+    if (!idle) return;
+    focusElement(panel.querySelector(".rs-get-btn") ?? panel.querySelector(".rs-close"));
+  }, [rom.id, best?.file.id]);
+
+  const onPanelButton = (event: GamepadEvent) => {
+    if (event.detail.button === PAD.BUMPER_LEFT && onPrev) onPrev();
+    else if (event.detail.button === PAD.BUMPER_RIGHT && onNext) onNext();
+  };
+
+  const legend: Record<number, string> = {};
+  if (onPrev) legend[PAD.BUMPER_LEFT] = "Previous game";
+  if (onNext) legend[PAD.BUMPER_RIGHT] = "Next game";
+
   return (
     <div className="rs-overlay" onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="rs-panel detail" role="dialog" aria-modal="true" aria-label={rom.title}>
-        <div className="rs-detail-hero">
-          <HeroBackdrop url={hero} />
-          <div className="rs-detail-hero-inner">
-            <div className="rs-detail-heading">
-              <h2 className="rs-detail-title">{rom.title}</h2>
-              <button className="rs-close" onClick={onClose} title="Close" autoFocus>
-                ✕
-              </button>
-            </div>
-            <div className="rs-detail-sub">
-              {[developer, publisher && publisher !== developer ? publisher : null, year, genres.slice(0, 2).join(" · ")]
-                .filter(Boolean)
-                .join("  ·  ")}
-            </div>
-            <div className="rs-detail-badges">
-              <span className="rs-pill system">{systemLabel(rom.system)}</span>
-              {rom.rating ? (
-                <span className="rs-pill rating">★ {rom.rating.toFixed(1)}</span>
-              ) : null}
-              {rom.downloads ? (
-                <span className="rs-pill">↓ {formatCount(rom.downloads)} downloads</span>
-              ) : null}
-              {rom.regions.map((region) => (
-                <span key={region} className="rs-pill region">
-                  {region}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* d-pad: the close button, then down through the files, media and the
+          save target. B closes (useBackGuard), X downloads the main file from
+          anywhere in the panel, L1/R1 move to the neighbouring game. */}
+      <Focusable
+        ref={panelRef}
+        className="rs-panel detail"
+        flow-children="column"
+        role="dialog"
+        aria-modal="true"
+        aria-label={rom.title}
+        onCancelActionDescription="Close"
+        onSecondaryButton={best ? () => download(best.entry, best.file) : undefined}
+        onSecondaryActionDescription={best ? "Download" : undefined}
+        onButtonDown={onPanelButton}
+        actionDescriptionMap={legend}
+      >
+        <Focusable
+          className="rs-close"
+          focusClassName="is-focus"
+          title="Close"
+          onActivate={onClose}
+          onClick={onClose}
+          onOKActionDescription="Close"
+        >
+          ✕
+        </Focusable>
 
-        <div className="rs-detail-body">
-          <aside className="rs-detail-side">
-            <div className="rs-detail-poster" style={{ aspectRatio: systemAspect(rom.system) }}>
-              {cover ? (
-                <CoverImage url={cover} kind="detail" alt={rom.title} eager />
-              ) : (
-                <div className="rs-detail-cover-placeholder">{rom.title.slice(0, 2).toUpperCase()}</div>
-              )}
-            </div>
-
-            <div className="rs-save">
-              <div className="rs-save-label">Save into</div>
-              <Dropdown
-                rgOptions={systems.map((item) => ({ label: item.label, data: item.key }))}
-                selectedOption={target}
-                onChange={(option) => setTarget(option.data)}
-                menuLabel="System"
+        {/* Left: the poster from the panel's top edge, the credits under it. */}
+        <aside className="rs-detail-side">
+          <div
+            className="rs-detail-poster"
+            style={{ aspectRatio: posterRatio ? String(clampArtRatio(posterRatio)) : systemAspect(rom.system) }}
+          >
+            {cover ? (
+              <CoverImage url={cover} kind="detail" alt={rom.title} eager onRatio={(ratio) => {
+                  setPosterRatio(ratio);
+                  return clampArtRatio(ratio) === ratio;
+                }}
               />
-              <div className="rs-save-path" title={destination}>
-                {destination}
-              </div>
+            ) : (
+              <div className="rs-detail-cover-placeholder">{rom.title.slice(0, 2).toUpperCase()}</div>
+            )}
+          </div>
+          {facts.length > 0 ? (
+            <dl className="rs-facts">
+              {facts.map(([label, value]) => (
+                <div className="rs-fact" key={label}>
+                  <dt>{label}</dt>
+                  <dd title={value}>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+        </aside>
+
+        {/* Right: one scroll area, ordered by what people come here to do. */}
+        <Focusable ref={contentRef} className="rs-detail-content" flow-children="column">
+          <HeroBackdrop url={hero} />
+
+          <header className="rs-detail-head">
+            <div className="rs-detail-eyebrow">{systemName}</div>
+            <h2 className="rs-detail-title">{rom.title}</h2>
+            <div className="rs-kvs">
+              {rom.rating ? <Stat
+                  label="Rating"
+                  tone="rating"
+                  value={
+                    <>
+                      <FaStar /> {rom.rating.toFixed(1)}
+                    </>
+                  }
+                /> : null}
+              {rom.downloads ? <Stat label="Downloads" value={formatCount(rom.downloads)} /> : null}
+              {rom.year ? <Stat label="Released" value={String(rom.year)} /> : null}
+              {rom.regions.length ? <Stat label="Region" value={rom.regions.join(" · ")} /> : null}
             </div>
-          </aside>
+          </header>
 
-          <main className="rs-detail-main">
-            {media?.summary ? <p className="rs-summary">{media.summary}</p> : null}
-
-            <MediaGallery media={media} />
-
-            {loading ? (
-              <div className="rs-detail-loading">
+          <section className="rs-get">
+            {best ? (
+              <>
+                <Button
+                  className="rs-get-btn"
+                  disabled={busy === best.file.id}
+                  onClick={() => download(best.entry, best.file)}
+                  onOKActionDescription="Download"
+                  // Back at the top: show the title and art again, not just the button.
+                  onGamepadFocus={() => {
+                    if (contentRef.current) contentRef.current.scrollTop = 0;
+                  }}
+                >
+                  <FaDownload />
+                  {busy === best.file.id ? "Starting…" : "Download"}
+                </Button>
+                <div className="rs-get-file">
+                  <div className="rs-get-name" title={fileName(best.file)}>
+                    {fileName(best.file)}
+                  </div>
+                  <div className="rs-get-meta">
+                    {fileMeta(best.entry, best.file).map((part, index) => (
+                      <span key={index} className={index === 0 ? "rs-file-source" : undefined}>
+                        {part}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : loading ? (
+              <div className="rs-get-wait">
                 <div className="rs-spinner" /> Finding download links…
               </div>
-            ) : null}
+            ) : (
+              <div className="rs-get-wait">No download links were found for this title.</div>
+            )}
+          </section>
 
-            {!loading && files.length === 0 ? (
-              <div className="rs-hint">No download links were found for this title.</div>
-            ) : null}
-
-            {files.length > 0 ? (
-              <>
-                <div className="rs-file-head">
-                  <span>Download</span>
-                  <span className="rs-file-count">
-                    {files.length} {files.length === 1 ? "file" : "files"}
-                  </span>
-                </div>
-                {variants
-                  .filter((entry) => entry.files.length > 0 || entry.error)
-                  .map((entry) => (
-                    <div key={entry.key} className="rs-file-group">
-                      {entry.files.map((file) => (
-                        <div className="rs-file" key={file.id}>
-                          <div className="rs-file-main">
-                            <div className="rs-file-name" title={file.filename || file.url}>
-                              {file.filename || file.url.split("/").pop() || "Download"}
-                            </div>
-                            <div className="rs-file-meta">
-                              <span className="rs-file-source">{SOURCE_LABELS[entry.source] ?? entry.source}</span>
-                              <span className="rs-sep">•</span>
-                              <span>{file.size ? formatBytes(file.size) : "size unknown"}</span>
-                              {file.region ? (
-                                <>
-                                  <span className="rs-sep">•</span>
-                                  <span>{file.region}</span>
-                                </>
-                              ) : null}
-                              {file.label && file.label !== file.region ? (
-                                <>
-                                  <span className="rs-sep">•</span>
-                                  <span>{file.label}</span>
-                                </>
-                              ) : null}
-                            </div>
-                          </div>
-                          <Button
-                            className="rs-btn rs-file-btn"
-                            disabled={busy === file.id}
-                            onClick={() => download(entry, file)}
-                          >
-                            <FaDownload />
-                            {busy === file.id ? "Starting…" : "Download"}
-                          </Button>
-                        </div>
-                      ))}
-                      {entry.error ? <div className="rs-hint rs-error">{entry.error}</div> : null}
+          {others.length > 0 || failures.length > 0 ? (
+            <section className="rs-detail-section">
+              <div className="rs-section-head">
+                <span>Other versions</span>
+                {others.length > 0 ? <span className="rs-section-count">{others.length}</span> : null}
+              </div>
+              <div className="rs-versions">
+                {others.map(({ entry, file }) => (
+                  <div className="rs-version" key={file.id}>
+                    <div className="rs-version-main">
+                      <div className="rs-version-name" title={fileName(file)}>
+                        {fileName(file)}
+                      </div>
+                      <div className="rs-version-meta">
+                        {fileMeta(entry, file).map((part, index) => (
+                          <span key={index} className={index === 0 ? "rs-file-source" : undefined}>
+                            {part}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                  ))}
-              </>
-            ) : null}
-          </main>
-        </div>
+                    <Button
+                      className="rs-version-btn"
+                      disabled={busy === file.id}
+                      onClick={() => download(entry, file)}
+                      onOKActionDescription="Download this version"
+                    >
+                      <FaDownload />
+                      {busy === file.id ? "Starting…" : "Download"}
+                    </Button>
+                  </div>
+                ))}
+              </div>
+              {failures.map((entry) => (
+                <div key={entry.key} className="rs-version-error">
+                  {SOURCE_LABELS[entry.source] ?? entry.source}: {entry.error}
+                </div>
+              ))}
+            </section>
+          ) : null}
 
-        <div className="rs-detail-foot">
-          <span>
-            <b>D-pad</b> move · <b>A</b> select · <b>B</b> close
-          </span>
-          <span className="rs-detail-foot-dest">{systemLabel(target)} → {destination}</span>
-        </div>
-      </div>
+          {media?.shots?.length || media?.trailer ? (
+            <section className="rs-detail-section">
+              <div className="rs-section-head">
+                <span>Media</span>
+              </div>
+              <MediaGallery media={media} />
+            </section>
+          ) : null}
+
+          {media?.summary ? (
+            <section className="rs-detail-section">
+              <div className="rs-section-head">
+                <span>About</span>
+              </div>
+              <p className="rs-summary">{media.summary}</p>
+            </section>
+          ) : null}
+
+          {/* Rarely changed, so it sits at the end rather than above the files. */}
+          <section className="rs-detail-section">
+            <div className="rs-dest">
+              <FaFolder className="rs-dest-icon" />
+              <span className="rs-dest-label">Save to</span>
+              <div className="rs-dest-select">
+                <Dropdown
+                  rgOptions={systems.map((item) => ({ label: item.label, data: item.key }))}
+                  selectedOption={target}
+                  onChange={(option) => setTarget(option.data)}
+                  menuLabel="Save to"
+                />
+              </div>
+              <span className="rs-dest-path" title={destination}>
+                {destination}
+              </span>
+            </div>
+          </section>
+        </Focusable>
+      </Focusable>
     </div>
   );
 };

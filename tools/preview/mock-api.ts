@@ -99,6 +99,29 @@ const roms: MergedRom[] = (MANY ? ALL_TITLES : TITLES).map((title, index) => {
                 label: null,
                 source_url: "https://example.invalid",
               },
+              // A few titles carry several dumps so the file list can be checked.
+              ...(index % 4 === 0
+                ? [
+                    {
+                      id: `${source}:${index}:1`,
+                      filename: `${title} (Europe) (En,Fr,De).zip`,
+                      url: "https://example.invalid/file-eu.zip",
+                      size: 6_120_000,
+                      region: "Europe",
+                      label: null,
+                      source_url: "https://example.invalid",
+                    },
+                    {
+                      id: `${source}:${index}:2`,
+                      filename: `${title} (USA) (Rev 1).zip`,
+                      url: "https://example.invalid/file-rev1.zip",
+                      size: 5_990_000,
+                      region: "USA",
+                      label: "Rev 1",
+                      source_url: "https://example.invalid",
+                    },
+                  ]
+                : []),
             ]
           : [],
     })),

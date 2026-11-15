@@ -1,6 +1,9 @@
-import { FC } from "react";
+import { FC, useEffect, useRef } from "react";
+import { Button, Focusable } from "@decky/ui";
 import { cancelDownload, clearDownloads, DownloadJob } from "../types";
 import { formatBytes, formatSpeed } from "./common";
+import { focusElement } from "./gamepad";
+import { useBackGuard } from "./useBackGuard";
 
 interface Props {
   jobs: DownloadJob[];
@@ -17,7 +20,27 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "#8b949d",
 };
 
+/**
+ * Gamepad: a column of the header buttons and each running download's Cancel.
+ * B closes the drawer (useBackGuard), X clears the finished downloads.
+ */
 const DownloadsDrawer: FC<Props> = ({ jobs, onClose, onRefresh }) => {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  // The back button closes the drawer instead of leaving the plugin.
+  useBackGuard(true, onClose);
+
+  // Focus the first running download's Cancel, or Close when nothing runs.
+  useEffect(() => {
+    window.requestAnimationFrame(() =>
+      focusElement(panelRef.current?.querySelector(".rs-dl-cancel") ?? panelRef.current?.querySelector(".rs-dl-close")),
+    );
+  }, []);
+
+  const clearFinished = () => {
+    clearDownloads();
+    onRefresh();
+  };
+
   const active = jobs.filter((job) => job.status === "downloading" || job.status === "queued" || job.status === "extracting");
   const finished = jobs.filter((job) => !active.includes(job));
 
@@ -37,15 +60,16 @@ const DownloadsDrawer: FC<Props> = ({ jobs, onClose, onRefresh }) => {
                 : job.status}
           </div>
           {job.status === "downloading" || job.status === "queued" ? (
-            <button
-              className="rs-btn ghost"
+            <Button
+              className="rs-btn ghost rs-dl-cancel"
               onClick={() => {
                 cancelDownload(job.id);
                 onRefresh();
               }}
+              onOKActionDescription="Cancel download"
             >
               Cancel
-            </button>
+            </Button>
           ) : null}
           {job.status === "error" ? <span className="rs-pill region">{job.error}</span> : null}
         </div>
@@ -74,23 +98,24 @@ const DownloadsDrawer: FC<Props> = ({ jobs, onClose, onRefresh }) => {
 
   return (
     <div className="rs-overlay" style={{ justifyContent: "flex-end", padding: 0 }} onClick={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="rs-panel drawer">
+      <Focusable
+        ref={panelRef}
+        className="rs-panel drawer"
+        flow-children="column"
+        onCancelActionDescription="Close"
+        onSecondaryButton={finished.length ? clearFinished : undefined}
+        onSecondaryActionDescription={finished.length ? "Clear finished" : undefined}
+      >
         <div className="rs-panel-head">
           <h3>Downloads{active.length ? ` (${active.length} active)` : ""}</h3>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              className="rs-btn ghost"
-              onClick={() => {
-                clearDownloads();
-                onRefresh();
-              }}
-            >
+          <Focusable className="rs-panel-actions" flow-children="row">
+            <Button className="rs-btn ghost" disabled={!finished.length} onClick={clearFinished}>
               Clear finished
-            </button>
-            <button className="rs-btn ghost" onClick={onClose}>
+            </Button>
+            <Button className="rs-btn ghost rs-dl-close" onClick={onClose}>
               Close
-            </button>
-          </div>
+            </Button>
+          </Focusable>
         </div>
         <div className="rs-panel-body">
           {jobs.length === 0 && <div className="rs-hint">Nothing downloaded yet.</div>}
@@ -98,7 +123,7 @@ const DownloadsDrawer: FC<Props> = ({ jobs, onClose, onRefresh }) => {
           {finished.length > 0 && <div className="rs-section-title">Finished</div>}
           {finished.map(render)}
         </div>
-      </div>
+      </Focusable>
     </div>
   );
 };
