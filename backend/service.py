@@ -130,6 +130,45 @@ class StoreService:
             return None
         return os.path.join(self._runtime_dir, "search_cache.json")
 
+    def _details_path(self) -> Optional[str]:
+        if not self._runtime_dir:
+            return None
+        return os.path.join(self._runtime_dir, "details_cache.json")
+
+    def _read_details_cache(self) -> Dict[str, Any]:
+        path = self._details_path()
+        if not path or not os.path.isfile(path):
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                return json.load(fh) or {}
+        except (OSError, ValueError):
+            return {}
+
+    def _write_details_cache(self, data: Dict[str, Any]) -> None:
+        path = self._details_path()
+        if not path:
+            return
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            if len(data) > 300:
+                oldest = sorted(data.items(), key=lambda item: float(item[1].get("at", 0)))
+                for key, _value in oldest[: len(data) - 300]:
+                    data.pop(key, None)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(data, fh)
+        except OSError:
+            pass
+
+    @staticmethod
+    def _details_key(title: str, system: str) -> str:
+        return f"{(title or '').strip().lower()}|{system or 'unknown'}"
+
+    def _index_rom(self, rom: MergedRom) -> None:
+        self._roms[rom.id] = rom
+        for entry in rom.entries:
+            self._entries[entry.key] = entry
+
     def _cache_key(self, query: str, system: Optional[str], sources: Optional[List[str]], sort: str) -> str:
         raw = f"{query.strip().lower()}|{system or 'all'}|{','.join(sorted(sources or [])) or 'all'}|{sort}"
         return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:16]
@@ -432,6 +471,32 @@ class StoreService:
         if not rom:
             return None
 
+        # Opening the same game again must be instant: the download links and
+        # the gallery are cached, so closing the modal never leaves a scrape
+        # running in the background.
+        ttl = float(self.settings.get("search_cache_hours", 72)) * 3600
+        key = self._details_key(rom.title, rom.system)
+        cache = self._read_details_cache()
+        cached = cache.get(key)
+        if cached and time.time() - float(cached.get("at", 0)) < ttl:
+            try:
+                entries = [self._entry_from_dict(item) for item in cached.get("entries") or []]
+                if entries and any(entry.files for entry in entries):
+                    rom.entries = entries
+                    rom.extra = dict(rom.extra or {})
+                    if cached.get("media"):
+                        rom.extra["media"] = cached["media"]
+                    self._index_rom(rom)
+                    return rom.to_dict()
+            except Exception:
+                cache.pop(key, None)
+
+        # Entries that already have their links resolved (this session) are
+        # not scraped again either.
+        pending = [entry for entry in rom.entries if not entry.files]
+        if not pending:
+            return rom.to_dict()
+
         sources = {source.id: source for source in self.build_sources()}
 
         async def resolve(entry: RomEntry) -> None:
@@ -457,15 +522,26 @@ class StoreService:
                     await asyncio.sleep(0.7 * (attempt + 1))
             entry.extra["error"] = last_error or "could not resolve the download link"
 
-        await asyncio.gather(*(resolve(entry) for entry in rom.entries))
+        await asyncio.gather(*(resolve(entry) for entry in pending))
 
         # Media for the gallery strip.
         primary = rom.entries[0] if rom.entries else None
+        media = None
         if primary:
             media = await self._build_media(primary)
             if media:
                 rom.extra = getattr(rom, "extra", {})
                 rom.extra["media"] = media
+
+        try:
+            cache[key] = {
+                "at": time.time(),
+                "entries": [entry.to_dict() for entry in rom.entries],
+                "media": media or (rom.extra or {}).get("media"),
+            }
+            self._write_details_cache(cache)
+        except Exception:
+            pass
         return rom.to_dict()
 
     async def _build_media(self, entry: RomEntry) -> Optional[Dict[str, Any]]:
@@ -603,7 +679,7 @@ class StoreService:
 
     # ------------------------------------------------------------------ images
     def clear_cache(self) -> Dict[str, Any]:
-        """Throw away the cached searches."""
+        """Throw away the cached searches and detail views."""
         path = self._cache_path()
         removed = 0
         if path and os.path.isfile(path):
@@ -612,6 +688,12 @@ class StoreService:
                 os.remove(path)
             except OSError:
                 removed = 0
+        details = self._details_path()
+        if details and os.path.isfile(details):
+            try:
+                os.remove(details)
+            except OSError:
+                pass
         self._browse_cache = {}
         return {"ok": True, "removed": removed}
 
@@ -624,9 +706,16 @@ class StoreService:
                 size = os.path.getsize(path)
             except OSError:
                 size = 0
+        details_path = self._details_path()
+        details_size = 0
+        if details_path and os.path.isfile(details_path):
+            try:
+                details_size = os.path.getsize(details_path)
+            except OSError:
+                details_size = 0
         return {
             "entries": len(data),
-            "bytes": size,
+            "bytes": size + details_size,
             "path": path or "",
             "ttl_hours": float(self.settings.get("search_cache_hours", 72)),
         }

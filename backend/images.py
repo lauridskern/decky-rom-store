@@ -62,6 +62,11 @@ def best_variant(url: Optional[str], kind: str = "card") -> Optional[str]:
     # is around 50 kB and plenty for a thumbnail.
     if "images.igdb.com" in url and "/screenshot_huge/" in url:
         return url.replace("/screenshot_huge/", "/t_screenshot_med/")
+    # IGDB covers: 264x374 decoded to 4 bytes per pixel is 400 kB of texture
+    # for a 130 px card. The 180x256 variant is indistinguishable at that size
+    # and halves both the download and the memory the client has to hold.
+    if "images.igdb.com" in url and "/t_cover_big/" in url:
+        return url.replace("/t_cover_big/", "/t_cover_med/")
     return url
 
 

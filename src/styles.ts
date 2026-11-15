@@ -73,12 +73,21 @@ export const CSS = `
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 16px 18px 28px;
+  /* The grid is rebuilt only when the page changes; let the browser keep the
+     scroll position where the user left it instead of re-anchoring. */
+  overflow-anchor: none;
 }
 .rs-main::-webkit-scrollbar { width: 10px; }
 .rs-main::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); }
 .rs-main::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.18); border-radius: 5px; }
 .rs-main::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.3); }
 .rs-bottom-space { height: var(--rs-chrome-bottom, 40px); flex: 0 0 auto; }
+
+.rs-pager {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 18px 0 8px;
+}
+.rs-pager-label { font-size: 12px; color: #8b949d; }
 
 .rs-grid {
   display: grid;
@@ -94,16 +103,19 @@ export const CSS = `
   overflow: hidden;
   cursor: pointer;
   display: flex; flex-direction: column;
-  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  /* No transform, no transition and no big blur shadow: each of those forced
+     the Steam client to promote and repaint every cover while moving through
+     the grid. A border and an outline are almost free. */
+  transition: border-color 100ms ease, background 100ms ease;
   outline: none;
 }
 .rs-card:hover, .rs-card:focus, .rs-card--focus {
-  transform: translateY(-2px);
-  border-color: rgba(102, 192, 244, 0.75);
+  border-color: #66c0f4;
   background: rgba(255, 255, 255, 0.07);
 }
 .rs-card--focus {
-  box-shadow: 0 0 0 2px #66c0f4, 0 10px 26px rgba(0, 0, 0, 0.55);
+  outline: 2px solid #66c0f4;
+  outline-offset: -2px;
 }
 
 .rs-cover {

@@ -19,11 +19,15 @@ import { SOURCE_LABELS, systemLabel } from "./common";
 import StoreStyles from "./StoreStyles";
 import { useChromeInsets } from "./useChromeInsets";
 import { searchState } from "../state";
-import RomCard from "./RomCard";
-import VirtualGrid from "./VirtualGrid";
+import RomGrid from "./RomGrid";
 import RomDetail from "./RomDetail";
 import DownloadsDrawer from "./DownloadsDrawer";
 import SettingsModal from "./SettingsModal";
+
+// One page is rendered at a time. A search fetches a few pages worth of
+// results up front, so paging is instant and never hits the network again.
+const PAGE_SIZE = 30;
+const RESULT_LIMIT = 120;
 
 const SORTS = [
   { value: "relevance", label: "Best match" },
@@ -48,13 +52,11 @@ const Store: FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<MergedRom | null>(null);
   const [showDownloads, setShowDownloads] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(0);
   const [cached, setCached] = useState(false);
   const [searched, setSearched] = useState(false);
   const [showIssues, setShowIssues] = useState(false);
@@ -63,12 +65,6 @@ const Store: FC = () => {
   const showDownloadsRef = useRef(false);
   const activeRef = useRef(0);
 
-  const renderCard = useCallback(
-    (rom: MergedRom, _index: number, rowIndex: number) => (
-      <RomCard key={`${rom.id}-${page}`} rom={rom} onOpen={setSelected} rowIndex={rowIndex} />
-    ),
-    [page, setSelected],
-  );
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const storeRef = useChromeInsets(
     settings?.chrome_top_offset ?? 0,
@@ -99,32 +95,22 @@ const Store: FC = () => {
     loadCounts();
     refreshLibrary();
     refreshDownloads();
-    // Poll fast only while something is actually downloading, otherwise stay
-    // out of the Steam client's way.
+    // Poll only while the drawer is open or something is downloading. When
+    // nothing is happening the plugin keeps its hands off the Steam client.
     const timer = setInterval(() => {
       if (showDownloadsRef.current || activeRef.current > 0) refreshDownloads();
-    }, 1200);
-    const slowTimer = setInterval(refreshDownloads, 5000);
+    }, 1500);
     const countsTimer = setInterval(loadCounts, 600000);
     return () => {
       clearInterval(timer);
-      clearInterval(slowTimer);
       clearInterval(countsTimer);
     };
   }, [refreshDownloads, refreshLibrary]);
 
   const runSearch = useCallback(
-    async (
-      term: string,
-      systemFilter: string,
-      sourceFilter: string,
-      sortBy: string,
-      pageNumber: number,
-      append: boolean,
-    ) => {
+    async (term: string, systemFilter: string, sourceFilter: string, sortBy: string) => {
       const id = ++requestId.current;
-      if (append) setLoadingMore(true);
-      else setLoading(true);
+      setLoading(true);
       try {
         let payload;
         if (!term.trim() && systemFilter !== "all") {
@@ -136,8 +122,8 @@ const Store: FC = () => {
             sourceList,
             systemFilter === "all" ? null : systemFilter,
             sortBy,
-            40,
-            pageNumber,
+            RESULT_LIMIT,
+            1,
           );
         }
         if (id !== requestId.current) return;
@@ -145,24 +131,20 @@ const Store: FC = () => {
         // Safety net: never mix consoles, even if a source ignores the filter.
         const filtered =
           systemFilter !== "all" ? incoming.filter((rom) => rom.system === systemFilter) : incoming;
-        setResults((previous) => (append ? [...previous, ...filtered] : filtered));
+        setResults(filtered);
         setSources(payload.sources ?? []);
         setSystems(payload.systems ?? []);
         setSourceCounts(payload.source_counts ?? {});
         setErrors(payload.errors ?? {});
-        setHasMore(!!payload.has_more);
         setCached(!!payload.cached);
-        setPage(payload.page ?? 1);
+        setPage(0);
         setSearched(true);
       } catch (error) {
         if (id !== requestId.current) return;
-        if (!append) setResults([]);
+        setResults([]);
         setErrors({ plugin: String(error) });
       } finally {
-        if (id === requestId.current) {
-          setLoading(false);
-          setLoadingMore(false);
-        }
+        if (id === requestId.current) setLoading(false);
       }
     },
     [],
@@ -190,17 +172,23 @@ const Store: FC = () => {
     debounce.current = setTimeout(() => {
       // Drop the previous results so a filter change never shows a mix.
       setResults([]);
-      runSearch(query, system, source, sort, 1, false);
+      runSearch(query, system, source, sort);
     }, 320);
     return () => {
       if (debounce.current) clearTimeout(debounce.current);
     };
   }, [query, system, source, sort, runSearch]);
 
-  const loadMore = () => {
-    if (!hasMore || loadingMore) return;
-    runSearch(query, system, source, sort, page + 1, true);
-  };
+  const pageCount = Math.max(1, Math.ceil(results.length / PAGE_SIZE));
+  const visible = useMemo(
+    () => results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [results, page],
+  );
+
+  const goPage = useCallback((next: number) => {
+    setPage(Math.max(0, next));
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+  }, []);
 
   useEffect(() => {
     showDownloadsRef.current = showDownloads;
@@ -321,19 +309,25 @@ const Store: FC = () => {
 
         {results.length > 0 ? (
           <>
-            <VirtualGrid
-              items={results}
-              scrollRef={mainRef}
-              renderItem={renderCard}
-            />
+            <RomGrid items={visible} onOpen={setSelected} />
 
             <div className="rs-bottom-space" />
 
-            {hasMore ? (
-              <div style={{ display: "flex", justifyContent: "center", padding: "20px 0 6px" }}>
-                <button className="rs-btn ghost" onClick={loadMore} disabled={loadingMore}>
-                  {loadingMore ? "Loading…" : "Load more"}
-                </button>
+            {pageCount > 1 ? (
+              <div className="rs-pager">
+                <Button className="rs-steam-btn" disabled={page <= 0} onClick={() => goPage(page - 1)}>
+                  ‹ Prev
+                </Button>
+                <span className="rs-pager-label">
+                  Page {page + 1} of {pageCount} · {results.length} titles
+                </span>
+                <Button
+                  className="rs-steam-btn"
+                  disabled={page >= pageCount - 1}
+                  onClick={() => goPage(page + 1)}
+                >
+                  Next ›
+                </Button>
               </div>
             ) : null}
           </>

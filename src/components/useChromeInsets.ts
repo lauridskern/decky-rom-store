@@ -66,12 +66,13 @@ export function useChromeInsets(manualTop = 0, manualBottom = 0): RefObject<HTML
       window.setTimeout(measure, 900),
       window.setTimeout(measure, 2000),
     ];
+    // No polling: every measurement walks Steam's own CSS variables and, in
+    // the fallback path, hit-tests the DOM - both force a style/layout flush,
+    // which is expensive to do on a timer inside the Steam client.
     window.addEventListener("resize", measure);
-    const interval = window.setInterval(measure, 6000);
 
     return () => {
       timers.forEach(window.clearTimeout);
-      window.clearInterval(interval);
       window.removeEventListener("resize", measure);
     };
   }, [manualTop, manualBottom]);

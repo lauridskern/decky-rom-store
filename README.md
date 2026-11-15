@@ -245,10 +245,23 @@ folder, the resolved local URL and the cache folder.
 
 ## Performance
 
-The result grid is a windowed list: only the rows near the viewport exist in
-the DOM, scroll events are coalesced into one update per animation frame, image
-decoding is asynchronous and the download poll only runs fast while something
-is actually downloading.
+The store is built to stay quiet on a device that is also running a game:
+
+- **One page of results at a time.** A search fetches a few pages worth of
+  results up front, then paging is instant and client-side. The grid renders at
+  most 30 cards, so moving through the catalogue never re-decodes cover art.
+- **No windowed list.** Windowing a grid of images meant mounting fresh `<img>`
+  elements on every scroll frame - the same covers were decoded over and over,
+  and the measured-row bookkeeping re-laid out the grid constantly. The page is
+  now rendered once and scrolling is pure paint work.
+- **Small images.** Cards use the 180x256 IGDB cover (about 8 kB) and the
+  medium screenshot size (about 34 kB); full resolution is only fetched when
+  you open one.
+- **Nothing polls on a timer** unless something is actually downloading, and
+  the download poll stops as soon as the queue is empty.
+- **Cached detail views.** Download links and the gallery are cached for the
+  same 72 hours as searches, so opening a game (or closing it again) starts no
+  scraping at all.
 
 ## Gamepad
 
