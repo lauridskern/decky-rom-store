@@ -109,85 +109,116 @@ export function formatSpeed(bytesPerSecond: number): string {
 
 
 /**
- * Box art shape per console, so a grid of NES games does not look like a
- * grid of Switch games.
+ * The shape of a console's box art, width / height of the front cover.
+ *
+ * Measured, not guessed: the median of the USA and Europe front scans in the
+ * libretro-thumbnails box-art sets (RetroArch's library, which keeps the
+ * scans' real proportions), November 2026. Japanese boxes often differ (the
+ * Super Famicom and Japanese N64 are portrait, for example); the ROM sites
+ * mostly carry USA and Europe releases. Consoles marked "~" had no usable
+ * scans and use the physical case or the closest family member.
+ *
+ * Do not take these from IGDB: it stores every cover cropped to 3:4.
  */
-export const SYSTEM_ASPECTS: Record<string, string> = {
-  // Box art is portrait on almost every cartridge and disc console. The exact
-  // ratio differs by a few percent between regions, which is why the artwork
-  // is fitted inside the frame rather than cropped to it.
-  nes: "5 / 7",
-  snes: "5 / 7",
-  n64: "5 / 7",
-  gc: "5 / 7",
-  wii: "5 / 7",
-  wiiu: "5 / 7",
-  switch: "5 / 7",
-  gb: "5 / 7",
-  gbc: "5 / 7",
-  gba: "5 / 7",
-  virtualboy: "5 / 7",
-  genesis: "5 / 7",
-  mastersystem: "5 / 7",
-  gamegear: "5 / 7",
-  sg1000: "5 / 7",
-  sega32x: "5 / 7",
-  segacd: "5 / 7",
-  saturn: "5 / 7",
-  dreamcast: "5 / 7",
-  psx: "5 / 7",
-  ps2: "5 / 7",
-  ps3: "5 / 7",
-  psp: "5 / 7",
-  psvita: "5 / 7",
-  atari2600: "5 / 7",
-  atari5200: "5 / 7",
-  atari7800: "5 / 7",
-  atarist: "5 / 7",
-  jaguar: "5 / 7",
-  "3do": "5 / 7",
-  wonderswan: "5 / 7",
-  "wonderswan-color": "5 / 7",
-  ngp: "5 / 7",
-  ngpc: "5 / 7",
-  pcengine: "5 / 7",
-  pcenginecd: "5 / 7",
-  pcfx: "5 / 7",
-  colecovision: "5 / 7",
-  intellivision: "5 / 7",
-  videopac: "5 / 7",
-  zxspectrum: "5 / 7",
-  amstradcpc: "5 / 7",
-  msx: "5 / 7",
-  x68000: "5 / 7",
-  pc98: "5 / 7",
-  c64: "5 / 7",
-  vic20: "5 / 7",
-  amiga: "5 / 7",
-  atari800: "5 / 7",
-  mac: "5 / 7",
-  ports: "5 / 7",
-  pc: "5 / 7",
-  scummvm: "5 / 7",
-  easyrpg: "5 / 7",
-  // Nintendo DS and 3DS boxes are close to square.
-  nds: "10 / 11",
-  "nds-64": "10 / 11",
-  "3ds": "10 / 11",
-  // Arcade marquees and flyers are the only landscape-shaped art here.
-  arcades: "4 / 3",
-  mame: "4 / 3",
-  fba: "4 / 3",
-  neogeo: "4 / 3",
-  neogeocd: "4 / 3",
-  dos: "5 / 7",
-  openbor: "5 / 7",
-  vectrex: "5 / 7",
-  atarilynx: "5 / 7",
+export const BOX_RATIOS: Record<string, number> = {
+  // Nintendo
+  nes: 0.7,
+  snes: 1.41, // USA/Europe boxes are landscape
+  n64: 1.37, // landscape outside Japan
+  gc: 0.71,
+  wii: 0.714,
+  wiiu: 0.714,
+  switch: 0.62, // ~ the case is 105 x 170 mm
+  gb: 1.0,
+  gbc: 1.0,
+  gba: 1.0,
+  nds: 1.12, // a DS case is a little wider than tall
+  "nds-64": 1.12,
+  "3ds": 1.13,
+  virtualboy: 1.0,
+  pokemini: 1.0, // ~
+  // Sega
+  sg1000: 0.7, // ~ like the Master System
+  mastersystem: 0.706,
+  genesis: 0.7,
+  segacd: 0.705,
+  sega32x: 0.725,
+  saturn: 0.62, // the USA/Europe cases are tall; Japanese ones are square
+  dreamcast: 1.0,
+  gamegear: 0.65, // USA 0.62, Europe 0.71
+  // Sony
+  psx: 1.0,
+  ps2: 0.705,
+  ps3: 0.87,
+  psp: 0.58,
+  psvita: 0.785,
+  // Atari
+  atari2600: 0.735,
+  atari5200: 0.735, // ~ like the 2600
+  atari7800: 0.723,
+  atari800: 0.75, // ~
+  atarist: 0.78, // ~ like the Amiga
+  atarilynx: 1.04,
+  jaguar: 0.71,
+  // NEC, SNK, Bandai and others
+  pcengine: 1.0,
+  pcenginecd: 1.0,
+  pcfx: 1.0, // ~ a CD case
+  neogeo: 0.7, // ~ the AES box
+  neogeoaes: 0.7,
+  neogeocd: 1.0, // ~ a CD case
+  ngp: 1.0,
+  ngpc: 1.0,
+  wonderswan: 0.815,
+  "wonderswan-color": 0.815,
+  "3do": 0.55, // USA long boxes; Europe 0.58
+  colecovision: 0.732,
+  intellivision: 0.722,
+  vectrex: 0.743,
+  videopac: 0.7, // ~
+  // Arcade: flyers, which are portrait
+  arcades: 0.71,
+  mame: 0.71,
+  fba: 0.71,
+  // Computers and engines
+  msx: 0.71,
+  c64: 0.77,
+  vic20: 0.77, // ~ like the C64
+  amiga: 0.78,
+  zxspectrum: 0.7, // ~
+  amstradcpc: 0.7, // ~
+  x68000: 0.71, // ~
+  pc98: 0.71, // ~
+  x1: 0.71, // ~
+  "sharp-x1": 0.71, // ~
+  dos: 0.78, // ~ big box PC games, like the Amiga
+  pc: 0.78,
+  mac: 0.78,
+  ports: 0.78,
+  scummvm: 0.78,
+  easyrpg: 0.75, // ~
+  openbor: 0.75, // ~
 };
 
+/** Box shape of a console's art, width / height (portrait 5:7 if unknown). */
+export function boxRatio(system: string): number {
+  return BOX_RATIOS[system] ?? 5 / 7;
+}
+
+/** The same, as a CSS aspect-ratio value. */
 export function systemAspect(system: string): string {
-  return SYSTEM_ASPECTS[system] ?? "5 / 7";
+  return String(boxRatio(system));
+}
+
+/**
+ * Sources that resize every image to one fixed size, whatever the art's real
+ * shape. Romspedia publishes covers at 500x710 (and 280x398) and thumbnails at
+ * 525x295, so a square Game Boy box comes out tall and a landscape SNES box
+ * comes out squeezed. Drawn stretched into the console's box shape, the art
+ * gets its real proportions back.
+ */
+export function isResizedArt(url: string | null | undefined): boolean {
+  return Boolean(url && /^https?:\/\/static\.romspedia\.com\//.test(url));
 }
 
 /**

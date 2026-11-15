@@ -293,10 +293,24 @@ minutes.
 `CoverImage` measures the decoded image against its frame and switches
 `object-fit` from cover to contain when the aspect differs by more than 4%;
 contained art gets a dimmed, blown-up copy of itself behind it. **Artwork is
-never cropped.** Grid covers and the detail
-poster take the art's own shape once it has loaded (`onRatio`, remembered per
-url in `artRatios`, clamped by `clampArtRatio()`); before that they hold the
-console's box shape from `systemAspect()`. Covers are top-aligned in their grid row.
+never cropped.**
+
+Shapes (grid covers and the detail poster):
+
+- `BOX_RATIOS` in `common.ts` is each console's real front-box shape, measured
+  from libretro-thumbnails scans (USA/Europe medians). Game Boy family, PS1,
+  Dreamcast and PC Engine are square; SNES and N64 landscape; DS/3DS 1.12.
+  Never take shapes from IGDB: it crops every cover to 3:4.
+- Romspedia resizes every image to a fixed size (500x710, 280x398, 525x295),
+  distorting it. `isResizedArt()` art gets the console's box shape and is drawn
+  stretched into it (`stretch`), which restores the proportions. The odd
+  Romspedia file that is portrait art rather than a box (some N64) is
+  squashed by this; box scans are the large majority.
+- Any other art keeps its own shape once loaded (`onRatio`, remembered per url
+  in `artRatios`, clamped by `clampArtRatio()`); before that, and without art,
+  the frame has the box shape. Covers are top-aligned in their grid row.
+- IGDB art only fills in games without a cover unless `igdb_replace_covers` is
+  on (default off since settings revision 2).
 
 ### Downloads
 

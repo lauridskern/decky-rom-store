@@ -27,7 +27,11 @@ DEFAULTS: Dict[str, Any] = {
     "search_cache_hours": 72,
     "chrome_top_offset": 0,
     "chrome_bottom_offset": 0,
-    "igdb_replace_covers": True,
+    # IGDB crops every cover to 3:4, which loses each console's box shape, so
+    # its art only fills in games that have no cover unless this is turned on.
+    "igdb_replace_covers": False,
+    # Bumped when a stored value has to be migrated (see Settings.load).
+    "settings_revision": 2,
     "igdb_client_id": "g5l93pm0saj4mnqpya3xujmmmcsna1",
     "igdb_client_secret": "v2qtz1potmdvx2blhcvg75ccc3ver7",
 }
@@ -55,8 +59,24 @@ class Settings:
             if isinstance(stored, dict):
                 with self._lock:
                     self._values.update(stored)
+                    migrated = self._migrate(stored)
+                if migrated:
+                    self.save()
         except (OSError, ValueError):
             pass
+
+    def _migrate(self, stored: Dict[str, Any]) -> bool:
+        """Bring a settings file written by an older version up to date."""
+        revision = stored.get("settings_revision", 1)
+        if revision >= DEFAULTS["settings_revision"]:
+            return False
+        if revision < 2:
+            # Up to v1.15 every cover was replaced with IGDB art by default and
+            # the file stored that default. Return to the new default once;
+            # turning it back on afterwards sticks.
+            self._values["igdb_replace_covers"] = False
+        self._values["settings_revision"] = DEFAULTS["settings_revision"]
+        return True
 
     def save(self) -> None:
         if not self._path:

@@ -78,6 +78,9 @@ class NswpediaSource(Source):
 
     # ------------------------------------------------------------------ browse
     async def browse(self, system: str, limit: int = 200) -> List[RomEntry]:
+        # Switch only; see SwitchRomsSource.browse.
+        if system != "switch":
+            return []
         entries: List[RomEntry] = []
         seen = set()
         for page in range(1, 13):

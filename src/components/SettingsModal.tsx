@@ -229,8 +229,14 @@ const SettingsModal: FC<Props> = ({ onClose, onSaved }) => {
             />
           </div>
           <div className="rs-form-row">
-            <label>Replace all artwork</label>
-            <Toggle on={settings.igdb_replace_covers !== false} onChange={(value) => update({ igdb_replace_covers: value })} />
+            <label>Use IGDB art for every game</label>
+            <Toggle on={settings.igdb_replace_covers === true} onChange={(value) => update({ igdb_replace_covers: value })} />
+          </div>
+          <div className="rs-form-row">
+            <div className="rs-hint">
+              Off: IGDB art only fills in games that have no cover, and the box scans keep each console's
+              real shape. On: IGDB art everywhere, which IGDB crops to 3:4 for every console.
+            </div>
           </div>
           <div className="rs-form-row">
             <label>IGDB client secret</label>

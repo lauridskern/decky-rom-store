@@ -11,7 +11,7 @@ import {
 } from "../types";
 import { Button, Dropdown, Focusable, GamepadEvent } from "@decky/ui";
 import { FaDownload, FaFolder, FaStar } from "react-icons/fa";
-import { artRatios, clampArtRatio, formatBytes, formatCount, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
+import { artRatios, clampArtRatio, formatBytes, formatCount, isResizedArt, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import MediaGallery from "./MediaGallery";
 import { useBackGuard } from "./useBackGuard";
@@ -111,6 +111,8 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
   const primary = variants[0];
   const media = details?.extra?.media;
   const cover = primary?.cover_full ?? rom.cover ?? null;
+  // Resized art (Romspedia) is stretched back into the console's box shape.
+  const resizedCover = isResizedArt(cover);
   // A screenshot makes a far better hero than a blown-up cover.
   const hero = media?.header ?? media?.shots?.[0]?.thumb ?? cover;
 
@@ -231,10 +233,19 @@ const RomDetail: FC<Props> = ({ rom, library, onClose, onStarted, onPrev, onNext
         <aside className="rs-detail-side">
           <div
             className="rs-detail-poster"
-            style={{ aspectRatio: posterRatio ? String(clampArtRatio(posterRatio)) : systemAspect(rom.system) }}
+            style={{
+              aspectRatio:
+                posterRatio && !resizedCover ? String(clampArtRatio(posterRatio)) : systemAspect(rom.system),
+            }}
           >
             {cover ? (
-              <CoverImage url={cover} kind="detail" alt={rom.title} eager onRatio={(ratio) => {
+              <CoverImage
+                url={cover}
+                kind="detail"
+                alt={rom.title}
+                eager
+                stretch={resizedCover}
+                onRatio={(ratio) => {
                   setPosterRatio(ratio);
                   return clampArtRatio(ratio) === ratio;
                 }}

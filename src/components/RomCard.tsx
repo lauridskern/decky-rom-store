@@ -2,7 +2,7 @@ import { FC, memo, useReducer } from "react";
 import { Focusable } from "@decky/ui";
 import { FaGamepad } from "react-icons/fa";
 import { MergedRom } from "../types";
-import { artRatios, clampArtRatio, systemAspect, systemLabel } from "./common";
+import { artRatios, clampArtRatio, isResizedArt, systemAspect, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 
 interface Props {
@@ -11,9 +11,12 @@ interface Props {
 }
 
 /**
- * One shelf item: the cover art is the whole item, in the art's own shape, so
- * nothing is cropped and there are no bars around it. Until the art has loaded
- * the frame holds the console's usual box shape. Only the console is drawn
+ * One shelf item: the cover art is the whole item, nothing cropped, no bars.
+ *
+ * Its shape: art that its source resized to a fixed size (Romspedia) gets the
+ * console's real box shape and is stretched back into it; any other art keeps
+ * its own shape, measured once it has loaded. Until then, and without art, the
+ * frame has the console's box shape. Only the console is drawn
  * over the art (the title shows only when there is no art); everything else
  * lives in the game panel.
  *
@@ -22,7 +25,8 @@ interface Props {
  */
 const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
   const [, refresh] = useReducer((n: number) => n + 1, 0);
-  const known = rom.cover ? artRatios.get(rom.cover) : undefined;
+  const resized = isResizedArt(rom.cover);
+  const known = rom.cover && !resized ? artRatios.get(rom.cover) : undefined;
   const shape = known ? String(clampArtRatio(known)) : systemAspect(rom.system);
 
   const onRatio = (ratio: number) => {
@@ -50,7 +54,7 @@ const RomCard: FC<Props> = memo(({ rom, onOpen }) => {
     >
       <div className="rs-card-art" title={rom.title}>
         {rom.cover ? (
-          <CoverImage url={rom.cover} alt={rom.title} onRatio={onRatio} />
+          <CoverImage url={rom.cover} alt={rom.title} stretch={resized} onRatio={resized ? undefined : onRatio} />
         ) : (
           // Without art the title is the only way to tell the game apart.
           <div className="rs-cover-placeholder rs-card-noart">

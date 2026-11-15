@@ -180,6 +180,8 @@ export const CSS = `
 }
 /* Fitted art: the frame keeps its shape, the picture keeps its own. */
 .rs-cover-img--contain img { object-fit: contain; }
+/* Art a source resized to a fixed size, stretched back into the box shape. */
+.rs-cover-img--fill img { object-fit: fill; }
 /* A blown-up, dimmed copy of the art fills the space a fitted picture leaves,
    so the letterboxing looks like a deliberate glow instead of a gap. */
 .rs-cover-ambient {

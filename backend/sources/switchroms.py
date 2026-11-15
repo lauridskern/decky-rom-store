@@ -54,6 +54,10 @@ class SwitchRomsSource(Source):
 
     async def browse(self, system: str, limit: int = 200) -> List[RomEntry]:
         """Walk the catalogue pages so the browse view shows the whole library."""
+        # A Switch-only catalogue: browsing any other console would fetch a
+        # dozen pages only for the store to filter every result out again.
+        if system != "switch":
+            return []
         entries: List[RomEntry] = []
         seen = set()
         for page in range(1, 13):

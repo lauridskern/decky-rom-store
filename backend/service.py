@@ -798,7 +798,7 @@ class StoreService:
         await self._apply_portrait_covers(roms)
         if not self.covers.enabled:
             return
-        replace = bool(self.settings.get("igdb_replace_covers", True))
+        replace = bool(self.settings.get("igdb_replace_covers", False))
 
         # Apply what we already know - this is instant and makes the ratings
         # show up on the next search.
@@ -840,7 +840,7 @@ class StoreService:
         return task
 
     async def _igdb_enrich(self, roms: List[MergedRom], titles: List[str]) -> None:
-        replace = bool(self.settings.get("igdb_replace_covers", True))
+        replace = bool(self.settings.get("igdb_replace_covers", False))
         try:
             found = await self.covers.lookup_many(titles, limit=len(titles))
         except Exception:

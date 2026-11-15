@@ -19,6 +19,12 @@ interface Props {
    * when the frame will not take that shape, and the art is fitted as usual.
    */
   onRatio?: (ratio: number) => boolean;
+  /**
+   * The art was resized to a fixed size by its source (see isResizedArt) and
+   * the frame has the console's box shape: draw it stretched to the frame,
+   * which gives it back its real proportions.
+   */
+  stretch?: boolean;
 }
 
 /**
@@ -30,7 +36,7 @@ interface Props {
  * fitted inside and the frame is filled with its own colours instead of
  * cutting the picture off at the edges.
  */
-const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRatio }) => {
+const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRatio, stretch }) => {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [fit, setFit] = useState<"cover" | "contain">("cover");
@@ -71,7 +77,7 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRati
   const measure = (event: SyntheticEvent<HTMLImageElement>) => {
     const image = event.currentTarget;
     const box = frame.current;
-    if (!box || !image.naturalWidth || !image.naturalHeight) return;
+    if (stretch || !box || !image.naturalWidth || !image.naturalHeight) return;
     if (onRatio?.(image.naturalWidth / image.naturalHeight)) {
       // The frame is about to take the art's own shape, so the art fills it.
       setFit("cover");
@@ -89,10 +95,10 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRati
   };
 
   return (
-    <div ref={frame} className={`rs-cover-img rs-cover-img--${fit} ${className ?? ""}`}>
+    <div ref={frame} className={`rs-cover-img rs-cover-img--${stretch ? "fill" : fit} ${className ?? ""}`}>
       {src && !failed ? (
         <>
-          {fit === "contain" ? (
+          {fit === "contain" && !stretch ? (
             <div className="rs-cover-ambient" style={{ backgroundImage: `url("${src}")` }} />
           ) : null}
           <img src={src} alt={alt} decoding="async" loading="lazy" onLoad={measure} onError={() => setFailed(true)} />

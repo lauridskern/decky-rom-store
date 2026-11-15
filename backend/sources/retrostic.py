@@ -262,13 +262,14 @@ class RetrosticSource(Source):
             region=extract_region(title),
         )
 
-    @staticmethod
-    def _row_image(row: str) -> Optional[str]:
+    def _row_image(self, row: str) -> Optional[str]:
         for match in _IMG_RE.finditer(row):
             path = match.group(1)
             if "spinner" in path or "no-image" in path or "flags/" in path or "logo" in path:
                 continue
-            return path
+            # The listings use site-relative paths (/img/screenshots/...);
+            # the client can only load an absolute URL.
+            return absolute(self.base, path)
         return None
 
     # ------------------------------------------------------------------ details
