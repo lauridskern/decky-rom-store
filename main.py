@@ -156,6 +156,24 @@ class Plugin:
     async def browse(self, system: str, limit: int = 60) -> Dict[str, Any]:
         return await self._self().service.browse(system, limit)
 
+    # ------------------------------------------------------------------ mods
+    async def get_game_mods(self, game_id: str) -> Dict[str, Any]:
+        """Popular GameBanana mods for an installed game (backend/mods.py)."""
+        return await self._self().service.game_mods(game_id)
+
+    async def install_mod(self, game_id: str, mod_id: int, variant: Optional[str] = None) -> Dict[str, Any]:
+        return await self._self().service.install_mod(game_id, mod_id, variant)
+
+    async def get_mod_job(self) -> Dict[str, Any]:
+        return self._self().service.mods.job()
+
+    async def cancel_mod(self) -> Dict[str, Any]:
+        self._self().service.mods.cancel()
+        return {"ok": True}
+
+    async def remove_mod(self, game_id: str, mod_id: int) -> Dict[str, Any]:
+        return await self._self().service.remove_mod(game_id, mod_id)
+
     async def get_consoles(self) -> List[Dict[str, Any]]:
         """Every console a source can browse, with its game count if known."""
         return await self._self().service.consoles()

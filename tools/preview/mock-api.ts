@@ -235,6 +235,8 @@ const steamTracked: Record<string, { appid: number; name: string }> = {};
 let installedGames = FRESH ? [] : [
   { id: "g1", system: "n64", title: "Super Mario 64 (USA)", cover: "./covers/sm64.webp", folder: "/home/deck/EmuDecky/roms/n64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 3 },
   { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", folder: "/home/deck/EmuDecky/roms/psx", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }], size: 1_010_000_120, modified: 2 },
+  { id: "g4", system: "switch", title: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0]", folder: "/home/deck/EmuDecky/roms/switch", files: [{ name: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0].nsp", size: 16_400_000_000, folder: false }], size: 16_400_000_000, modified: 4 },
+  { id: "g5", system: "gc", title: "Legend of Zelda, The - The Wind Waker (USA)", folder: "/home/deck/EmuDecky/roms/gc", files: [{ name: "Legend of Zelda, The - The Wind Waker (USA).rvz", size: 980_000_000, folder: false }], size: 980_000_000, modified: 5 },
   { id: "g3", system: "gb", title: "Tetris (World) (Rev 1)", folder: "/home/deck/EmuDecky/roms/gb", files: [{ name: "Tetris (World) (Rev 1).gb", size: 32_768, folder: false }], size: 32_768, modified: 1 },
 ];
 
@@ -521,6 +523,57 @@ const speedFields = (id: string) => ({
   speed_tested: measured[id]?.tested ?? null,
   speed_test_error: measured[id]?.test_error ?? null,
 });
+
+// Mods (backend/mods.py): TotK and Wind Waker have some, the rest are not supported.
+const MODS: Record<string, any[]> = {
+  g4: [
+    { id: 480138, name: "UltraCam (Resolution, FPS, FreeCam)", category: "Visual Overhaul", likes: 161, version: "2.6.1", author: "MaxLastBreath", image: null, summary: "Resolution and FPS options, free camera, configurable in game.", file: { id: 1, name: "ultracam_261_beyond.zip", size: 130_298 }, installable: true, variants: ["UltraCam"], reason: null, installed: null },
+    { id: 448096, name: "Visuals Fixed 1.1.2", category: "Visual Overhaul", likes: 41, version: "1.1.2", author: "Ninjamonkey", image: null, summary: "Sharper shadows, less ghosting, 30 or 60 FPS builds.", file: { id: 2, name: "visuals_fixed.zip", size: 3_200_000 }, installable: true, variants: ["Sky Island Fix Standalone", "Visuals Fixed 30fps", "Visuals Fixed 60fps"], reason: null, installed: null },
+    { id: 446995, name: "Serfrost's Defogger (Native)", category: "Visual Overhaul", likes: 224, version: null, author: "Serfrost", image: null, summary: "Removes the distance fog.", file: { id: 3, name: "defogger.zip", size: 52_000 }, installable: true, variants: ["Serfrosts Defogger"], reason: null, installed: { variant: "Serfrosts Defogger", emulators: ["ryujinx", "citron"] } },
+    { id: 537404, name: "Challenge Mode Complete Version", category: "Gameplay", likes: 182, version: null, author: "Hylian", image: null, summary: "", file: { id: 4, name: "challenge.zip", size: 900_000 }, installable: false, variants: [], reason: "No romfs or exefs folder: not a mod this store can install", installed: null },
+  ],
+  g5: [
+    { id: 9001, name: "The Legend of Goose: The Honk Waker", category: "Skins", likes: 88, version: null, author: "Goose", image: null, summary: "HD texture pack.", file: { id: 5, name: "goose.zip", size: 41_000_000 }, installable: true, variants: ["HD Texture Pack"], reason: null, installed: null },
+    { id: 250757, name: "Linka! (Female Link)", category: "Skins", likes: 120, version: null, author: "someone", image: null, summary: "", file: { id: 6, name: "linka.zip", size: 3_333_603 }, installable: false, variants: [], reason: "Replaces files on the disc: needs patching the game, not one-click", installed: null },
+  ],
+};
+let modJob: any = { state: "idle" };
+handlers.get_game_mods = async (id: string) => {
+  await new Promise((r) => setTimeout(r, 400));
+  const game = installedGames.find((g) => g.id === id);
+  if (!game || !MODS[id]) {
+    return { supported: false, emulators: [], mods: [], reason: "Mods are supported for Switch, GameCube and Wii games so far." };
+  }
+  const emulators = game.system === "switch" ? [{ id: "ryujinx", label: "Ryujinx" }, { id: "citron", label: "Citron" }] : [{ id: "dolphin", label: "Dolphin" }];
+  return { supported: true, emulators, game_id: game.system === "switch" ? "0100F2C0115B6000" : "GZLE01", gamebanana: { id: 7617, name: game.title.replace(/ \[.*$/, "") }, mods: MODS[id], reason: null };
+};
+handlers.install_mod = async (gameId: string, modId: number, variant: string | null) => {
+  const mod = MODS[gameId]?.find((m) => m.id === modId);
+  if (!mod) return { ok: false, state: "error", error: "Unknown mod" };
+  const total = mod.file.size;
+  modJob = { state: "downloading", mod: modId, game: gameId, received: 0, total };
+  const tick = () => {
+    if (modJob.state !== "downloading") return;
+    modJob.received = Math.min(total, modJob.received + total / 6);
+    if (modJob.received >= total) {
+      modJob.state = "installing";
+      setTimeout(() => {
+        modJob.state = "done";
+        mod.installed = { variant: variant ?? mod.variants[0], emulators: gameId === "g5" ? ["dolphin"] : ["ryujinx", "citron"] };
+        if (gameId === "g5") modJob.config = "GFX.ini";
+      }, 500);
+    } else setTimeout(tick, 350);
+  };
+  setTimeout(tick, 350);
+  return { ok: true, ...modJob };
+};
+handlers.get_mod_job = async () => ({ ...modJob });
+handlers.cancel_mod = async () => { modJob = { ...modJob, state: "error", error: "Cancelled" }; return { ok: true }; };
+handlers.remove_mod = async (gameId: string, modId: number) => {
+  const mod = MODS[gameId]?.find((m) => m.id === modId);
+  if (mod) mod.installed = null;
+  return { ok: true, error: null };
+};
 
 export const callable =
   <Args extends any[] = [], Return = void>(route: string) =>

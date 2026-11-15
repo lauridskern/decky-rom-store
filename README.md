@@ -219,6 +219,22 @@ game's store page. Saves, EmuDeck's notes, artwork folders and emulator storage 
 `InstalledGames`, Cemu's `mlc01`, ...) are not listed and never
 touched, and nothing outside the ROM folders can be deleted.
 
+## Mods
+
+In the **Library** tab, **A** on a Switch, GameCube or Wii game opens its page
+with the most popular mods on [GameBanana](https://gamebanana.com): FPS and
+resolution mods, HD texture packs, UI and gameplay mods. **A** on a mod
+installs it in one go, into every emulator for that console the store finds
+(Ryujinx, yuzu/Citron/Eden/Sudachi/suyu for Switch; Dolphin for GameCube and
+Wii, where "Load Custom Textures" is switched on for you). A mod that comes in
+several builds (60 FPS, 30 FPS, ...) asks which one first. **A** on an
+installed mod removes it again, and exactly what was installed.
+
+Mods the store cannot install on its own (patches that change the disc,
+unusual layouts) are listed under *Not one-click*. A Switch game needs its
+title ID in the file name (`Game [0100…000].nsp`) or an NSP; mods made for
+another update of the game may crash it, so check the version on the mod.
+
 ## Steam library
 
 Every game you download is added to your Steam library straight away, and
@@ -382,7 +398,7 @@ buttons do where you are.
 | home | d-pad through the shelves and the consoles · **A** open · **Y** favourite |
 | results | **A** game page · **Y** favourite · **L2 / R2** previous / next page · **B** home |
 | game page | starts on Download · **A / X** download · **Y** favourite · **L1 / R1** previous / next game · **B** close |
-| library | **A** uninstall (asks, *Keep* selected) · **Y** store page |
+| library | **A** game page with mods · **X** uninstall (asks, *Keep* selected) · **Y** store page |
 | downloads | **A** cancel, or open a finished game's page · **X** clear finished |
 | settings | d-pad up/down picks a section, right goes into it · **A** flips a switch |
 | screenshot viewer | **◀ ▶ / A** next · **B** back to the game page |

@@ -5,7 +5,8 @@ import { InstalledGame, StorageInfo } from "../types";
 import { boxRatio, formatBytes, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import { NoArt } from "./RomCard";
-import { focusElement } from "./gamepad";
+import { childFocus, focusElement } from "./gamepad";
+import ModsPanel from "./ModsPanel";
 import { useBackGuard } from "./useBackGuard";
 import { EmptyState, Spinner } from "./ui";
 
@@ -42,6 +43,8 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [sort, setSort] = useState("console");
+  // The game whose page (mods, uninstall) is open.
+  const [open, setOpen] = useState<InstalledGame | null>(null);
 
   const total = (games ?? []).reduce((sum, game) => sum + game.size, 0);
 
@@ -108,12 +111,20 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
     );
   };
 
+  const closePage = () => {
+    const id = open?.id;
+    setOpen(null);
+    if (id) window.requestAnimationFrame(() => focusElement(card(id)));
+  };
+
   return (
+    <>
     <Focusable noFocusRing
       ref={viewRef}
       className={`rs-view rs-scroll${games && games.length === 0 ? " is-empty" : ""}`}
       data-view="library"
       flow-children="column"
+      {...childFocus(open === null)}
     >
       <Focusable noFocusRing className="rs-view-head" flow-children="row">
         <div className="rs-view-title">
@@ -231,9 +242,11 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
                   className="rs-lib-card rs-f"
                   data-game={game.id}
                   focusClassName="is-focus"
-                  onActivate={() => ask(game)}
-                  onClick={() => ask(game)}
-                  onOKActionDescription="Uninstall"
+                  onActivate={() => setOpen(game)}
+                  onClick={() => setOpen(game)}
+                  onOKActionDescription="Mods"
+                  onSecondaryButton={() => ask(game)}
+                  onSecondaryActionDescription="Uninstall"
                   onOptionsButton={() => onStorePage({ title: game.title, system: game.system, cover: game.cover })}
                   onOptionsActionDescription="Store page"
                 >
@@ -260,6 +273,19 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
         </section>
       ))}
     </Focusable>
+    {open ? (
+      <ModsPanel
+        game={open}
+        onClose={closePage}
+        onUninstall={() => {
+          const game = open;
+          setOpen(null);
+          window.setTimeout(() => ask(game), 0);
+        }}
+        onStorePage={() => onStorePage({ title: open.title, system: open.system, cover: open.cover })}
+      />
+    ) : null}
+    </>
   );
 };
 

@@ -18,6 +18,8 @@ from .artwork import SteamArtwork
 from .boxart import BoxArt
 from .gametdb import PLATFORMS as GAMETDB_PLATFORMS, GameTDB
 from .sgdb import SteamGridCovers
+from .mods import ModManager
+from .steam import _home as _user_home
 from .speedtest import SpeedTest
 from .covers import IgdbCovers
 from .dedupe import merge_entries, sort_roms
@@ -136,6 +138,7 @@ class StoreService:
         self.gametdb = GameTDB(self.http, cache_dir=runtime_dir)
         self.images.alternatives = GameTDB.alternatives
         self.sgdb = SteamGridCovers(self.http, self.steamgriddb_key, cache_dir=runtime_dir)
+        self.mods = ModManager(self.http, runtime_dir, home=_user_home)
         self.library_index = LibraryIndex()
         self.srm = SrmRunner(runtime_dir)
         self.speeds = SpeedStats(os.path.join(runtime_dir, "source_speeds.json") if runtime_dir else None)
@@ -1405,6 +1408,29 @@ class StoreService:
         loop.create_task(self.images.prefetch(urls))
 
     # ------------------------------------------------------------------ system counts
+    # ------------------------------------------------------------------ mods
+    def _installed_game(self, game_id: str) -> Optional[Dict[str, Any]]:
+        return next((g for g in installed_games(self.roms_root()) if g["id"] == game_id), None)
+
+    async def game_mods(self, game_id: str) -> Dict[str, Any]:
+        """Popular mods for an installed game and what is installed (backend/mods.py)."""
+        game = await asyncio.to_thread(self._installed_game, game_id)
+        if not game:
+            return {"supported": False, "reason": "That game is no longer in the library.", "mods": [], "emulators": []}
+        return await self.mods.game_mods(game, self.roms_root())
+
+    async def install_mod(self, game_id: str, mod_id: int, variant: Optional[str] = None) -> Dict[str, Any]:
+        game = await asyncio.to_thread(self._installed_game, game_id)
+        if not game:
+            return {"ok": False, "error": "That game is no longer in the library."}
+        return self.mods.start_install(game, int(mod_id), variant)
+
+    async def remove_mod(self, game_id: str, mod_id: int) -> Dict[str, Any]:
+        game = await asyncio.to_thread(self._installed_game, game_id)
+        if not game:
+            return {"ok": False, "error": "That game is no longer in the library."}
+        return await asyncio.to_thread(self.mods.remove, game, int(mod_id))
+
     def steamgriddb_key(self) -> str:
         """The user's own SteamGridDB key, else the one built into the plugin."""
         return (self.settings.get("steamgriddb_api_key") or "").strip() or DEFAULT_STEAMGRIDDB_KEY

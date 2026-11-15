@@ -625,6 +625,57 @@ export const CSS = `
 .rs-lib-steam { display: inline-flex; align-items: center; gap: 5px; color: var(--rs-accent); font-weight: 600; }
 .rs-lib-size { flex: 0 0 auto; font-size: 15px; font-weight: 700; color: var(--rs-text-2); white-space: nowrap; }
 
+/* -------------------------------------------------------- a game's mods */
+/* Over the Library tab, under the top bar (tabs stay usable). */
+.rs-modpage {
+  position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; min-height: 0;
+  background: var(--rs-bg); animation: rs-fade 140ms ease-out;
+}
+.rs-modpage-head { flex: 0 0 auto; display: flex; align-items: center; gap: 22px; padding: 22px var(--rs-pad) 18px; border-bottom: 1px solid var(--rs-line); }
+.rs-modpage-art { flex: 0 0 auto; height: 96px; overflow: hidden; background: #05070a; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5); }
+.rs-modpage-art .rs-noart { padding: 8px; }
+.rs-modpage-art .rs-noart-title { font-size: 12px; }
+.rs-modpage-title { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.rs-modpage-title .rs-h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-modpage-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.rs-modpage-actions .rs-close { background: var(--rs-surface-2); }
+.rs-modpage-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 12px; padding: 20px var(--rs-pad) 36px; scroll-padding: 20px 0 28px;
+}
+.rs-modpage-body .rs-section-head { align-items: center; }
+.rs-mod-cancel { margin-left: auto; }
+.rs-mods { display: flex; flex-direction: column; gap: 8px; }
+.rs-mod {
+  position: relative; display: flex; align-items: center; gap: 16px; min-width: 0; min-height: 84px;
+  padding: 10px 18px 10px 10px; border-radius: 14px; background: var(--rs-surface); overflow: hidden;
+}
+.rs-mod:hover, .rs-mod.is-focus { background: var(--rs-surface-2); }
+.rs-mod.manual { opacity: 0.62; }
+.rs-mod.manual.is-focus { opacity: 1; }
+.rs-mod-art {
+  flex: 0 0 auto; width: 112px; height: 64px; border-radius: 8px; overflow: hidden; background: #05070a;
+  display: flex; align-items: center; justify-content: center; color: var(--rs-text-3); font-size: 20px;
+}
+.rs-mod-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.rs-mod-name { font-size: 15px; font-weight: 700; color: var(--rs-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-mod-likes { display: inline-flex; align-items: center; gap: 5px; }
+.rs-mod-likes svg { font-size: 10px; color: var(--rs-bad); }
+.rs-mod-summary { font-size: 13px; color: var(--rs-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-mod.installed .rs-mod-summary { color: var(--rs-good); }
+.rs-mod-action { flex: 0 0 auto; display: flex; align-items: center; justify-content: center; min-width: 38px; }
+.rs-mod-state {
+  width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.08); color: var(--rs-text-2); font-size: 14px;
+}
+.rs-mod.is-focus .rs-mod-state { background: #fff; color: #0b0e13; }
+.rs-mod-state.on, .rs-mod.is-focus .rs-mod-state.on { background: rgba(106, 211, 122, 0.2); color: var(--rs-good); }
+.rs-mod-progress { font-size: 14px; font-weight: 800; color: var(--rs-accent); white-space: nowrap; }
+.rs-mod-bar { position: absolute; left: 0; right: 0; bottom: 0; }
+.rs-mod-bar .rs-progress { height: 4px; border-radius: 0; }
+.rs-mod-variants { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 4px 4px 138px; }
+.rs-mod-variants-label { font-size: 13px; font-weight: 700; color: var(--rs-text-2); margin-right: 4px; }
+
 /* ------------------------------------------------------------- downloads */
 .rs-dl-list { display: flex; flex-direction: column; gap: 8px; flex: 0 0 auto; }
 .rs-dl { display: flex; align-items: center; gap: 18px; min-width: 0; padding: 14px 18px 14px 14px; border-radius: 14px; background: var(--rs-surface); }

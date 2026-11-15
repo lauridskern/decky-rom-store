@@ -243,6 +243,53 @@ export interface InstalledGame {
   cover?: string | null;
 }
 
+/** A GameBanana mod for an installed game (backend/mods.py). */
+export interface ModInfo {
+  id: number;
+  name: string;
+  category?: string | null;
+  likes: number;
+  version?: string | null;
+  updated?: number | null;
+  author?: string | null;
+  image?: string | null;
+  summary?: string;
+  url?: string | null;
+  file: { id: number; name: string; size?: number | null; note?: string };
+  /** One click: the layout is known, the emulator and the game ID found. */
+  installable: boolean;
+  /** Builds inside the archive (60 FPS, 30 FPS, ...); one has to be picked. */
+  variants: string[];
+  /** Why it is not one-click. */
+  reason?: string | null;
+  installed?: { variant?: string | null; emulators: string[] } | null;
+}
+
+export interface GameMods {
+  game?: string;
+  system?: string;
+  supported: boolean;
+  /** The emulators a mod goes into. */
+  emulators: { id: string; label: string }[];
+  /** Switch title ID or GameCube / Wii game ID. */
+  game_id?: string | null;
+  gamebanana?: { id: number; name: string } | null;
+  mods: ModInfo[];
+  reason?: string | null;
+}
+
+export interface ModJob {
+  ok?: boolean;
+  state: "idle" | "downloading" | "installing" | "done" | "error";
+  mod?: number;
+  game?: string;
+  received?: number;
+  total?: number;
+  error?: string | null;
+  /** An emulator setting the install switched on (Dolphin's custom textures). */
+  config?: string | null;
+}
+
 export interface InstalledPayload {
   root: string;
   games: InstalledGame[];
@@ -400,6 +447,11 @@ export interface ConsoleInfo {
   count: number | null;
 }
 export const getConsoles = callable<[], ConsoleInfo[]>("get_consoles");
+export const getGameMods = callable<[string], GameMods>("get_game_mods");
+export const installMod = callable<[string, number, string | null], ModJob>("install_mod");
+export const getModJob = callable<[], ModJob>("get_mod_job");
+export const cancelMod = callable<[], { ok: boolean }>("cancel_mod");
+export const removeMod = callable<[string, number], { ok: boolean; error?: string | null }>("remove_mod");
 export const getStatus = callable<[], StatusPayload>("get_status");
 export const getImageDiagnostics = callable<[string | null], ImageDiagnostics>("image_diagnostics");
 export const getCacheStats = callable<[], CacheStats>("cache_stats");

@@ -88,6 +88,7 @@ backend/
   srm_runner.py             runs Steam ROM Manager itself while Steam is closed
   speeds.py                 measured speed + start delay per source (ranking)
   speedtest.py              speed test: one real link per source, timed sample
+  mods.py                   mods for installed games: GameBanana, emulators, install
   httpclient.py             urllib + cookies + per-host throttle (polite=)
   systems.py                console normalisation -> EmuDecky folder names
   emudeck.py                library detection (roms root, systems, folders)
@@ -110,6 +111,7 @@ src/
                             media, save-into)
     MediaGallery.tsx        screenshot strip + lightbox
     LibraryView.tsx         Library tab: installed games, drives, uninstall
+    ModsPanel.tsx           a library game's page: popular mods, install/remove
     DownloadsView.tsx       Downloads tab: running and finished downloads
     SettingsView.tsx        Settings tab: section list + pane, saves by itself
     ui.tsx                  shared parts: Glyph, Switch, Progress, EmptyState
@@ -373,6 +375,40 @@ A job carries the game's `cover` for that tab.
   and again from Content-Length; `library().storage` lists the internal and SD
   card libraries a download can go to (`root` argument of `start_download`).
 
+### Mods (Library → a game)
+
+`backend/mods.py`, `src/components/ModsPanel.tsx`. Switch (Ryujinx; yuzu,
+Citron, Eden, Sudachi, suyu) and GameCube / Wii (Dolphin) so far.
+
+- Emulators are found by their data folders (`EMULATORS`: EmuDeck's places,
+  native and Flatpak); a mod goes into every one found for that console.
+  Ryujinx: `mods/contents/<title id lower>/<mod>/`; the yuzu family:
+  `load/<TITLE ID>/<mod>/`; Dolphin: `Load/Textures/<game id>/<mod>/`, and
+  "Load Custom Textures" (`GFX.ini` `[Settings] HiresTextures = True`) is
+  switched on, the rest of the file kept.
+- Game IDs: Switch from `[0100…]` in the file name, else the ticket name
+  inside an NSP (PFS0); an XCI without it in the name is not supported (the
+  NCA metadata is encrypted). An update's ID maps to the base game (`…000`).
+  GC / Wii: the disc header of ISO/GCM, RVZ/WIA (0x58), CISO, WBFS.
+- GameBanana: the game by name (`Util/Game/NameMatch` matches a continuous
+  piece of a name, so `name_queries()` asks with pieces of the title and only
+  the same `match_title()` is accepted), its most downloaded mods
+  (`Mod/Index`), their files, and the paths inside each archive from the
+  legacy API (`Metadata().aArchiveFilesList()`), without downloading. Mod
+  lists are cached a day, games two weeks, archive listings for good.
+- `classify()`: Switch mods are the folders holding `romfs`/`exefs`/`cheats`
+  (several = builds to pick); Dolphin mods are `tex1_*` texture packs, and
+  anything that replaces disc files (`.arc`, `.szs`, `.dol`, `.xdelta`, …) is
+  "not one-click". Unknown layouts are listed, not installable.
+- Install: one at a time, download (progress, cancel), unpack (ZIP in
+  Python; 7z/RAR with `bsdtar`; paths outside the archive are refused), copy
+  the chosen build, record every path in `mods/installed.json`. Remove deletes
+  exactly those paths, and only when they sit directly in that emulator's mod
+  folder for the game.
+- Untested on a Deck: the emulator folders are EmuDeck's standard ones and
+  `bsdtar` is assumed to be on SteamOS. Mods made for another game update
+  can crash a Switch game; the version GameBanana lists is shown.
+
 ### Steam library
 
 Steam ROM Manager cannot run while Steam runs (it rewrites shortcuts.vdf, which
@@ -553,7 +589,7 @@ the cover that had it. Hints come from `on…ActionDescription` /
 | home | d-pad shelves ↔ consoles · A open · Y favourite (shelf tiles) |
 | results | d-pad search ↔ filters ↔ grid ↔ pager · A game page · Y favourite · L2/R2 page · B home |
 | game page | starts on Download · A/X download (A on a running one: Downloads tab) · Y favourite · L1/R1 previous/next game · B close |
-| library | A Uninstall → Keep (focused) / Delete · B keeps · Y store page |
+| library | A game page with mods (A install/remove, a build to pick if several; B closes) · X Uninstall → Keep (focused) / Delete · B keeps · Y store page |
 | downloads | A cancel / open a finished game's page · X clear finished |
 | settings | up/down section (the pane follows focus), right into it · A flips a switch |
 | screenshot viewer | ◀ ▶ / A next · B back to the game page |
