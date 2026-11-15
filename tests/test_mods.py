@@ -56,6 +56,35 @@ class GameIds(unittest.TestCase):
         self.assertIsNone(disc_game_id(write(os.path.join(tmp, "d.iso"), b"\0" * 64)))
 
 
+class Names(unittest.TestCase):
+    def test_clean_names_and_switch_titles(self):
+        from backend.titles import SwitchTitles, clean_name
+        self.assertEqual(clean_name("+Super+Mario+Bros.+Wonder"), "Super Mario Bros. Wonder")
+        self.assertEqual(clean_name("Legend of Zelda, The - The Wind Waker (USA)"), "The Legend of Zelda - The Wind Waker")
+        self.assertEqual(clean_name("Mario_Kart_8_Deluxe_[0100152000022000][v0]"), "Mario Kart 8 Deluxe")
+        self.assertEqual(clean_name("Mario + Rabbids Kingdom Battle"), "Mario + Rabbids Kingdom Battle", "a real +")
+
+        home = tempfile.mkdtemp()
+        titles = SwitchTitles(lambda: home)
+        self.assertEqual(titles.find("+Super+Mario+Bros.+Wonder"), "010015100B514000", "from the shipped list")
+        self.assertEqual(titles.name("010015100B514000"), "Super Mario Bros. Wonder")
+        self.assertIsNone(titles.find("A Game Nobody Made"))
+        # Newer than the list: Ryujinx's own game list has it.
+        meta = os.path.join(home, ".config/Ryujinx/games/0100abcdef012000/gui/metadata.json")
+        write(meta, json.dumps({"title": "A Game Nobody Made", "favorite": False}).encode())
+        self.assertEqual(titles.find("A_Game_Nobody_Made"), "0100ABCDEF012000")
+        self.assertEqual(titles.name("0100ABCDEF012000"), "A Game Nobody Made")
+
+        tmp = tempfile.mkdtemp()
+        xci = write(os.path.join(tmp, "+Super+Mario+Bros.+Wonder.xci"), b"HEAD" * 8)
+        self.assertEqual(switch_title_id(xci, titles.find), "010015100B514000", "an XCI without the ID in its name")
+
+    def test_switch_roms_file_names(self):
+        from backend.sources.switchroms import SwitchRomsSource
+        url = "https://dl.invalid/get?filename=+Super+Mario+Bros.+Wonder.nsp&x=1"
+        self.assertEqual(SwitchRomsSource._filename_from(url), "Super Mario Bros. Wonder.nsp")
+
+
 class Layouts(unittest.TestCase):
     def test_switch(self):
         self.assertEqual(classify("switch", ["UltraCam/exefs/main.npdm", "UltraCam/romfs/a.ini"], None)["variants"],

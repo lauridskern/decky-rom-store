@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from typing import Any, Dict, List, Optional
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, unquote_plus, urlparse
 
 from ..htmlutil import absolute, collapse_ws, strip_tags
 from ..models import RomEntry, RomFile, extract_region
@@ -262,11 +262,11 @@ class SwitchRomsSource(Source):
         query = parsed.query
         name = ""
         if "filename=" in query:
-            name = query.split("filename=", 1)[1]
-            name = name.split("&", 1)[0]
+            # A query value: "+" is a space there.
+            name = unquote_plus(query.split("filename=", 1)[1].split("&", 1)[0])
         if not name:
-            name = parsed.path.rsplit("/", 1)[-1]
-        name = unquote(name)
+            name = unquote(parsed.path.rsplit("/", 1)[-1])
+        name = name.strip()
         name = re.sub(r"^\d+[a-z0-9]*-", "", name)  # strip the hash prefix
         return name or "switch-rom.nsp"
 

@@ -89,6 +89,8 @@ backend/
   speeds.py                 measured speed + start delay per source (ranking)
   speedtest.py              speed test: one real link per source, timed sample
   mods.py                   mods for installed games: GameBanana, emulators, install
+  titles.py                 real names for files; Switch title IDs by name
+  data/switch_titles.json.gz  Switch title ID -> name (tools/update_switch_titles.py)
   httpclient.py             urllib + cookies + per-host throttle (polite=)
   systems.py                console normalisation -> EmuDecky folder names
   emudeck.py                library detection (roms root, systems, folders)
@@ -128,6 +130,7 @@ tools/
   verify_package.py         validates a release zip against Decky's installer
   selftest.py               live end-to-end backend test (temp download dir)
   record_fixtures.py        re-record tests/fixtures from the live sites
+  update_switch_titles.py   rebuild backend/data/switch_titles.json.gz from titledb
   preview/                  browser harness for the UI (see §5)
 ```
 
@@ -387,8 +390,18 @@ Citron, Eden, Sudachi, suyu) and GameCube / Wii (Dolphin) so far.
   "Load Custom Textures" (`GFX.ini` `[Settings] HiresTextures = True`) is
   switched on, the rest of the file kept.
 - Game IDs: Switch from `[0100…]` in the file name, else the ticket name
-  inside an NSP (PFS0); an XCI without it in the name is not supported (the
-  NCA metadata is encrypted). An update's ID maps to the base game (`…000`).
+  inside an NSP (PFS0), else by name (`titles.py`): the shipped title list
+  (`backend/data/switch_titles.json.gz`, ~19k base games, 330 kB, made from
+  blawar/titledb's 90 MB US.en.json by `tools/update_switch_titles.py`; run
+  it before a release now and then), then Ryujinx's game list
+  (`games/<tid>/gui/metadata.json`). The NCA metadata is encrypted and is
+  never read. An update's ID maps to the base game (`…000`).
+- Names: `installed_view` gives every game a `name`: Switch from the title
+  list, others from the matched libretro scan or GameTDB, else
+  `titles.clean_name()` (`+`/`%20`/`_` to spaces, tags and "NSP" gone,
+  "Title, The" turned round). GameBanana is searched with it. The Library
+  reads console folders strictly (`emudeck_folder(..., strict=True)`): a
+  missing `nes` folder must not make SNES games NES games.
   GC / Wii: the disc header of ISO/GCM, RVZ/WIA (0x58), CISO, WBFS.
 - GameBanana: the game by name (`Util/Game/NameMatch` matches a continuous
   piece of a name, so `name_queries()` asks with pieces of the title and only

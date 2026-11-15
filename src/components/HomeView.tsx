@@ -134,9 +134,9 @@ const HomeView: FC<Props> = ({ consoles, favorites, recent, installed, onConsole
                 onClick={() => onInstalled(game.id)}
                 onOKActionDescription="Show in library"
               >
-                <Art item={{ title: game.title, system: game.system, cover: game.cover ?? null }} height={172} className="rs-shelf-art" />
+                <Art item={{ title: game.name ?? game.title, system: game.system, cover: game.cover ?? null }} height={172} className="rs-shelf-art" />
                 <div className="rs-shelf-title" title={game.title}>
-                  {game.title}
+                  {game.name ?? game.title}
                 </div>
                 <div className="rs-shelf-sub">
                   {systemLabel(game.system)} · {formatBytes(game.size)}

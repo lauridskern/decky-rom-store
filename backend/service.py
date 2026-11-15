@@ -18,7 +18,8 @@ from .artwork import SteamArtwork
 from .boxart import BoxArt
 from .gametdb import PLATFORMS as GAMETDB_PLATFORMS, GameTDB
 from .sgdb import SteamGridCovers
-from .mods import ModManager
+from .mods import ModManager, switch_title_id, _main_file
+from .titles import SwitchTitles, clean_name
 from .steam import _home as _user_home
 from .speedtest import SpeedTest
 from .covers import IgdbCovers
@@ -138,7 +139,8 @@ class StoreService:
         self.gametdb = GameTDB(self.http, cache_dir=runtime_dir)
         self.images.alternatives = GameTDB.alternatives
         self.sgdb = SteamGridCovers(self.http, self.steamgriddb_key, cache_dir=runtime_dir)
-        self.mods = ModManager(self.http, runtime_dir, home=_user_home)
+        self.titles = SwitchTitles(_user_home)
+        self.mods = ModManager(self.http, runtime_dir, home=_user_home, lookup=self.titles.find)
         self.library_index = LibraryIndex()
         self.srm = SrmRunner(runtime_dir)
         self.speeds = SpeedStats(os.path.join(runtime_dir, "source_speeds.json") if runtime_dir else None)
@@ -953,7 +955,29 @@ class StoreService:
             await self._library_fallback_covers(games)
         except Exception as exc:  # pragma: no cover - art must never break the list
             print(f"ROM Store: library cover fallback failed: {exc!r}")
+        for game in games:
+            game["name"] = self._display_name(game)
         return result
+
+    def _display_name(self, game: Dict[str, Any]) -> str:
+        """The game's real name: from the title list, libretro or GameTDB,
+        else the file name cleaned up (backend/titles.py)."""
+        title, system = str(game.get("title") or ""), str(game.get("system") or "")
+        cleaned = clean_name(title)
+        try:
+            if system == "switch":
+                path = _main_file(game)
+                tid = switch_title_id(path, self.titles.find) if path else None
+                name = self.titles.name(tid)
+                if name:
+                    return name
+            for candidate in (title, cleaned):
+                name = self.boxart.name(candidate, system) or self.gametdb.name(candidate, system)
+                if name:
+                    return name
+        except Exception:  # pragma: no cover - a name must never break the list
+            pass
+        return cleaned
 
     async def _library_fallback_covers(self, games: List[Dict[str, Any]], wait: float = 2.0) -> None:
         """Covers for installed games the box-art index has no scan for.
@@ -1410,7 +1434,11 @@ class StoreService:
     # ------------------------------------------------------------------ system counts
     # ------------------------------------------------------------------ mods
     def _installed_game(self, game_id: str) -> Optional[Dict[str, Any]]:
-        return next((g for g in installed_games(self.roms_root()) if g["id"] == game_id), None)
+        game = next((g for g in installed_games(self.roms_root()) if g["id"] == game_id), None)
+        if game:
+            # The real name: GameBanana is searched with it, not the file name.
+            game["name"] = self._display_name(game)
+        return game
 
     async def game_mods(self, game_id: str) -> Dict[str, Any]:
         """Popular mods for an installed game and what is installed (backend/mods.py)."""

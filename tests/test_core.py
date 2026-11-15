@@ -368,6 +368,13 @@ class Installed(unittest.TestCase):
         games = {g["title"] for g in installed_games(root)}
         self.assertEqual(games, {"Tetris (World)", "Doom"})
 
+    def test_a_console_never_takes_another_consoles_folder(self):
+        root = os.path.join(tempfile.mkdtemp(), "roms")
+        self.make(root, "snes/Super Mario World (USA).sfc")
+        self.make(root, "gba/Golden Sun (USA).gba")
+        games = {g["title"]: g["system"] for g in installed_games(root)}
+        self.assertEqual(games, {"Super Mario World (USA)": "snes", "Golden Sun (USA)": "gba"})
+
     def test_uninstall_removes_the_game_only(self):
         home = tempfile.mkdtemp()
         root = os.path.join(home, "roms")

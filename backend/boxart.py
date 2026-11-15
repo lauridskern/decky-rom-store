@@ -227,6 +227,16 @@ class BoxArt:
         best = min(names, key=lambda name: _score(name, region or extract_region(title)))
         return full_url(SYSTEMS[system], best)
 
+    def name(self, title: str, system: str) -> Optional[str]:
+        """The game's name as the matched scan has it, without tags."""
+        names = self._index.get(system, {}).get(match_title(title))
+        if not names:
+            return None
+        best = min(names, key=lambda name: _score(name, extract_region(title)))
+        name = re.sub(r"\s*\([^)]*\)|\s*\[[^\]]*\]", "", best[:-4] if best.lower().endswith(".png") else best).strip()
+        # libretro writes "Title, The" and ":" as " - ".
+        return re.sub(r"^(.+?), (The|A|An)\b", r"\2 \1", name) or None
+
     async def covers(self, games: List[Dict[str, object]], resize: bool = True, wait: float = 2.0) -> None:
         """Box art for installed games (dicts with ``title`` and ``system``).
 

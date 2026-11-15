@@ -233,11 +233,11 @@ const steamTracked: Record<string, { appid: number; name: string }> = {};
 
 // Installed games panel: a few games, one with several files.
 let installedGames = FRESH ? [] : [
-  { id: "g1", system: "n64", title: "Super Mario 64 (USA)", cover: "./covers/sm64.webp", folder: "/home/deck/EmuDecky/roms/n64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 3 },
-  { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", folder: "/home/deck/EmuDecky/roms/psx", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }], size: 1_010_000_120, modified: 2 },
-  { id: "g4", system: "switch", title: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0]", folder: "/home/deck/EmuDecky/roms/switch", files: [{ name: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0].nsp", size: 16_400_000_000, folder: false }], size: 16_400_000_000, modified: 4 },
-  { id: "g5", system: "gc", title: "Legend of Zelda, The - The Wind Waker (USA)", folder: "/home/deck/EmuDecky/roms/gc", files: [{ name: "Legend of Zelda, The - The Wind Waker (USA).rvz", size: 980_000_000, folder: false }], size: 980_000_000, modified: 5 },
-  { id: "g3", system: "gb", title: "Tetris (World) (Rev 1)", folder: "/home/deck/EmuDecky/roms/gb", files: [{ name: "Tetris (World) (Rev 1).gb", size: 32_768, folder: false }], size: 32_768, modified: 1 },
+  { id: "g1", system: "n64", title: "Super Mario 64 (USA)", name: "Super Mario 64", cover: "./covers/sm64.webp", folder: "/home/deck/EmuDecky/roms/n64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 3 },
+  { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", name: "Final Fantasy VII", folder: "/home/deck/EmuDecky/roms/psx", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }], size: 1_010_000_120, modified: 2 },
+  { id: "g4", system: "switch", title: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0]", name: "The Legend of Zelda: Tears of the Kingdom", folder: "/home/deck/EmuDecky/roms/switch", files: [{ name: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0].nsp", size: 16_400_000_000, folder: false }], size: 16_400_000_000, modified: 4 },
+  { id: "g5", system: "gc", title: "Legend of Zelda, The - The Wind Waker (USA)", name: "The Legend of Zelda: The Wind Waker", folder: "/home/deck/EmuDecky/roms/gc", files: [{ name: "Legend of Zelda, The - The Wind Waker (USA).rvz", size: 980_000_000, folder: false }], size: 980_000_000, modified: 5 },
+  { id: "g3", system: "gb", title: "Tetris (World) (Rev 1)", name: "Tetris", folder: "/home/deck/EmuDecky/roms/gb", files: [{ name: "Tetris (World) (Rev 1).gb", size: 32_768, folder: false }], size: 32_768, modified: 1 },
 ];
 
 const library: LibraryInfo = {

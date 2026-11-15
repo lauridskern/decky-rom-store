@@ -29,6 +29,7 @@ const busy = (job: ModJob | null) => job?.state === "downloading" || job?.state 
  */
 const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const name = game.name ?? game.title;
   const [info, setInfo] = useState<GameMods | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [job, setJob] = useState<ModJob | null>(null);
@@ -79,7 +80,7 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
           if (next.state === "done") {
             toaster.toast({
               title: "Mod installed",
-              body: next.config ? "Custom textures were switched on in Dolphin" : game.title,
+              body: next.config ? "Custom textures were switched on in Dolphin" : name,
               icon: "Check",
             });
             load();
@@ -90,7 +91,7 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
         .catch(() => undefined);
     }, 600);
     return () => window.clearTimeout(timer);
-  }, [running, job, load, game.title]);
+  }, [running, job, load, name]);
 
   const install = (mod: ModInfo, variant: string | null) => {
     setChoosing(null);
@@ -222,12 +223,12 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
     <Focusable noFocusRing ref={panelRef} className="rs-modpage" flow-children="column">
       <header className="rs-modpage-head">
         <div className="rs-modpage-art" style={{ aspectRatio: String(Math.min(1.45, Math.max(0.6, boxRatio(game.system)))) }}>
-          {game.cover ? <CoverImage url={game.cover} alt="" /> : <NoArt title={game.title} system={game.system} />}
+          {game.cover ? <CoverImage url={game.cover} alt="" /> : <NoArt title={name} system={game.system} />}
         </div>
         <div className="rs-modpage-title">
           <span className="rs-eyebrow">{systemLabel(game.system)}</span>
           <h1 className="rs-h1" title={game.title}>
-            {game.title.replace(/\s*\[[^\]]*\]/g, "").trim() || game.title}
+            {name}
           </h1>
           <div className="rs-meta">
             <span>{formatBytes(game.size)}</span>

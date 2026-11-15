@@ -85,6 +85,7 @@ class GameTDB:
         self._dir = os.path.join(cache_dir, "gametdb") if cache_dir else None
         self._index: Dict[str, Dict[str, List[str]]] = {}
         self._sorted: Dict[str, List[str]] = {}
+        self._titles: Dict[str, Dict[str, str]] = {}
         self._loaded_at: Dict[str, float] = {}
         self._building: Dict[str, asyncio.Task] = {}
         # "switch/AABPA" -> [region folder or "", when it was looked up]
@@ -147,6 +148,7 @@ class GameTDB:
         if not isinstance(data, dict) or not data.get("titles"):
             return False
         self._index[platform] = self.group(data["titles"])
+        self._titles[platform] = data["titles"]
         self._sorted.pop(platform, None)
         self._loaded_at[platform] = float(data.get("at") or 0)
         return True
@@ -157,6 +159,7 @@ class GameTDB:
         if len(titles) < 100:  # an error page, not the list
             return
         self._index[platform] = self.group(titles)
+        self._titles[platform] = titles
         self._sorted.pop(platform, None)
         self._loaded_at[platform] = time.time()
         self._write(f"{platform}.json", {"at": time.time(), "titles": titles})
@@ -189,6 +192,12 @@ class GameTDB:
         if cleaned != key and index.get(cleaned):
             return index[cleaned]
         return self._prefix(platform, cleaned or key)
+
+    def name(self, title: str, system: str) -> Optional[str]:
+        """GameTDB's name for this game (its title list must be loaded)."""
+        platform = PLATFORMS.get(system)
+        ids = self.ids(title, system) if platform else []
+        return self._titles.get(platform or "", {}).get(ids[0]) if ids else None
 
     def _prefix(self, platform: str, key: str) -> List[str]:
         """A cut-off title: the shortest full title it is the start of."""

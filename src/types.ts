@@ -241,6 +241,8 @@ export interface InstalledGame {
   in_steam?: boolean;
   /** Box art for it, when the console's box-art index has a match. */
   cover?: string | null;
+  /** Its real name (title list, libretro, GameTDB), else the file name cleaned up. */
+  name?: string;
 }
 
 /** A GameBanana mod for an installed game (backend/mods.py). */

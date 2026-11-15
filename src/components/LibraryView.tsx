@@ -57,7 +57,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
       return Array.from(map.entries());
     }
     if (sort === "size") list.sort((a, b) => b.size - a.size);
-    else if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title));
+    else if (sort === "title") list.sort((a, b) => (a.name ?? a.title).localeCompare(b.name ?? b.title));
     else list.sort((a, b) => b.modified - a.modified);
     return list.length ? [[null, list]] : [];
   }, [games, sort]);
@@ -215,7 +215,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
                   <div key={game.id} className="rs-lib-card asking" data-game={game.id}>
                     {thumb}
                     <div className="rs-lib-main">
-                      <div className="rs-lib-title">{game.title}</div>
+                      <div className="rs-lib-title">{game.name ?? game.title}</div>
                       <div className="rs-lib-meta">
                         Delete {files} {files === 1 ? "file" : "files"}, {formatBytes(game.size)}? This cannot be undone.
                       </div>
@@ -247,13 +247,13 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
                   onOKActionDescription="Mods"
                   onSecondaryButton={() => ask(game)}
                   onSecondaryActionDescription="Uninstall"
-                  onOptionsButton={() => onStorePage({ title: game.title, system: game.system, cover: game.cover })}
+                  onOptionsButton={() => onStorePage({ title: game.name ?? game.title, system: game.system, cover: game.cover })}
                   onOptionsActionDescription="Store page"
                 >
                   {thumb}
                   <div className="rs-lib-main">
                     <div className="rs-lib-title" title={game.files.map((file) => file.name).join("\n")}>
-                      {game.title}
+                      {game.name ?? game.title}
                     </div>
                     <div className="rs-lib-meta">
                       {system ? null : <span>{systemLabel(game.system)}</span>}
@@ -282,7 +282,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
           setOpen(null);
           window.setTimeout(() => ask(game), 0);
         }}
-        onStorePage={() => onStorePage({ title: open.title, system: open.system, cover: open.cover })}
+        onStorePage={() => onStorePage({ title: open.name ?? open.title, system: open.system, cover: open.cover })}
       />
     ) : null}
     </>

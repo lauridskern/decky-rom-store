@@ -146,12 +146,15 @@ _TITLE_ID_RE = re.compile(r"[\[(]?\b(01[0-9a-fA-F]{14})\b[\])]?")
 _DISC_ID_RE = re.compile(rb"^[A-Z0-9]{4}[0-9A-Z]{2}$")
 
 
-def switch_title_id(path: str) -> Optional[str]:
-    """The base game's title ID, from the file name or an NSP's ticket name."""
+def switch_title_id(path: str, lookup: Optional[Callable[[str], Optional[str]]] = None) -> Optional[str]:
+    """The base game's title ID: from the file name, an NSP's ticket name, or
+    else by the game's name (``lookup``: backend/titles.py)."""
     match = _TITLE_ID_RE.search(os.path.basename(path))
     tid = match.group(1) if match else None
     if not tid and path.lower().endswith((".nsp", ".nsz")):
         tid = _nsp_ticket_title(path)
+    if not tid and lookup:
+        tid = lookup(os.path.splitext(os.path.basename(path))[0])
     if not tid:
         return None
     # Updates (…800) and DLC belong to the base game's folder (…000).
@@ -201,9 +204,9 @@ def disc_game_id(path: str) -> Optional[str]:
     return candidate.decode("ascii") if _DISC_ID_RE.match(candidate) else None
 
 
-def game_id_for(system: str, path: str) -> Optional[str]:
+def game_id_for(system: str, path: str, lookup: Optional[Callable[[str], Optional[str]]] = None) -> Optional[str]:
     if system == "switch":
-        return switch_title_id(path)
+        return switch_title_id(path, lookup)
     if system in ("gc", "wii"):
         return disc_game_id(path)
     return None
@@ -342,8 +345,11 @@ def name_queries(title: str, limit: int = 6) -> List[str]:
 
 
 class ModManager:
-    def __init__(self, http: HttpClient, data_dir: Optional[str], home: Callable[[], str]):
+    def __init__(self, http: HttpClient, data_dir: Optional[str], home: Callable[[], str],
+                 lookup: Optional[Callable[[str], Optional[str]]] = None):
         self._http = http
+        # Switch title ID by name, when the file does not say (backend/titles.py).
+        self._lookup = lookup
         self._dir = os.path.join(data_dir, "mods") if data_dir else tempfile.mkdtemp(prefix="rom-store-mods-")
         self._home = home
         self._lock = threading.Lock()
@@ -493,18 +499,19 @@ class ModManager:
         emulators = detect_emulators(system, self._home())
         result["emulators"] = [{"id": e["id"], "label": e["label"]} for e in emulators]
         path = _main_file(game)
-        game_id = game_id_for(system, path) if path else None
+        game_id = game_id_for(system, path, self._lookup) if path else None
         result["game_id"] = game_id
         if not emulators:
             names = ", ".join(EMULATORS[e]["label"] for e in EMULATORS if system in EMULATORS[e]["systems"])
             result["reason"] = f"No emulator for this console found ({names})."
         elif not game_id:
             result["reason"] = (
-                "The game's title ID is unknown: add it to the file name, like \"Game [0100…000].nsp\"."
+                "The game's title ID is unknown (not in the file name, the NSP, the store's title list or "
+                "Ryujinx's game list): add it to the file name, like \"Game [0100…000].nsp\"."
                 if system == "switch" else "The game ID could not be read from this disc image."
             )
         try:
-            gb_game = await self.find_game(str(game.get("title") or ""))
+            gb_game = await self.find_game(str(game.get("name") or game.get("title") or ""))
         except (HttpError, ValueError) as exc:
             result["reason"] = result["reason"] or f"GameBanana did not answer: {exc}"
             return result
@@ -569,11 +576,11 @@ class ModManager:
         try:
             system = str(game.get("system") or "")
             path = _main_file(game)
-            game_id = game_id_for(system, path) if path else None
+            game_id = game_id_for(system, path, self._lookup) if path else None
             emulators = detect_emulators(system, self._home())
             if not game_id or not emulators:
                 raise RuntimeError("The game or its emulator could not be found")
-            gb_game = await self.find_game(str(game.get("title") or ""))
+            gb_game = await self.find_game(str(game.get("name") or game.get("title") or ""))
             mods = await self.popular(int(gb_game["id"])) if gb_game else []
             mod = next((m for m in mods if int(m["id"]) == int(mod_id)), None)
             if not mod:

@@ -231,9 +231,13 @@ several builds (60 FPS, 30 FPS, ...) asks which one first. **A** on an
 installed mod removes it again, and exactly what was installed.
 
 Mods the store cannot install on its own (patches that change the disc,
-unusual layouts) are listed under *Not one-click*. A Switch game needs its
-title ID in the file name (`Game [0100…000].nsp`) or an NSP; mods made for
-another update of the game may crash it, so check the version on the mod.
+unusual layouts) are listed under *Not one-click*. A Switch game's title ID
+comes from its file name, the NSP, a list of every Switch game the store
+ships with, or Ryujinx's game list; mods made for another update of the game
+may crash it, so check the version on the mod.
+
+The Library shows every game under its real name (from the same lists and
+box-art databases), not the file name a site gave it.
 
 ## Steam library
 

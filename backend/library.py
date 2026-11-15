@@ -156,7 +156,7 @@ def installed_games(root: str) -> List[Dict[str, Any]]:
     seen_folders: Set[str] = set()
     games: List[Dict[str, Any]] = []
     for system in known_systems():
-        folder_name = emudeck_folder(system["key"], available)
+        folder_name = emudeck_folder(system["key"], available, strict=True)
         folder = os.path.join(root, folder_name)
         if folder_name.lower() in seen_folders or not os.path.isdir(folder):
             continue

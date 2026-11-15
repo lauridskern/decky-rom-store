@@ -181,7 +181,7 @@ def default_folder(key: str) -> str:
     return SYSTEMS.get(key, ("Unknown", key))[1]
 
 
-def emudeck_folder(key: str, available: Optional[List[str]] = None) -> str:
+def emudeck_folder(key: str, available: Optional[List[str]] = None, strict: bool = False) -> str:
     """Map a system key onto a folder that exists in the EmuDecky roms tree.
 
     `available` is the list of directories found inside the roms root; when the
@@ -202,6 +202,9 @@ def emudeck_folder(key: str, available: Optional[List[str]] = None) -> str:
     for name in available:
         if _key(name) == compact:
             return name
+    if strict:
+        # Reading a library: "nes" must not take "snes" (or "gb" take "gba").
+        return preferred
     for name in available:
         nk = _key(name)
         if nk and (nk in compact or compact in nk):
