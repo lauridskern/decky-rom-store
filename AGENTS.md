@@ -464,6 +464,9 @@ One screen, four tabs (`Store.tsx` is the shell):
   rom, id `stub:…`) while `openShelfItem` looks its links up in the
   background, without touching the search on screen. Starting a download
   keeps the page open; its button becomes that job's progress.
+  The poster has its art's shape and fills the left column; on a screen too
+  short for it the whole column narrows instead (`sideLayout`, measured from
+  the page height), and only the facts that fit under it are shown.
 - **Settings save by themselves** (`SettingsView`: 700 ms after the last
   change, and when the tab closes). There is no Save button.
 

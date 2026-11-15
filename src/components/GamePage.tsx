@@ -1,4 +1,4 @@
-import { CSSProperties, FC, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, FC, ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
 import {
   BiosInfo,
@@ -105,6 +105,40 @@ function inRegion(file: RomFile, region: string): boolean {
   return (short[needle] ?? [needle]).some((token) => text.includes(token)) || text.includes("world");
 }
 
+// The poster column (see .rs-page-side in styles.ts).
+const SIDE_PAD_LEFT = 40;
+const SIDE_PAD_Y = 66 + 28;
+const SIDE_GAP = 22;
+const POSTER_MAX_WIDTH = 268;
+const POSTER_MIN_WIDTH = 120;
+const FACT_ROW = 37; // label + one line of value
+const FACT_GAP = 12;
+
+/**
+ * How wide the poster column is and how many facts fit under the poster.
+ *
+ * The poster has its art's shape and fills the column's width. A tall cover
+ * on a short screen would run off the bottom, so the poster gets at most the
+ * column's height minus two rows of facts, and the whole column narrows to
+ * the poster's width instead of the poster being cut or squashed. Facts that
+ * do not fit under it are left out rather than cut in half.
+ */
+export function sideLayout(
+  pageHeight: number,
+  ratio: number,
+  factCount: number,
+): { width: number; facts: number; columns: 1 | 2 } {
+  if (pageHeight <= 0) return { width: POSTER_MAX_WIDTH, facts: factCount, columns: 2 };
+  const column = pageHeight - SIDE_PAD_Y;
+  const reserved = factCount ? SIDE_GAP + 2 * FACT_ROW + FACT_GAP : 0;
+  const width = Math.round(Math.max(POSTER_MIN_WIDTH, Math.min(POSTER_MAX_WIDTH, (column - reserved) * ratio)));
+  const left = column - width / ratio - SIDE_GAP;
+  const rows = Math.max(0, Math.floor((left + FACT_GAP) / (FACT_ROW + FACT_GAP)));
+  // Two columns of facts need room for "DOWNLOADS" and a short value each.
+  const columns = width >= 220 ? 2 : 1;
+  return { width, facts: Math.min(factCount, rows * columns), columns };
+}
+
 /**
  * A game, on the whole screen: its art behind the title, the poster on the
  * left, and on the right everything in the order people need it - the
@@ -142,6 +176,17 @@ const GamePage: FC<Props> = ({
   // details until this one's arrive.
   const details = loaded?.id === rom.id ? loaded : null;
   const panelRef = useRef<HTMLDivElement | null>(null);
+  // The page's height: the poster column is sized from it (see sideLayout).
+  const [pageHeight, setPageHeight] = useState(0);
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    setPageHeight(panel.clientHeight);
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setPageHeight(panel.clientHeight));
+    observer.observe(panel);
+    return () => observer.disconnect();
+  }, []);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -288,6 +333,8 @@ const GamePage: FC<Props> = ({
     ["Found on", sourceNames.join(", ")],
   ].filter((fact): fact is [string, string] => Boolean(fact[1]));
 
+  const side = sideLayout(pageHeight, Number(posterShape) || 5 / 7, facts.length);
+
   // Some sites only name the file when the download starts (MyAbandonware);
   // "Rogue (DOS)" reads better than the link's "lfq3-rogue" until then.
   const fileName = (file: RomFile) =>
@@ -389,7 +436,7 @@ const GamePage: FC<Props> = ({
       </Focusable>
 
       {/* Left: the poster in its own shape, the credits under it. */}
-      <aside className="rs-page-side">
+      <aside className="rs-page-side" style={{ width: side.width + SIDE_PAD_LEFT }}>
         <div
           className="rs-poster"
           style={
@@ -415,9 +462,9 @@ const GamePage: FC<Props> = ({
             <NoArt title={rom.title} system={rom.system} />
           )}
         </div>
-        {facts.length > 0 ? (
-          <dl className="rs-facts">
-            {facts.map(([label, value]) => (
+        {side.facts > 0 ? (
+          <dl className={`rs-facts${side.columns === 1 ? " single" : ""}`}>
+            {facts.slice(0, side.facts).map(([label, value]) => (
               <div className="rs-fact" key={label}>
                 <dt>{label}</dt>
                 <dd title={value}>{value}</dd>

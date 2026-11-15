@@ -432,7 +432,8 @@ export const CSS = `
 /* On the whole store area: 1280 x 720 on the Deck. */
 .rs-page {
   position: absolute; inset: 0; z-index: 40; overflow: hidden;
-  display: grid; grid-template-columns: 308px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
+  /* The first column is as wide as the poster (GamePage sideLayout). */
+  display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: minmax(0, 1fr);
   background: var(--rs-bg);
   animation: rs-fade 140ms ease-out;
 }
@@ -459,19 +460,18 @@ export const CSS = `
 .rs-close:hover, .rs-close.is-focus { background: rgba(255, 255, 255, 0.2); }
 
 .rs-page-side { position: relative; display: flex; flex-direction: column; gap: 22px; min-width: 0; min-height: 0; overflow: hidden; padding: 66px 0 28px 40px; }
-/* The poster fills the column's width and has its art's shape. Its height is
-   never capped: a capped full-width frame squashes the art towards a square.
-   The facts under it take what is left of the column. */
+/* The poster fills the column's width and has its art's shape. A cover too
+   tall for the screen makes the column narrower (GamePage sideLayout); the
+   height alone is never capped, which would squash the art. */
 .rs-poster { position: relative; flex: 0 0 auto; width: 100%; overflow: hidden; background: #05070a; box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6); }
-/* Two columns: five facts under a tall poster still fit the 720px screen. */
+/* Two columns of one-line facts; as many rows as fit under the poster. */
 .rs-facts { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; align-content: start; min-height: 0; overflow: hidden; }
+.rs-facts.single { grid-template-columns: minmax(0, 1fr); }
 .rs-fact { min-width: 0; }
 .rs-fact:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .rs-fact dt { margin: 0 0 2px; font-size: 12px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: var(--rs-text-3); }
-.rs-fact dd {
-  margin: 0; font-size: 14px; line-height: 1.35; color: var(--rs-text); word-break: break-word;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
+.rs-fact dt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-fact dd { margin: 0; font-size: 14px; line-height: 1.35; color: var(--rs-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .rs-page-main {
   position: relative; min-width: 0; min-height: 0;
