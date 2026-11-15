@@ -1,4 +1,5 @@
 import { FC, ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { toaster } from "@decky/api";
 import { Button, Dropdown, Focusable, TextField } from "@decky/ui";
 import { FaDownload, FaFolderOpen, FaGlobe, FaImage, FaSteam, FaWrench } from "react-icons/fa";
 import { focusElement } from "./gamepad";
@@ -9,12 +10,15 @@ import {
   getImageDiagnostics,
   getLibrary,
   getSettings,
+  getSpeedTest,
   getStatus,
   ImageDiagnostics,
   LibraryInfo,
   Settings,
   SourceInfo,
+  SpeedTestStatus,
   srmStatus,
+  startSpeedTest,
   SrmStatus,
   steamStatus,
   SteamStatus,
@@ -31,15 +35,14 @@ interface Props {
   onSaved: (settings: Settings) => void;
 }
 
-const SOURCE_ORDER = ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"] as const;
-const WITH_BASE_URL = new Set(["romspedia", "retrostic", "romsdl", "switchroms", "nswpedia", "romsfun"]);
+const SOURCE_ORDER = ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"] as const;
+const WITH_BASE_URL = new Set(["romspedia", "retrostic", "romsdl", "switchroms", "romsfun"]);
 
 const SOURCE_HINTS: Record<string, string> = {
   switchroms: "Switch specific catalogue with hundreds of NSP/XCI titles and direct file links.",
   romspedia: "Server rendered search results, region specific builds, direct file links. The only source with a Switch section.",
   retrostic: "Large catalogue of classic consoles, direct zip downloads.",
   romsdl: "Same engine as Retrostic, different catalogue - useful for extra region builds.",
-  nswpedia: "Switch catalogue with its own search; covers and sizes come from the result cards.",
   romsfun:
     "Big catalogue across 50+ consoles, including romhacks and fan translations (listed after the games). Each download waits out the site's 7-second countdown first.",
   myabandonware: "TypeSense backed search for older PC and console titles.",
@@ -57,6 +60,7 @@ const SECTIONS: { key: SectionKey; label: string; icon: ReactNode; lead: string 
 
 /** Measured download speed, for the health line. */
 function speedNote(info: SourceInfo | undefined): string {
+  if (info?.speed_test_error) return ` · speed test: ${info.speed_test_error}`;
   if (!info?.speed || !info.speed_samples) return "";
   const delay = info.delay && info.delay >= 2 ? `, ${Math.round(info.delay)} s to start` : "";
   return ` · downloads at ${formatBytes(info.speed)}/s${delay} (${info.speed_samples} measured)`;
@@ -87,6 +91,52 @@ function SourceHealth({ info }: { info: SourceInfo | undefined }) {
       Working · last answered {timeAgo(info.last_ok)}
       {speedNote(info)}
     </span>
+  );
+}
+
+/**
+ * Every provider by measured speed, fastest first: the order the game page
+ * offers their files in. A provider whose last test got no file is last.
+ */
+function SpeedRanking({ sources, enabled }: { sources: SourceInfo[]; enabled: string[] }) {
+  const list = sources.filter((item) => enabled.includes(item.id));
+  const working = list
+    .filter((item) => item.speed && !item.speed_test_error)
+    .sort((a, b) => (b.speed ?? 0) - (a.speed ?? 0));
+  const failed = list.filter((item) => item.speed_test_error);
+  const unknown = list.filter((item) => !item.speed && !item.speed_test_error);
+  const top = working[0]?.speed ?? 1;
+  if (!working.length && !failed.length) return null;
+  return (
+    <div className="rs-speeds">
+      {working.map((item, index) => (
+        <div className="rs-speed" key={item.id}>
+          <span className="rs-speed-name">
+            {index === 0 ? <span className="rs-speed-top">Fastest</span> : null}
+            {SOURCE_LABELS[item.id] ?? item.label}
+          </span>
+          <span className="rs-speed-bar">
+            <span style={{ width: `${Math.max(2, Math.round(((item.speed ?? 0) / top) * 100))}%` }} />
+          </span>
+          <span className="rs-speed-value">
+            {formatBytes(item.speed)}/s
+            {item.delay && item.delay >= 2 ? <em> · {Math.round(item.delay)} s to start</em> : null}
+          </span>
+        </div>
+      ))}
+      {failed.map((item) => (
+        <div className="rs-speed failed" key={item.id} title={item.speed_test_error ?? undefined}>
+          <span className="rs-speed-name">{SOURCE_LABELS[item.id] ?? item.label}</span>
+          <span className="rs-speed-error">{item.speed_test_error}</span>
+        </div>
+      ))}
+      {unknown.map((item) => (
+        <div className="rs-speed unknown" key={item.id}>
+          <span className="rs-speed-name">{SOURCE_LABELS[item.id] ?? item.label}</span>
+          <span className="rs-speed-error">Not measured yet</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -152,6 +202,7 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
   const [perf, setPerf] = useState<PerfSample | null>(null);
   const [perfBusy, setPerfBusy] = useState(false);
   const [sources, setSources] = useState<SourceInfo[]>([]);
+  const [speedTest, setSpeedTest] = useState<SpeedTestStatus | null>(null);
   const [steam, setSteam] = useState<SteamStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [synced, setSynced] = useState<SyncResult | null>(null);
@@ -198,9 +249,44 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
       .then((status) => setSources(status.sources ?? []))
       .catch(() => undefined);
     getCacheStats().then(setCache).catch(() => undefined);
+    getSpeedTest().then(setSpeedTest).catch(() => undefined);
     steamStatus().then(setSteam).catch(() => undefined);
     srmStatus().then(setSrm).catch(() => undefined);
   }, []);
+
+  // While a speed test runs, follow it once a second; when it is done, the
+  // sources' figures are fresh, so read them again. Nothing polls otherwise.
+  const testing = Boolean(speedTest?.running);
+  useEffect(() => {
+    if (!testing) return;
+    let alive = true;
+    const timer = window.setTimeout(function tick() {
+      getSpeedTest()
+        .then((next) => {
+          if (!alive) return;
+          setSpeedTest(next);
+          if (!next.running) {
+            getStatus()
+              .then((status) => alive && setSources(status.sources ?? []))
+              .catch(() => undefined);
+          }
+        })
+        .catch(() => undefined);
+    }, 1000);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [testing, speedTest]);
+
+  const runSpeedTest = () => {
+    startSpeedTest()
+      .then((status) => {
+        setSpeedTest(status);
+        if (!status.running && status.error) toaster.toast({ title: "Speed test", body: status.error });
+      })
+      .catch(() => undefined);
+  };
 
   // Start on the section list.
   const ready = settings !== null;
@@ -329,8 +415,41 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
       </>
     );
   } else if (section === "sources") {
+    const current = speedTest?.current ? (SOURCE_LABELS[speedTest.current] ?? speedTest.current) : null;
+    const done = Object.keys(speedTest?.results ?? {}).length;
+    const total = done + (speedTest?.pending?.length ?? 0);
     body = (
       <>
+        <div className="rs-group">Speed</div>
+        <Row
+          label="Provider speed"
+          hint={
+            testing
+              ? `Testing ${current ?? "…"} (${Math.min(done + 1, total)} of ${total})`
+              : `Reads a few seconds of a real download from every provider, one after the other; nothing is saved. Every game page offers the fastest provider's file first${
+                  speedTest?.last_tested ? `. Last test ${timeAgo(speedTest.last_tested)}` : ""
+                }.`
+          }
+          fit
+        >
+          <Button noFocusRing className="rs-btn ghost" disabled={testing} onClick={runSpeedTest}>
+            {testing ? (
+              <>
+                <Spinner /> Testing…
+              </>
+            ) : (
+              "Test all now"
+            )}
+          </Button>
+        </Row>
+        <SpeedRanking sources={sources} enabled={settings.enabled_sources} />
+        <ToggleRow
+          label="Test again every week"
+          hint="By itself, a couple of minutes after the store starts, when nothing is downloading."
+          on={settings.speed_test_auto !== false}
+          onChange={(value) => update({ speed_test_auto: value })}
+        />
+        <div className="rs-group">Sources</div>
         {SOURCE_ORDER.map((id) => (
           <div className="rs-source" key={id}>
             <ToggleRow

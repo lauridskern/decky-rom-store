@@ -9,8 +9,8 @@ from typing import Any, Dict, Optional
 
 DEFAULTS: Dict[str, Any] = {
     "roms_root": "",
-    "source_priority": ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
-    "enabled_sources": ["switchroms", "nswpedia", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
+    "source_priority": ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
+    "enabled_sources": ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
     "extract_archives": False,
     "keep_archive": True,
     "max_concurrent": 2,
@@ -19,6 +19,7 @@ DEFAULTS: Dict[str, Any] = {
     "retrostic_base_url": "https://www.retrostic.com",
     "romsdl_base_url": "https://romsdl.com",
     "switchroms_base_url": "https://nintendo-switch-roms.com",
+    # Not a download source any more; only its Switch cover index is used.
     "nswpedia_base_url": "https://nswpedia.io",
     "romsfun_base_url": "https://romsfun.com",
     "myabandonware_base_url": "https://www.myabandonware.com",
@@ -30,11 +31,14 @@ DEFAULTS: Dict[str, Any] = {
     # its art only fills in games that have no cover unless this is turned on.
     "igdb_replace_covers": False,
     # Bumped when a stored value has to be migrated (see Settings.load).
-    "settings_revision": 4,
+    "settings_revision": 5,
     # Box art from libretro-thumbnails (see backend/boxart.py), and whether the
     # grid gets small copies through the wsrv.nl resizing proxy.
     # Region whose file the game panel offers first ("" picks no favourite).
     "preferred_region": "",
+    # Measure every provider's speed once a week (backend/speedtest.py), so the
+    # game page can offer the fastest one first.
+    "speed_test_auto": True,
     # Add installed games to the Steam library (backend/steam.py), sorted into
     # the collections their Steam ROM Manager parser names.
     "steam_shortcuts": True,
@@ -107,6 +111,13 @@ class Settings:
                 if isinstance(value, list) and "romsfun" not in value:
                     at = value.index("myabandonware") if "myabandonware" in value else len(value)
                     self._values[key] = value[:at] + ["romsfun"] + value[at:]
+        if revision < 5:
+            # Nswpedia was removed as a download source: every file link it
+            # has opens datanodes.to's download page, which needs a browser.
+            for key in ("enabled_sources", "source_priority"):
+                value = self._values.get(key)
+                if isinstance(value, list):
+                    self._values[key] = [s for s in value if s != "nswpedia"]
         self._values["settings_revision"] = DEFAULTS["settings_revision"]
         return True
 

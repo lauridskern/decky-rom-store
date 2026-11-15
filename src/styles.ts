@@ -663,6 +663,19 @@ export const CSS = `
 .rs-group { margin: 24px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--rs-text-3); }
 .rs-group:first-of-type { margin-top: 0; }
 
+/* Providers by measured speed, fastest first. */
+.rs-speeds { display: flex; flex-direction: column; gap: 2px; margin: 0 0 8px; padding: 10px 18px; border-radius: 14px; background: var(--rs-surface); }
+.rs-speed { display: grid; grid-template-columns: 200px minmax(0, 1fr) 190px; align-items: center; gap: 16px; min-height: 34px; }
+.rs-speed-name { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; font-weight: 700; color: var(--rs-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-speed-top { flex: 0 0 auto; padding: 2px 7px; border-radius: 6px; background: rgba(106, 211, 122, 0.18); color: var(--rs-good); font-size: 11px; font-weight: 800; letter-spacing: 0.4px; text-transform: uppercase; }
+.rs-speed-bar { height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.rs-speed-bar > span { display: block; height: 100%; border-radius: 4px; background: var(--rs-accent); }
+.rs-speed-value { font-size: 13px; font-weight: 700; color: var(--rs-text-2); text-align: right; white-space: nowrap; }
+.rs-speed-value em { font-style: normal; font-weight: 500; color: var(--rs-text-3); }
+.rs-speed.failed .rs-speed-name, .rs-speed.unknown .rs-speed-name { color: var(--rs-text-2); }
+.rs-speed-error { grid-column: 2 / -1; min-width: 0; font-size: 13px; color: var(--rs-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rs-speed.failed .rs-speed-error { color: var(--rs-warn); }
+
 .rs-row {
   display: flex; align-items: center; gap: 24px; min-width: 0; min-height: 62px;
   margin-bottom: 8px; padding: 12px 18px; border-radius: 14px; background: var(--rs-surface);

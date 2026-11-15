@@ -92,6 +92,9 @@ interface Props {
 
 /** Seconds until a file is in, from its provider's measurements; null if unmeasured. */
 function estimateSeconds(stats: SourceSpeed | undefined, size: number | null | undefined): number | null {
+  // The last speed test got no file from it (a browser check, a download
+  // page): offered last, after every provider that works.
+  if (stats?.test_error) return Number.POSITIVE_INFINITY;
   if (!stats?.speed) return null;
   return (stats.delay ?? 0) + (size ?? 0) / stats.speed;
 }
@@ -292,7 +295,10 @@ const GamePage: FC<Props> = ({
     rank: inRegion(item.file, preferredRegion) ? 0 : 1,
     eta: estimateSeconds(speeds[item.entry.source], gameSize),
   }));
-  const knownEtas = listed.map((item) => item.eta).filter((eta): eta is number => eta !== null).sort((a, b) => a - b);
+  const knownEtas = listed
+    .map((item) => item.eta)
+    .filter((eta): eta is number => eta !== null && Number.isFinite(eta))
+    .sort((a, b) => a - b);
   const typicalEta = knownEtas.length ? knownEtas[Math.floor(knownEtas.length / 2)] : 0;
   const files = listed.sort(
     (a, b) => a.rank - b.rank || (a.eta ?? typicalEta) - (b.eta ?? typicalEta) || a.index - b.index,

@@ -191,6 +191,13 @@ class Plugin:
         return await self._self().service.start_download(rom_id, entry_key, file_id, system, destination_folder, root)
 
     # ------------------------------------------------------------------ downloads
+    async def start_speed_test(self) -> Dict[str, Any]:
+        """Measure every enabled provider now; progress via get_speed_test."""
+        return self._self().service.start_speed_test()
+
+    async def get_speed_test(self) -> Dict[str, Any]:
+        return self._self().service.speed_test_status()
+
     async def get_speeds(self) -> Dict[str, Any]:
         """Measured speed and start delay per source (backend/speeds.py)."""
         return self._self().service.speeds.all()

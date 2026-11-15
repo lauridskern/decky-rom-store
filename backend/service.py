@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 from . import bios
 from .artwork import SteamArtwork
 from .boxart import BoxArt
+from .speedtest import SpeedTest
 from .covers import IgdbCovers
 from .dedupe import merge_entries, sort_roms
 from .downloader import DownloadManager
@@ -64,12 +65,6 @@ SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
         "label": "RomsDL",
         "homepage": "https://romsdl.com",
         "base_key": "romsdl_base_url",
-    },
-    "nswpedia": {
-        "cls": NswpediaSource,
-        "label": "Nswpedia",
-        "homepage": "https://nswpedia.io",
-        "base_key": "nswpedia_base_url",
     },
     "romsfun": {
         "cls": RomsFunSource,
@@ -125,6 +120,7 @@ class StoreService:
         self.library_index = LibraryIndex()
         self.srm = SrmRunner(runtime_dir)
         self.speeds = SpeedStats(os.path.join(runtime_dir, "source_speeds.json") if runtime_dir else None)
+        self.speed_test = SpeedTest()
         self.downloads.on_measure = lambda job, size, seconds: self.speeds.record(
             job.source, size, seconds, job.prepare_seconds
         )
@@ -406,6 +402,8 @@ class StoreService:
             info["speed"] = speed.get("speed")
             info["delay"] = speed.get("delay")
             info["speed_samples"] = int(speed.get("samples") or 0)
+            info["speed_tested"] = speed.get("tested")
+            info["speed_test_error"] = speed.get("test_error")
             described.append(info)
         return described
 
@@ -1269,7 +1267,12 @@ class StoreService:
             entry.cover_full = url
 
     def _cover_source(self) -> NswpediaSource:
-        """One shared cover source, so its cache survives between searches."""
+        """One shared cover source, so its cache survives between searches.
+
+        Nswpedia is no longer a download source (every file link it has opens
+        datanodes.to's download page, which needs a browser); its cover index
+        is still the best portrait box art for Switch games.
+        """
         if getattr(self, "_nswpedia", None) is None:
             self._nswpedia = NswpediaSource(
                 self.http,
@@ -1279,6 +1282,44 @@ class StoreService:
                 },
             )
         return self._nswpedia
+
+    # ------------------------------------------------------------- speed test
+    # Results older than this are tested again by themselves (see
+    # start_background_tasks), when the setting is on.
+    SPEED_TEST_EVERY = 7 * 24 * 3600
+
+    def start_speed_test(self) -> Dict[str, Any]:
+        """Measure every enabled source now (backend/speedtest.py)."""
+        sources = [source for source in self.build_sources() if not self._resting_until(source.id)]
+        if not sources:
+            return {"ok": False, "error": "No source is switched on.", **self.speed_test.status()}
+
+        def record(source_id: str, result: Dict[str, Any]) -> None:
+            self.speeds.record_test(
+                source_id,
+                float(result.get("bytes") or 0),
+                float(result.get("seconds") or 0),
+                float(result.get("delay") or 0),
+                None if result.get("ok") else str(result.get("error") or "failed"),
+            )
+
+        started = self.speed_test.start(sources, self.http, record)
+        return {"ok": started, **self.speed_test.status()}
+
+    def speed_test_status(self) -> Dict[str, Any]:
+        status = self.speed_test.status()
+        status["last_tested"] = self.speeds.last_tested([s.id for s in self.build_sources()]) or None
+        return status
+
+    def speed_test_due(self) -> bool:
+        """The automatic test should run: on, stale, and nothing downloading."""
+        if not self.settings.get("speed_test_auto", True) or self.speed_test.running:
+            return False
+        ids = [source.id for source in self.build_sources()]
+        if not ids or time.time() - self.speeds.last_tested(ids) < self.SPEED_TEST_EVERY:
+            return False
+        # A download in progress shares the line and would spoil the result.
+        return not any(job.get("status") in ("queued", "downloading") for job in self.downloads.snapshot())
 
     def start_background_tasks(self) -> None:
         """Re-check the sources now and then, so a source that comes back
@@ -1294,6 +1335,13 @@ class StoreService:
         async def ticker():
             while True:
                 await asyncio.sleep(120)
+                # Provider speeds, once a week, a couple of minutes after the
+                # plugin starts and whenever nothing is downloading.
+                try:
+                    if self.speed_test_due():
+                        self.start_speed_test()
+                except Exception as exc:  # pragma: no cover - never stops the ticker
+                    print(f"ROM Store: speed test could not start: {exc!r}")
                 for source in self.build_sources():
                     if self._unreachable.get(source.id, 0.0) <= time.time():
                         continue

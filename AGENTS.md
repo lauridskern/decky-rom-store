@@ -72,7 +72,8 @@ backend/
   service.py                source fan-out, dedupe, IGDB enrichment, caches
   sources/                  one adapter per site (base.py is the contract)
     romspedia.py  retrostic.py  romsdl.py  switchroms.py
-    myabandonware.py  nswpedia.py  romsfun.py
+    myabandonware.py  romsfun.py
+    nswpedia.py       not a source any more: only its Switch cover index
   boxart.py                 libretro-thumbnails box art: index, matching, resize
   covers.py                 IGDB client: covers, screenshots, trailer, rating
   media.py                  Steam and YouTube fallback media for PC titles
@@ -85,6 +86,7 @@ backend/
   artwork.py                Steam library art: SteamGridDB (user key) or IGDB
   srm_runner.py             runs Steam ROM Manager itself while Steam is closed
   speeds.py                 measured speed + start delay per source (ranking)
+  speedtest.py              speed test: one real link per source, timed sample
   httpclient.py             urllib + cookies + per-host throttle (polite=)
   systems.py                console normalisation -> EmuDecky folder names
   emudeck.py                library detection (roms root, systems, folders)
@@ -422,9 +424,21 @@ Steam only reads at start), so the plugin does its job live:
 - Provider speed (`speeds.py`, `source_speeds.json`): each finished download
   (2 MB or more) records bytes over transfer time (resumed bytes excluded)
   and the start delay (resolving the link: forms, RomsFun's countdown) as a
-  moving average per source. The game panel orders files by preferred region,
-  then by estimated time (delay + the game's median size / speed); unmeasured
-  sources count as the median; within one source its own order stays.
+  moving average per source. The speed test (`speedtest.py`; Settings →
+  Sources → "Test all now", and by itself weekly from the background ticker
+  when `speed_test_auto` is on and nothing is downloading) measures every
+  enabled source, one after the other: search a common title, resolve one
+  real download link like a download does, read up to 8 MB / 6 s of it with
+  `HttpClient.sample()` and discard it. One link per source per test (RomsFun
+  counts guest downloads). A source whose last test got no file
+  (`test_error`: a Cloudflare check, a file host's download page) is offered
+  last. The game page orders files by preferred region (only if one is set),
+  then by estimated time (delay + the game's median size / speed);
+  unmeasured sources count as the median; within one source its own order
+  stays.
+- The downloader never saves a web page as a game: a link that answers with
+  HTML (a file host's download page) or a Cloudflare check fails with a
+  message that says so (`HttpClient._is_web_page`, `_blocked`).
 - Favourites and recently viewed live in `shelves.json`; opening one searches
   for it and opens the game once it shows up (`openShelfItem`).
 - Installed games (`library.installed_games`; art added by
@@ -585,9 +599,13 @@ the cover that had it. Hints come from `on…ActionDescription` /
   the link the way its page script does (admin-ajax `k_get_download`), as a
   guest. A guest download limit or a Cloudflare check is reported, never
   worked around. Romhacks are listed after the games.
-- Nswpedia: search uses the site's WordPress search (`?s=`) and both search and
-  browse read its `nsw-rom-card` result cards; the old cover-index parsing is
-  only a fallback.
+- Nswpedia was removed as a download source in v1.17.4 (settings revision 5
+  drops it from existing installs): every file link it has opens
+  datanodes.to's download page, which needs a browser. `nswpedia.py` stays
+  for `_cover_source()`, the Switch cover index.
+- RomsFun: its MAME sets come from a file server behind a Cloudflare check
+  (reported, not worked around); its console games download normally. The
+  speed test skips arcade sets for that reason.
 - IGDB client credentials are baked into `backend/settings.py` as defaults so
   covers work out of the box. Do not log them, and treat a leak as a reason to
   rotate them rather than to remove the feature.

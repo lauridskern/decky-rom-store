@@ -2,7 +2,7 @@
 
 A game-store style front end for browsing and downloading ROMs on the Steam Deck.
 It searches **Romspedia**, **Retrostic**, **RomsDL**, **RomsFun**, **MyAbandonware**
-and two Switch catalogues (**Switch ROMs**, **Nswpedia**) at the same time, merges the results, removes duplicates, and
+and the **Switch ROMs** catalogue at the same time, merges the results, removes duplicates, and
 drops the file you pick straight into the matching **EmuDecky** ROM folder
 (`~/EmuDecky/roms/<system>/`).
 
@@ -144,7 +144,6 @@ real ROM library.
 | **Retrostic** | `https://www.retrostic.com` — large classic catalogue, 46 consoles, direct zip downloads. |
 | **RomsDL** | `https://romsdl.com` — the same engine as Retrostic with a different catalogue; good for extra region builds. |
 | **RomsFun** | `https://romsfun.com` — large catalogue across 50+ consoles, including romhacks and fan translations (listed after the games). Each download waits out the site's 7-second countdown, as a visitor would. |
-| **Nswpedia** | `https://nswpedia.io` — a Switch catalogue with its own search; titles, covers and sizes come from its result cards. |
 | **MyAbandonware** | `https://www.myabandonware.com` — backed by a TypeSense index. The plugin reads the short-lived scoped search key out of the search page and queries the index directly. Older PC and console titles. |
 
 Each source can be switched off individually if it is unreachable; failures are
@@ -170,8 +169,10 @@ What the catalogues actually contain is the limiting factor, not the plugin:
 * **Retrostic / RomsDL / MyAbandonware** carry no Switch catalogue at all
   (MyAbandonware's platform list has 144 platforms, Switch is not one of them).
 
-For Switch games the two Switch catalogues, **Switch ROMs** and **Nswpedia**,
-carry far more titles; both are searched and browsed alongside the others.
+For Switch games the **Switch ROMs** catalogue carries far more titles; it is
+searched and browsed alongside the others. (Nswpedia was removed as a source
+in v1.17.4: its files all sit behind datanodes.to's download page, which needs
+a browser. Its cover index still gives Switch games their box art.)
 
 ## Where files land
 
@@ -192,12 +193,19 @@ Existing files are never overwritten silently — the new file is written as
 
 ## Fastest download first
 
-Every download is timed. The store learns how fast each provider delivers, and
-how long it takes to hand out the link (some sites have a form or a countdown
-first). The game page then puts the file that should finish first on top,
-marked **Fastest**, and shows each provider's speed next to its files. Your
-preferred region still comes first. *Settings → Sources* shows each source's
-measured speed.
+The store measures how fast each provider delivers, and how long it takes to
+hand out the link (some sites have a form or a countdown first). Every game
+page puts the file that should finish first on top, and shows each
+provider's speed next to its files. If you set a preferred region, that
+region's files still come first.
+
+*Settings → Sources → Test all now* measures every provider right away: it
+asks each one for a real download link and reads a few seconds of the file,
+one provider after the other, without saving anything. It runs again by
+itself once a week (switch that off under the button). Real downloads keep
+the figures up to date in between. A provider that only hands out a web page
+or a browser check instead of the file is listed with that reason and offered
+last.
 
 ## Library
 

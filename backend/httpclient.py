@@ -17,6 +17,7 @@ import ssl
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zlib
 from dataclasses import dataclass, field
@@ -181,6 +182,16 @@ class HttpClient:
         self._known_hosts.add(host)
         return True
 
+    @staticmethod
+    def _safe_url(url: str) -> str:
+        """Percent-encode what an HTTP request line cannot carry as is.
+
+        Sites hand out links with accents and spaces in them ("Pokémon
+        Expedition.zip"); urllib refuses those. Characters that are already
+        escaped, and the URL's own punctuation, are left alone.
+        """
+        return urllib.parse.quote(url, safe=":/?#[]@!$&'()*+,;=%~")
+
     def _build_request(self, url: str, method: str, data: Optional[bytes], headers: Dict[str, str]):
         hdrs = {
             "User-Agent": self._ua,
@@ -190,7 +201,7 @@ class HttpClient:
             "Connection": "keep-alive",
         }
         hdrs.update(headers or {})
-        return urllib.request.Request(url, data=data, headers=hdrs, method=method.upper())
+        return urllib.request.Request(self._safe_url(url), data=data, headers=hdrs, method=method.upper())
 
     def _open(self, url: str, method: str = "GET", data: Optional[bytes] = None,
               headers: Optional[Dict[str, str]] = None, allow_redirects: bool = True,
@@ -326,6 +337,69 @@ class HttpClient:
             return current
         return current
 
+    @staticmethod
+    def _blocked(code: int, headers, host: str) -> Optional[str]:
+        """A clear reason when a file server wants a browser, else None."""
+        if not headers:
+            return None
+        servers = headers.get_all("Server") if hasattr(headers, "get_all") else [headers.get("Server")]
+        cloudflare = any("cloudflare" in (value or "").lower() for value in servers or []) or bool(headers.get("cf-mitigated"))
+        if code in (403, 429, 503) and cloudflare:
+            return f"{host} asks for a browser check (Cloudflare); get this file from the site in a browser"
+        return None
+
+    @staticmethod
+    def _is_web_page(content_type: str, first: bytes) -> bool:
+        """A download link that answered with a web page instead of the file."""
+        start = first[:2048].lstrip().lower()
+        return "text/html" in (content_type or "").lower() and (start.startswith(b"<!doctype html") or b"<html" in start)
+
+    async def sample(self, url: str, headers: Optional[Dict[str, str]] = None,
+                     max_bytes: int = 8 * 1024 * 1024, max_seconds: float = 6.0) -> Dict[str, float]:
+        """Read the start of a download and throw it away: how fast it comes.
+
+        Returns ``first_byte`` (seconds until the response started), and the
+        ``bytes`` read in ``seconds`` after that. Stops at ``max_bytes`` or
+        ``max_seconds``, whichever comes first; nothing is written to disk.
+        """
+        return await asyncio.to_thread(self._sample_sync, url, headers or {}, max_bytes, max_seconds)
+
+    def _sample_sync(self, url: str, headers: Dict[str, str], max_bytes: int, max_seconds: float) -> Dict[str, float]:
+        host = urllib.request.Request(url).host or ""
+        self._throttle(host)
+        request_headers = dict(headers)
+        # Raw bytes: a compressed transfer would measure the compression.
+        request_headers["Accept-Encoding"] = "identity"
+        req = self._build_request(url, "GET", None, request_headers)
+        started = time.monotonic()
+        read = 0
+        try:
+            with self._opener.open(req, timeout=max(self._timeout, 30)) as resp:
+                first = resp.read(65536)
+                first_byte = time.monotonic() - started
+                if self._is_web_page(resp.headers.get("Content-Type") or "", first):
+                    landing = urllib.request.Request(resp.geturl()).host or host
+                    raise HttpError(f"the link opens a download page on {landing}, which needs a browser", url=url)
+                # Throughput is timed from here, so connection setup and the
+                # first chunk count as start delay, not as slow transfer.
+                transfer = time.monotonic()
+                while len(first) + read < max_bytes and time.monotonic() - transfer < max_seconds:
+                    chunk = resp.read(262144)
+                    if not chunk:
+                        break
+                    read += len(chunk)
+                seconds = time.monotonic() - transfer
+        except urllib.error.HTTPError as exc:
+            reason = self._blocked(exc.code, exc.headers, host)
+            raise HttpError(reason or f"HTTP {exc.code} from {host}", exc.code, url) from exc
+        except HttpError:
+            raise
+        except urllib.error.URLError as exc:
+            raise HttpError(f"Request failed: {exc.reason}", url=url) from exc
+        except (TimeoutError, OSError) as exc:
+            raise HttpError(f"Network error: {exc}", url=url) from exc
+        return {"bytes": float(read), "seconds": max(seconds, 0.001), "first_byte": first_byte}
+
     async def download(self, url: str, dest_path: str, headers: Optional[Dict[str, str]] = None,
                        on_progress: Optional[Callable[[int, int], None]] = None,
                        cancel: Optional[threading.Event] = None, resume: bool = False) -> int:
@@ -383,7 +457,24 @@ class HttpClient:
                 elif "deflate" in encoding:
                     decoder = zlib.decompressobj()
                 written = existing
+                # A link that opens a file host's download page answers with
+                # HTML; saving that as the game would only leave a broken file.
+                first = b""
+                if not partial and not decoder:
+                    first = resp.read(65536)
+                    if self._is_web_page(resp.headers.get("Content-Type") or "", first):
+                        landing = urllib.request.Request(resp.geturl()).host or host
+                        raise HttpError(
+                            f"The link opens a download page on {landing} instead of the file; "
+                            "get it from the site in a browser",
+                            url=url,
+                        )
                 with open(dest_path, "ab" if partial else "wb") as fh:
+                    if first:
+                        fh.write(first)
+                        written += len(first)
+                        if on_progress:
+                            on_progress(written, total)
                     while True:
                         if cancel is not None and cancel.is_set():
                             raise HttpError("Download cancelled", url=url)
@@ -404,7 +495,8 @@ class HttpClient:
                 if on_progress:
                     on_progress(existing, existing)
                 return existing
-            raise HttpError(f"HTTP {exc.code} while downloading {url}", exc.code, url) from exc
+            reason = self._blocked(exc.code, exc.headers, host)
+            raise HttpError(reason or f"HTTP {exc.code} while downloading {url}", exc.code, url) from exc
         except HttpError:
             raise
         except urllib.error.URLError as exc:

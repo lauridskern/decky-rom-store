@@ -137,5 +137,141 @@ class Speeds(unittest.TestCase):
             server.server_close()
 
 
+class Pages(BaseHTTPRequestHandler):
+    """/file: a file. /page: a file host's download page. /cf: a browser check."""
+
+    def log_message(self, *args):  # noqa: D401
+        pass
+
+    def do_GET(self):  # noqa: N802
+        if self.path.startswith("/page"):
+            body, kind, code, server = b"<!DOCTYPE html><html><body>Download</body></html>", "text/html; charset=UTF-8", 200, "nginx"
+        elif self.path.startswith("/cf"):
+            body, kind, code, server = b"<!DOCTYPE html><html><title>Just a moment...</title></html>", "text/html", 403, "cloudflare"
+        else:
+            body, kind, code, server = DATA[: 3 * 1024 * 1024], "application/zip", 200, "nginx"
+        self.send_response(code)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Server", server)
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+
+
+class WebPagesAreNotGames(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.server = ThreadingHTTPServer(("127.0.0.1", 0), Pages)
+        threading.Thread(target=cls.server.serve_forever, daemon=True).start()
+        cls.base = f"http://127.0.0.1:{cls.server.server_address[1]}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+        cls.server.server_close()
+
+    def download(self, path):
+        async def run():
+            folder = tempfile.mkdtemp()
+            manager = DownloadManager(HttpClient())
+            manager.enqueue(title="G", system="switch", source="x", filename="G.rar", url=self.base + path,
+                            destination=folder)
+            while manager.snapshot()[0]["status"] not in ("done", "error"):
+                await asyncio.sleep(0.05)
+            return manager.snapshot()[0], os.listdir(folder)
+
+        return asyncio.run(run())
+
+    def test_a_download_page_is_an_error_not_a_file(self):
+        job, files = self.download("/page")
+        self.assertEqual(job["status"], "error")
+        self.assertIn("download page", job["error"])
+        self.assertNotIn("G.rar", files)
+
+    def test_a_browser_check_is_named(self):
+        job, _files = self.download("/cf")
+        self.assertEqual(job["status"], "error")
+        self.assertIn("browser check", job["error"])
+
+    def test_a_file_still_downloads(self):
+        job, files = self.download("/file")
+        self.assertEqual(job["status"], "done")
+        self.assertIn("G.rar", files)
+
+    def test_sample_measures_without_saving(self):
+        http = HttpClient()
+        result = asyncio.run(http.sample(self.base + "/file", max_bytes=2 * 1024 * 1024, max_seconds=5))
+        self.assertGreater(result["bytes"], 0)
+        self.assertGreater(result["seconds"], 0)
+        with self.assertRaises(Exception) as page:
+            asyncio.run(http.sample(self.base + "/page"))
+        self.assertIn("download page", str(page.exception))
+        with self.assertRaises(Exception) as check:
+            asyncio.run(http.sample(self.base + "/cf"))
+        self.assertIn("browser check", str(check.exception))
+
+
+class SpeedTests(unittest.TestCase):
+    def test_every_source_is_measured_one_after_the_other(self):
+        from backend.models import RomEntry, RomFile
+        from backend.speedtest import SpeedTest
+
+        class Fake:
+            def __init__(self, sid, fail=None):
+                self.id, self.fail, self.asked = sid, fail, 0
+
+            async def search(self, query, limit=40, page=1):
+                return [RomEntry(source=self.id, source_id=query, title=f"Game {query}", system="psx", size=5_000_000)]
+
+            async def resolve(self, entry):
+                return [RomFile(id="f", filename="Game.zip", url=f"https://{self.id}.invalid/g.zip", size=5_000_000)]
+
+            async def resolve_download(self, rom_file):
+                self.asked += 1
+                if self.fail:
+                    raise RuntimeError(self.fail)
+                return rom_file.url
+
+        class Http:
+            running = 0
+
+            async def sample(self, url, max_bytes=0, max_seconds=0):
+                Http.running += 1
+                assert Http.running == 1, "one source at a time"
+                await asyncio.sleep(0.01)
+                Http.running -= 1
+                # The fast one fills its sample early; the slow one runs out of time.
+                if "fast" in url:
+                    return {"bytes": 4_000_000.0, "seconds": 2.0, "first_byte": 0.2}
+                return {"bytes": 1_200_000.0, "seconds": 6.0, "first_byte": 0.2}
+
+        stats = SpeedStats(os.path.join(tempfile.mkdtemp(), "speeds.json"))
+        sources = [Fake("fast"), Fake("slow"), Fake("broken", fail="asks for a browser check")]
+
+        async def run():
+            test = SpeedTest()
+            self.assertTrue(test.start(sources, Http(), lambda sid, r: stats.record_test(
+                sid, r.get("bytes", 0), r.get("seconds", 0), r.get("delay", 0), None if r["ok"] else r["error"])))
+            self.assertFalse(test.start(sources, Http(), lambda *a: None), "one test at a time")
+            while test.running:
+                await asyncio.sleep(0.01)
+            return test.status()
+
+        status = asyncio.run(run())
+        measured = stats.all()
+        self.assertAlmostEqual(measured["fast"]["speed"], 2_000_000)
+        self.assertAlmostEqual(measured["slow"]["speed"], 200_000)
+        self.assertGreater(measured["fast"]["delay"], 0)
+        self.assertIn("browser check", measured["broken"]["test_error"])
+        self.assertNotIn("speed", measured["broken"])
+        self.assertEqual(sorted(status["results"]), ["broken", "fast", "slow"])
+        self.assertEqual([s.asked for s in sources], [1, 1, 2], "one link per source; a second game only after a failure")
+        self.assertGreater(stats.last_tested(["fast", "slow", "broken"]), 0)
+        self.assertEqual(stats.last_tested(["fast", "never"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -68,6 +68,41 @@ class SpeedStats:
             self._save()
         return True
 
+    def record_test(self, source: str, size: float, seconds: float, delay: float,
+                    error: Optional[str] = None) -> None:
+        """Add the result of a speed test (backend/speedtest.py).
+
+        A test reads a few seconds of a real download, so unlike a finished
+        download it counts whatever its size: a slow provider sends little in
+        that time, and that is the measurement. A failed test keeps the
+        earlier figures and only notes the error.
+        """
+        if not source:
+            return
+        with self._lock:
+            stats = dict(self._sources.get(source) or {})
+            stats["tested"] = time.time()
+            if error or size <= 0 or seconds <= 0:
+                stats["test_error"] = error or "nothing came in"
+            else:
+                speed = size / seconds
+                if stats.get("speed"):
+                    stats["speed"] = ALPHA * speed + (1 - ALPHA) * float(stats["speed"])
+                    stats["delay"] = ALPHA * max(0.0, delay) + (1 - ALPHA) * float(stats.get("delay") or 0.0)
+                else:
+                    stats["speed"] = speed
+                    stats["delay"] = max(0.0, delay)
+                stats["samples"] = int(stats.get("samples") or 0) + 1
+                stats["updated"] = time.time()
+                stats.pop("test_error", None)
+            self._sources[source] = stats
+            self._save()
+
+    def last_tested(self, sources) -> float:
+        """When the least recently tested of these sources was tested (0: never)."""
+        with self._lock:
+            return min((float((self._sources.get(s) or {}).get("tested") or 0.0) for s in sources), default=0.0)
+
     def all(self) -> Dict[str, Dict[str, Any]]:
         with self._lock:
             return {k: dict(v) for k, v in self._sources.items()}

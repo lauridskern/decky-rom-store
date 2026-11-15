@@ -261,7 +261,7 @@ const library: LibraryInfo = {
 const settings: Settings = {
   roms_root: "/home/deck/EmuDecky/roms",
   source_priority: ["romspedia", "retrostic", "romsdl", "myabandonware"],
-  enabled_sources: ["romspedia", "retrostic", "romsdl", "myabandonware"],
+  enabled_sources: ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
   extract_archives: false,
   keep_archive: true,
   max_concurrent: 2,
@@ -371,11 +371,34 @@ const handlers: Record<string, (...args: any[]) => any> = {
   update_settings: async (values: Partial<Settings>) => ({ ...settings, ...values }),
   get_library: async () => library,
   get_shelves: async () => shelves,
-  // Measured provider speeds: Romspedia slow here, Retrostic fast.
-  get_speeds: async () => ({
-    romspedia: { speed: 700_000, delay: 0.8, samples: 3 },
-    retrostic: { speed: 9_500_000, delay: 2.1, samples: 5 },
-  }),
+  // Measured provider speeds (see the speed test below).
+  get_speeds: async () => measured,
+  start_speed_test: async () => {
+    if (speedTest.running) return { ok: false, ...speedTest };
+    const ids = [...settings.enabled_sources];
+    speedTest = { running: true, current: ids[0] ?? null, pending: ids, results: {}, started: Date.now() / 1000, finished: null, last_tested: speedTest.last_tested };
+    const step = () => {
+      // As the backend: a source stays pending until its result is in.
+      const id = speedTest.pending[0];
+      if (!id) {
+        speedTest = { ...speedTest, running: false, current: null, finished: Date.now() / 1000, last_tested: Date.now() / 1000 };
+        return;
+      }
+      speedTest.current = id;
+      window.setTimeout(() => {
+        const live = SPEED_TEST[id];
+        speedTest.results[id] = live.error ? { ok: false, error: live.error } : { ok: true, speed: live.speed, delay: live.delay, game: "Super Mario 64" };
+        measured[id] = live.error
+          ? { ...(measured[id] ?? {}), test_error: live.error, tested: Date.now() / 1000 }
+          : { speed: live.speed, delay: live.delay, samples: (measured[id]?.samples ?? 0) + 1, tested: Date.now() / 1000 };
+        speedTest.pending = speedTest.pending.slice(1);
+        step();
+      }, 500);
+    };
+    step();
+    return { ok: true, ...speedTest };
+  },
+  get_speed_test: async () => ({ ...speedTest, results: { ...speedTest.results }, pending: [...speedTest.pending] }),
   // Steam library (backend/steam.py): N64 and PS1 have SRM parsers, Game Boy not.
   steam_status: async () => ({
     srm: "/home/deck/.config/steam-rom-manager/userData",
@@ -469,16 +492,49 @@ const handlers: Record<string, (...args: any[]) => any> = {
     settings,
     // One of each health state, so the settings view shows them all.
     sources: [
-      { id: "romspedia", label: "Romspedia", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 240, failures: 0 },
-      { id: "retrostic", label: "Retrostic", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 7200, last_error: "HttpError: HTTP 503", last_error_at: Date.now() / 1000 - 600, failures: 1 },
-      { id: "romsdl", label: "RomsDL", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_error: "Host not found", last_error_at: Date.now() / 1000 - 120, failures: 4, resting_until: Date.now() / 1000 + 780 },
-      { id: "myabandonware", label: "My Abandonware", homepage: "", supports_browse: false, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 30, failures: 0 },
+      { id: "romspedia", label: "Romspedia", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 240, failures: 0, ...speedFields("romspedia") },
+      { id: "retrostic", label: "Retrostic", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 7200, last_error: "HttpError: HTTP 503", last_error_at: Date.now() / 1000 - 600, failures: 1, ...speedFields("retrostic") },
+      { id: "romsdl", label: "RomsDL", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_error: "Host not found", last_error_at: Date.now() / 1000 - 120, failures: 4, resting_until: Date.now() / 1000 + 780, ...speedFields("romsdl") },
+      { id: "myabandonware", label: "My Abandonware", homepage: "", supports_browse: false, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 30, failures: 0, ...speedFields("myabandonware") },
+      { id: "switchroms", label: "Switch ROMs", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 600, failures: 0, ...speedFields("switchroms") },
+      { id: "romsfun", label: "RomsFun", homepage: "", supports_browse: true, enabled: true, status: "idle", error: null, last_ok: Date.now() / 1000 - 900, failures: 0, ...speedFields("romsfun") },
     ],
     library,
     downloads: jobs,
   }),
   open_folder: async () => ({ ok: true }),
 };
+
+// What the speed test measured on a real run (Nov 2026), so the preview's
+// ranking looks like the Deck's.
+const SPEED_TEST: Record<string, { speed?: number; delay?: number; error?: string }> = {
+  switchroms: { speed: 18_050_000, delay: 1.0 },
+  romspedia: { speed: 5_690_000, delay: 0.6 },
+  romsfun: { speed: 5_660_000, delay: 8.6 },
+  myabandonware: { speed: 380_000, delay: 43.7 },
+  romsdl: { speed: 250_000, delay: 0.1 },
+  retrostic: { speed: 110_000, delay: 1.1 },
+};
+const measured: Record<string, { speed?: number; delay?: number; samples?: number; tested?: number; test_error?: string }> = {
+  romspedia: { speed: 5_690_000, delay: 0.6, samples: 3 },
+  retrostic: { speed: 110_000, delay: 1.1, samples: 2 },
+};
+let speedTest: {
+  running: boolean;
+  current: string | null;
+  pending: string[];
+  results: Record<string, unknown>;
+  started: number | null;
+  finished: number | null;
+  last_tested: number | null;
+} = { running: false, current: null, pending: [], results: {}, started: null, finished: null, last_tested: null };
+const speedFields = (id: string) => ({
+  speed: measured[id]?.speed ?? null,
+  delay: measured[id]?.delay ?? null,
+  speed_samples: measured[id]?.samples ?? 0,
+  speed_tested: measured[id]?.tested ?? null,
+  speed_test_error: measured[id]?.test_error ?? null,
+});
 
 export const callable =
   <Args extends any[] = [], Return = void>(route: string) =>

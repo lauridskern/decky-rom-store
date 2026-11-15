@@ -29,7 +29,6 @@ QUERIES = {
     "romsdl": "mario",
     "myabandonware": "doom",
     "switchroms": "zelda",
-    "nswpedia": "zelda",
     "romsfun": "super mario world",
 }
 

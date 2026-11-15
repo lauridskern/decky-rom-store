@@ -94,6 +94,9 @@ export interface SourceInfo {
   speed?: number | null;
   delay?: number | null;
   speed_samples?: number;
+  /** When the speed test last tried this source, and why it failed if it did. */
+  speed_tested?: number | null;
+  speed_test_error?: string | null;
 }
 
 export interface SearchPayload {
@@ -175,6 +178,8 @@ export interface Settings {
   chrome_bottom_offset: number;
   igdb_replace_covers: boolean;
   preferred_region?: string;
+  /** Test every provider's speed once a week (backend/speedtest.py). */
+  speed_test_auto?: boolean;
   steam_shortcuts?: boolean;
   steam_collections?: boolean;
   steam_artwork?: boolean;
@@ -329,11 +334,36 @@ export const getInstalled = callable<[], InstalledPayload>("get_installed");
 
 /** Measured per source (backend/speeds.py): bytes per second, start delay. */
 export interface SourceSpeed {
-  speed: number;
-  delay: number;
-  samples: number;
+  speed?: number;
+  delay?: number;
+  samples?: number;
+  /** The last speed test could not get a file from this source. */
+  test_error?: string | null;
+  tested?: number | null;
 }
 export const getSpeeds = callable<[], Record<string, SourceSpeed>>("get_speeds");
+
+/** The provider speed test (backend/speedtest.py). */
+export interface SpeedTestResult {
+  ok: boolean;
+  speed?: number;
+  delay?: number;
+  game?: string;
+  error?: string;
+}
+export interface SpeedTestStatus {
+  ok?: boolean;
+  error?: string;
+  running: boolean;
+  current: string | null;
+  pending?: string[];
+  results: Record<string, SpeedTestResult>;
+  started: number | null;
+  finished: number | null;
+  last_tested?: number | null;
+}
+export const startSpeedTest = callable<[], SpeedTestStatus>("start_speed_test");
+export const getSpeedTest = callable<[], SpeedTestStatus>("get_speed_test");
 export const steamPlan = callable<[string[] | null, boolean], SteamPlan>("steam_plan");
 export const steamReport = callable<[Record<string, { appid: number; name: string }>, string[]], { ok: boolean }>("steam_report");
 export const steamStatus = callable<[], SteamStatus>("steam_status");
