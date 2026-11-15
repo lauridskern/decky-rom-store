@@ -297,7 +297,7 @@ poster uses `systemAspect()` from `common.ts`.
 `start_download` resolves the selected `RomFile`, asks `emudeck.py` for the
 destination folder, and hands the job to `Downloader`, which streams through
 `HttpClient` on a worker thread, reports progress, supports cancel, optionally
-extracts archives, and forgets finished jobs after 40. The UI polls
+extracts archives, and keeps only the 40 most recent jobs in memory. The UI polls
 `get_downloads()` only while the drawer is open or something is running.
 
 ### UI structure
