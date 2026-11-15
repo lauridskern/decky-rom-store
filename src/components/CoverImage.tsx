@@ -6,6 +6,36 @@ import { getCover } from "../types";
 // example after a search) must not ask the backend again.
 const coverCache = new Map<string, string>();
 
+/**
+ * The local file for a piece of art (the backend downloads it once), or null
+ * until it is there. For backdrops, which are CSS backgrounds, not <img>.
+ */
+export function useCoverSrc(url: string | null | undefined, kind: "card" | "detail" = "card"): string | null {
+  const [src, setSrc] = useState<string | null>(() => (url ? (coverCache.get(`${kind}:${url}`) ?? null) : null));
+  useEffect(() => {
+    let cancelled = false;
+    if (!url) {
+      setSrc(null);
+      return;
+    }
+    const cacheKey = `${kind}:${url}`;
+    const cached = coverCache.get(cacheKey);
+    setSrc(cached ?? null);
+    if (cached) return;
+    getCover(url, kind)
+      .then((resolved) => {
+        if (cancelled || !resolved) return;
+        coverCache.set(cacheKey, resolved);
+        setSrc(resolved);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [url, kind]);
+  return src;
+}
+
 interface Props {
   url: string | null;
   kind?: "card" | "detail";

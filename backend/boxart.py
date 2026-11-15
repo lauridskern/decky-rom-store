@@ -204,6 +204,28 @@ class BoxArt:
         best = min(names, key=lambda name: _score(name, region or extract_region(title)))
         return full_url(SYSTEMS[system], best)
 
+    async def covers(self, games: List[Dict[str, object]], resize: bool = True, wait: float = 2.0) -> None:
+        """Box art for installed games (dicts with ``title`` and ``system``).
+
+        Sets ``cover`` where a scan matches the file's name. Like ``apply``, a
+        console without an index gets one built; the list waits ``wait``
+        seconds for it at most and has the art the next time otherwise.
+        """
+        systems = {str(game.get("system")) for game in games if game.get("system") in SYSTEMS}
+        pending = [task for task in (self._ensure(system) for system in systems) if task]
+        if pending and wait > 0:
+            try:
+                await asyncio.wait_for(asyncio.gather(*(asyncio.shield(t) for t in pending), return_exceptions=True), wait)
+            except (asyncio.TimeoutError, Exception):
+                pass
+        for game in games:
+            system = str(game.get("system"))
+            if system not in self._index:
+                continue
+            url = self.find(str(game.get("title") or ""), system)
+            if url:
+                game["cover"] = thumb_url(url) if resize else url
+
     async def apply(self, entries: List[RomEntry], resize: bool = True, wait: float = 4.0) -> None:
         """Give entries libretro box art where there is a match.
 

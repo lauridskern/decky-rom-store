@@ -187,6 +187,10 @@ class Plugin:
         return await self._self().service.start_download(rom_id, entry_key, file_id, system, destination_folder, root)
 
     # ------------------------------------------------------------------ downloads
+    async def get_speeds(self) -> Dict[str, Any]:
+        """Measured speed and start delay per source (backend/speeds.py)."""
+        return self._self().service.speeds.all()
+
     async def get_downloads(self) -> List[Dict[str, Any]]:
         return self._self().service.downloads.snapshot()
 
@@ -246,9 +250,8 @@ class Plugin:
         return await asyncio.to_thread(self._self().service.steam_status)
 
     async def get_installed(self) -> Dict[str, Any]:
-        import asyncio
-        # Sizing folders walks the disk; keep it off the event loop.
-        return await asyncio.to_thread(self._self().service.installed)
+        # Sizing folders walks the disk; the service keeps that off the event loop.
+        return await self._self().service.installed_view()
 
     async def uninstall_game(self, game_id: str) -> Dict[str, Any]:
         import asyncio

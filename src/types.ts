@@ -90,6 +90,10 @@ export interface SourceInfo {
   /** Failures in a row; after a few the source rests for a while. */
   failures?: number;
   resting_until?: number | null;
+  /** Measured download speed (bytes/s) and start delay, see backend/speeds.py. */
+  speed?: number | null;
+  delay?: number | null;
+  speed_samples?: number;
 }
 
 export interface SearchPayload {
@@ -123,6 +127,8 @@ export interface DownloadJob {
   extracted_to: string | null;
   created: number;
   finished: number | null;
+  /** The game's cover, for the Downloads tab. */
+  cover?: string | null;
 }
 
 export interface LibrarySystem {
@@ -228,6 +234,8 @@ export interface InstalledGame {
   modified: number;
   /** A Steam shortcut for it was made by the plugin. */
   in_steam?: boolean;
+  /** Box art for it, when the console's box-art index has a match. */
+  cover?: string | null;
 }
 
 export interface InstalledPayload {
@@ -318,6 +326,14 @@ export const getLibrary = callable<[], LibraryInfo>("get_library");
 export const checkBios = callable<[string], BiosInfo | null>("check_bios");
 export const getShelves = callable<[], ShelvesPayload>("get_shelves");
 export const getInstalled = callable<[], InstalledPayload>("get_installed");
+
+/** Measured per source (backend/speeds.py): bytes per second, start delay. */
+export interface SourceSpeed {
+  speed: number;
+  delay: number;
+  samples: number;
+}
+export const getSpeeds = callable<[], Record<string, SourceSpeed>>("get_speeds");
 export const steamPlan = callable<[string[] | null, boolean], SteamPlan>("steam_plan");
 export const steamReport = callable<[Record<string, { appid: number; name: string }>, string[]], { ok: boolean }>("steam_report");
 export const steamStatus = callable<[], SteamStatus>("steam_status");

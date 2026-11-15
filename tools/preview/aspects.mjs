@@ -19,7 +19,7 @@ await page.addInitScript(() => {
 await page.goto(`file://${path.join(here, "index.html")}`);
 await page.waitForTimeout(1200);
 await page.locator(".rs-search-wrap input").fill("mario");
-await page.waitForSelector(".rs-card", { timeout: 15000 });
+await page.locator(".rs-card").first().waitFor({ timeout: 15000 });
 await page.waitForTimeout(1200);
 
 const ratios = [

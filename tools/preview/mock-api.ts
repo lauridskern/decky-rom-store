@@ -45,6 +45,8 @@ const TITLES = [
 const SYSTEMS = ["n64", "wii", "3ds", "switch", "snes", "dos", "nes", "gc"];
 
 const MANY = Number((globalThis as any).__ROM_COUNT ?? 0);
+// A first start: nothing viewed, nothing installed, nothing downloading.
+const FRESH = Boolean((globalThis as any).__FRESH);
 const ALL_TITLES = [...TITLES, ...Array.from({ length: 48 }, (_, i) => `Test Game ${i + 1}`)];
 
 const makeRom = (title: string, index: number, system: string, id: string): MergedRom => {
@@ -88,7 +90,21 @@ const makeRom = (title: string, index: number, system: string, id: string): Merg
       normalized_title: title.toLowerCase(),
       error: null,
       files:
-        variantIndex === 0
+        // The first game also has a file on a second provider, so the speed
+        // ranking ("Fastest") can be seen.
+        variantIndex === 1 && index === 0
+          ? [
+              {
+                id: `${source}:${index}:other`,
+                filename: `${title} (USA) [!].zip`,
+                url: "https://example.invalid/other.zip",
+                size: 6_000_000,
+                region: "USA",
+                label: null,
+                source_url: "https://example.invalid",
+              },
+            ]
+          : variantIndex === 0
           ? [
               {
                 id: `${source}:${index}:0`,
@@ -155,7 +171,7 @@ const browseConsole = (system: string): MergedRom[] =>
     return rom;
   });
 
-const jobs: DownloadJob[] = [
+const jobs: DownloadJob[] = FRESH ? [] : [
   {
     id: "dl-1",
     title: "Super Mario 64",
@@ -173,6 +189,7 @@ const jobs: DownloadJob[] = [
     extracted_to: null,
     created: Date.now() / 1000,
     finished: null,
+    cover: "./covers/sm64.webp",
   },
   {
     id: "dl-2",
@@ -195,10 +212,12 @@ const jobs: DownloadJob[] = [
 ];
 
 // Home screen shelves: a few favourites and recently viewed games.
-const shelves = {
+const shelves = FRESH ? { favorites: [], recent: [] } : {
   favorites: [
     { key: "n64|supermario64", title: "Super Mario 64", system: "n64", cover: "./covers/sm64.webp", at: 0 },
     { key: "3ds|mariokart7", title: "Mario Kart 7", system: "3ds", cover: "./covers/mk7.webp", at: 0 },
+    // Not in the mock catalogue: its page shows "Search for it".
+    { key: "snes|chronotrigger", title: "Chrono Trigger", system: "snes", cover: null, at: 0 },
   ],
   recent: [
     { key: "wii|mariokartwii", title: "Mario Kart Wii", system: "wii", cover: "./covers/mkwii.webp", at: 0 },
@@ -213,8 +232,8 @@ let srmStarted = false;
 const steamTracked: Record<string, { appid: number; name: string }> = {};
 
 // Installed games panel: a few games, one with several files.
-let installedGames = [
-  { id: "g1", system: "n64", title: "Super Mario 64 (USA)", folder: "/home/deck/EmuDecky/roms/n64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 3 },
+let installedGames = FRESH ? [] : [
+  { id: "g1", system: "n64", title: "Super Mario 64 (USA)", cover: "./covers/sm64.webp", folder: "/home/deck/EmuDecky/roms/n64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 3 },
   { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", folder: "/home/deck/EmuDecky/roms/psx", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }], size: 1_010_000_120, modified: 2 },
   { id: "g3", system: "gb", title: "Tetris (World) (Rev 1)", folder: "/home/deck/EmuDecky/roms/gb", files: [{ name: "Tetris (World) (Rev 1).gb", size: 32_768, folder: false }], size: 32_768, modified: 1 },
 ];
@@ -345,6 +364,11 @@ const handlers: Record<string, (...args: any[]) => any> = {
   update_settings: async (values: Partial<Settings>) => ({ ...settings, ...values }),
   get_library: async () => library,
   get_shelves: async () => shelves,
+  // Measured provider speeds: Romspedia slow here, Retrostic fast.
+  get_speeds: async () => ({
+    romspedia: { speed: 700_000, delay: 0.8, samples: 3 },
+    retrostic: { speed: 9_500_000, delay: 2.1, samples: 5 },
+  }),
   // Steam library (backend/steam.py): N64 and PS1 have SRM parsers, Game Boy not.
   steam_status: async () => ({
     srm: "/home/deck/.config/steam-rom-manager/userData",

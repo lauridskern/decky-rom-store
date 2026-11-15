@@ -44,6 +44,13 @@ class DownloadJob:
     headers: Dict[str, str] = field(default_factory=dict)
     extract: bool = False
     keep_archive: bool = True
+    # Timing, for the provider speed ranking (backend/speeds.py): how long the
+    # site took to hand out the link, and the transfer itself.
+    prepare_seconds: float = 0.0
+    transfer_started: Optional[float] = None
+    resumed_from: int = 0
+    # The game's cover, for the Downloads tab.
+    cover: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -63,6 +70,7 @@ class DownloadJob:
             "extracted_to": self.extracted_to,
             "created": self.created,
             "finished": self.finished,
+            "cover": self.cover,
         }
 
 
@@ -91,6 +99,8 @@ class DownloadManager:
         # Called with each job that finished (the plugin tells the frontend,
         # which adds the game to the Steam library).
         self.on_done = None
+        # Called with (job, bytes, seconds) for each finished transfer.
+        self.on_measure = None
         self._load()
 
     # ------------------------------------------------------------------ state
@@ -197,7 +207,8 @@ class DownloadManager:
 
     def enqueue(self, *, title: str, system: str, source: str, filename: str, url: str,
                 destination: str, headers: Optional[Dict[str, str]] = None,
-                extract: bool = False, keep_archive: bool = True) -> DownloadJob:
+                extract: bool = False, keep_archive: bool = True,
+                prepare_seconds: float = 0.0, cover: Optional[str] = None) -> DownloadJob:
         with self._lock:
             self._counter += 1
             job_id = f"dl-{int(time.time())}-{self._counter}"
@@ -212,6 +223,8 @@ class DownloadManager:
                 headers=headers or {},
                 extract=extract,
                 keep_archive=keep_archive,
+                prepare_seconds=prepare_seconds,
+                cover=cover,
             )
             self._jobs[job_id] = job
             self._cancels[job_id] = threading.Event()
@@ -279,6 +292,8 @@ class DownloadManager:
                 final_path = os.path.join(job.destination, name)
                 temp_path = final_path + ".part"
                 job.path = final_path
+                job.transfer_started = time.time()
+                job.resumed_from = os.path.getsize(temp_path) if resume and os.path.exists(temp_path) else 0
 
                 last = time.time()
                 last_bytes = 0
@@ -320,6 +335,7 @@ class DownloadManager:
                             await asyncio.sleep(1.0 * (attempt + 1))
                 if last_error:
                     raise HttpError(last_error)
+                transfer_seconds = time.time() - (job.transfer_started or time.time())
 
                 if cancel.is_set():
                     if self._suspending:
@@ -351,6 +367,11 @@ class DownloadManager:
                 job.status = STATUS_DONE
                 job.finished = time.time()
                 self._save(force=True)
+                if self.on_measure is not None:
+                    try:
+                        self.on_measure(job, max(0, job.received - job.resumed_from), transfer_seconds)
+                    except Exception:  # pragma: no cover - statistics must not fail a download
+                        pass
                 if self.on_done is not None:
                     try:
                         self.on_done(job)

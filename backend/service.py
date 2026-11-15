@@ -25,6 +25,7 @@ from .library import LibraryIndex, installed_games, uninstall
 from .srm_runner import SrmRunner
 from .steam import SrmConfig, SteamShortcuts, plan as steam_plan
 from .shelves import Shelves
+from .speeds import SpeedStats
 from .media import SteamMedia
 from .models import MergedRom, RomEntry, RomFile, match_title, normalize_title
 from .settings import Settings
@@ -122,6 +123,10 @@ class StoreService:
         self.boxart = BoxArt(self.http, cache_dir=runtime_dir)
         self.library_index = LibraryIndex()
         self.srm = SrmRunner(runtime_dir)
+        self.speeds = SpeedStats(os.path.join(runtime_dir, "source_speeds.json") if runtime_dir else None)
+        self.downloads.on_measure = lambda job, size, seconds: self.speeds.record(
+            job.source, size, seconds, job.prepare_seconds
+        )
         self.steam_shortcuts = SteamShortcuts(os.path.join(runtime_dir, "steam_shortcuts.json") if runtime_dir else None)
         self.shelves = Shelves(os.path.join(runtime_dir, "shelves.json") if runtime_dir else None)
         self.covers = IgdbCovers(
@@ -396,6 +401,10 @@ class StoreService:
             info["last_error_at"] = health.get("error_at")
             info["failures"] = int(health.get("failures") or 0)
             info["resting_until"] = self._resting_until(source_id)
+            speed = self.speeds.all().get(source_id) or {}
+            info["speed"] = speed.get("speed")
+            info["delay"] = speed.get("delay")
+            info["speed_samples"] = int(speed.get("samples") or 0)
             described.append(info)
         return described
 
@@ -791,6 +800,9 @@ class StoreService:
         source = next((s for s in self.build_sources() if s.id == entry.source), None)
         headers: Dict[str, str] = {}
         url = rom_file.url
+        # How long the site takes to hand out the link (forms, countdowns)
+        # counts towards its speed ranking too.
+        preparing = time.time()
         if source is not None and hasattr(source, "resolve_download"):
             for attempt in range(3):
                 try:
@@ -839,6 +851,8 @@ class StoreService:
             headers=headers,
             extract=bool(self.settings.get("extract_archives")),
             keep_archive=bool(self.settings.get("keep_archive", True)),
+            prepare_seconds=time.time() - preparing,
+            cover=rom.cover or entry.cover,
         )
         return {"ok": True, "job": job.to_dict(), "destination": folder}
 
@@ -890,6 +904,20 @@ class StoreService:
         for game in games:
             game["in_steam"] = any(os.path.join(game["folder"], f["name"]) in tracked for f in game["files"])
         return {"root": root, "games": games, "size": sum(g["size"] for g in games)}
+
+    async def installed_view(self) -> Dict[str, Any]:
+        """``installed()`` with box art, for the Library tab and the home shelf.
+
+        Sizing folders walks the disk, so the listing runs on a worker thread;
+        the art is matched from the box-art index by file name.
+        """
+        result = await asyncio.to_thread(self.installed)
+        if self.settings.get("libretro_boxart", True):
+            try:
+                await self.boxart.covers(result["games"], resize=bool(self.settings.get("boxart_resize", True)))
+            except Exception as exc:  # pragma: no cover - art must never break the list
+                print(f"ROM Store: library box art lookup failed: {exc!r}")
+        return result
 
     # ------------------------------------------------------------------ steam
     def steam_plan(self, paths: Optional[List[str]] = None, add: bool = True) -> Dict[str, Any]:

@@ -67,6 +67,23 @@ class BoxArtMatching(unittest.TestCase):
         self.assertTrue(entry.cover_full.startswith("https://thumbnails.libretro.com/"))
         self.assertIn("gb", SYSTEMS)
 
+    def test_installed_games_get_covers_by_file_name(self):
+        # The Library tab: titles are file names, tags and all.
+        art = BoxArt(http=None)  # type: ignore[arg-type]
+        art._index["gb"] = art._group(["Tetris (World) (Rev 1).png"])
+        art._loaded_at["gb"] = time.time()
+        games = [
+            {"title": "Tetris (World) (Rev 1)", "system": "gb"},
+            {"title": "Unknown Homebrew", "system": "gb"},
+            {"title": "sf2", "system": "arcade"},  # no libretro art by title
+        ]
+        asyncio.run(art.covers(games, resize=True, wait=0))
+        self.assertTrue(games[0]["cover"].startswith("https://wsrv.nl/"))
+        self.assertNotIn("cover", games[1])
+        self.assertNotIn("cover", games[2])
+        asyncio.run(art.covers(games, resize=False, wait=0))
+        self.assertTrue(games[0]["cover"].startswith("https://thumbnails.libretro.com/"))
+
 
 class ImageLinks(unittest.TestCase):
     def test_igdb_screenshot_links_are_valid(self):

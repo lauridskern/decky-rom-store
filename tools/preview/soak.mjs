@@ -1,6 +1,6 @@
 /**
- * Long-session check: search, page, open a game, close it - seventy times -
- * while sampling frames, DOM size and JS heap. This is the test that proved
+ * Long-session check: search, page, open a game, close it, go round the tabs -
+ * seventy times - while sampling frames, DOM size and JS heap. This is the test that proved
  * the frontend tree does not leak; run it after any change to the grid.
  */
 import { chromium } from "playwright";
@@ -59,10 +59,13 @@ for (let round = 0; round < ROUNDS; round += 1) {
   const q = queries[round % queries.length];
   await page.locator(".rs-search-wrap input").fill(`${q}${round}`);
   await page.waitForTimeout(450);
-  await page.waitForSelector(".rs-card", { timeout: 15000 });
+  // Not waitForSelector: it returns a handle to the card, and a handle kept
+  // per round pins every grid that has since been replaced (a leak of the
+  // test, which then reads as a leak of the store).
+  await page.locator(".rs-card").first().waitFor({ timeout: 15000 });
   await page.waitForTimeout(350);
 
-  const next = page.locator(".rs-pager button", { hasText: "Next" });
+  const next = page.locator(".rs-pager .rs-pill.rs-f", { hasText: "Next" });
   if (await next.count()) {
     await next.click().catch(() => {});
     await page.waitForTimeout(200);
@@ -70,10 +73,19 @@ for (let round = 0; round < ROUNDS; round += 1) {
 
   await page.locator(".rs-card").first().click({ force: true });
   await page.waitForTimeout(500);
-  const close = page.locator(".rs-panel.detail .rs-close");
+  const close = page.locator(".rs-page .rs-close");
   if (await close.count()) {
     await close.click({ force: true });
     await page.waitForTimeout(250);
+  }
+
+  // Every fifth round: once around the tabs (R1 x3, L1 x3) and back.
+  if (round % 5 === 4) {
+    await page.locator(".rs-card").first().focus();
+    for (const button of ["e", "e", "e", "q", "q", "q"]) {
+      await page.keyboard.press(button);
+      await page.waitForTimeout(120);
+    }
   }
 
   if ((round + 1) % 10 === 0) {

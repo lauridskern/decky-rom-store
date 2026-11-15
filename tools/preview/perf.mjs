@@ -23,7 +23,7 @@ await page.waitForTimeout(1200);
 
 const t0 = Date.now();
 await page.locator(".rs-search-wrap input").fill("mario");
-await page.waitForSelector(".rs-card", { timeout: 15000 });
+await page.locator(".rs-card").first().waitFor({ timeout: 15000 });
 await page.waitForTimeout(600);
 const render = Date.now() - t0;
 

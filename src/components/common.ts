@@ -26,6 +26,7 @@ export const SYSTEM_LABELS: Record<string, string> = {
   "nds-64": "Nintendo DS 64",
   virtualboy: "Virtual Boy",
   genesis: "Genesis",
+  megadrive: "Mega Drive",
   mastersystem: "Master System",
   gamegear: "Game Gear",
   sg1000: "SG-1000",
@@ -295,3 +296,61 @@ export function inRegion(rom: Parameters<typeof regionsOf>[0], region: string): 
 
 /** width / height of each cover once it has loaded, shared by every frame. */
 export const artRatios = new Map<string, number>();
+
+
+/**
+ * Console families, for a touch of colour: the stripe on a console tile and
+ * the tint of a cover that has no art. Colours only, no logos.
+ */
+const FAMILIES: Record<string, string[]> = {
+  nintendo: ["nes", "snes", "n64", "gc", "wii", "wiiu", "switch", "gb", "gbc", "gba", "nds", "nds-64", "3ds", "virtualboy", "pokemini"],
+  sony: ["psx", "ps2", "ps3", "psp", "psvita"],
+  sega: ["genesis", "megadrive", "mastersystem", "gamegear", "sg1000", "sega32x", "segacd", "saturn", "dreamcast"],
+  atari: ["atari2600", "atari5200", "atari7800", "atarist", "atarilynx", "jaguar", "atari800"],
+  nec: ["pcengine", "pcenginecd", "pcfx"],
+  snk: ["neogeo", "neogeocd", "ngp", "ngpc"],
+  arcade: ["arcades", "mame", "fba"],
+  computer: ["dos", "pc", "mac", "amiga", "c64", "vic20", "zxspectrum", "amstradcpc", "msx", "x68000", "pc98", "scummvm", "ports", "easyrpg", "openbor"],
+};
+const FAMILY_TINT: Record<string, string> = {
+  nintendo: "#e5484d",
+  sony: "#4c82ff",
+  sega: "#2bb5e8",
+  atari: "#f2913d",
+  nec: "#e9c046",
+  snk: "#d7a94b",
+  arcade: "#a877ff",
+  computer: "#4fc98a",
+};
+const SYSTEM_TINT: Record<string, string> = {};
+Object.entries(FAMILIES).forEach(([family, systems]) => systems.forEach((key) => (SYSTEM_TINT[key] = FAMILY_TINT[family])));
+
+/** A console's accent colour (by maker), grey when unknown. */
+export function systemTint(system: string): string {
+  return SYSTEM_TINT[system] ?? "#8a95a3";
+}
+
+/** "12 s", "4 min", "1 h 20 min": time left on a download. */
+export function formatEta(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.round((seconds - hours * 3600) / 60);
+  return minutes ? `${hours} h ${minutes} min` : `${hours} h`;
+}
+
+/** "just now", "5 min ago", "3 h ago", "2 days ago" from unix seconds. */
+export function timeAgo(seconds: number | null | undefined): string {
+  if (!seconds) return "";
+  const delta = Math.max(0, Date.now() / 1000 - seconds);
+  if (delta < 90) return "just now";
+  if (delta < 5400) return `${Math.round(delta / 60)} min ago`;
+  if (delta < 129600) return `${Math.round(delta / 3600)} h ago`;
+  return `${Math.round(delta / 86400)} days ago`;
+}
+
+/** The key favourites and recently viewed games are stored under. */
+export function shelfKey(system: string, title: string): string {
+  return `${system}|${matchKey(title)}`;
+}

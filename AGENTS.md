@@ -4,7 +4,7 @@ Everything an agent needs to work on this repository: what it is, how to run
 it, how it is tested, and how it is published.
 
 GitHub: `lauridskern/decky-rom-store` · local folder: `rom-store-decky` ·
-plugin name: `ROM-Store` · current line: **v1.14.x**
+plugin name: `ROM-Store` · current line: **v1.16.x**
 
 ---
 
@@ -84,6 +84,7 @@ backend/
   steam.py                  Steam library: SRM parsers -> shortcut plan, app ids
   artwork.py                Steam library art: SteamGridDB (user key) or IGDB
   srm_runner.py             runs Steam ROM Manager itself while Steam is closed
+  speeds.py                 measured speed + start delay per source (ranking)
   httpclient.py             urllib + cookies + per-host throttle (polite=)
   systems.py                console normalisation -> EmuDecky folder names
   emudeck.py                library detection (roms root, systems, folders)
@@ -95,17 +96,22 @@ src/
   steam.ts                  adds/removes Steam shortcuts (SteamClient.Apps)
   styles.ts                 the entire stylesheet (injected at runtime)
   components/
-    Store.tsx               header, console chips, search, paging, polling
-    HomeView.tsx            home screen: shelves and consoles
+    Store.tsx               the shell: top bar (tabs, search), results, paging,
+                            info strip, polling, what B / L1 / R1 / L2 / R2 do
+    HomeView.tsx            home screen: hero, shelves, consoles
     StoreHost.tsx           epoch-keyed mount + error boundary
     RomGrid.tsx             slot-keyed grid, 30 cards per page
-    RomCard.tsx             one shelf item
-    CoverImage.tsx          fit/contain logic + ambient fill
-    RomDetail.tsx           game panel (hero, poster, files, save-into)
+    RomCard.tsx             one cover; NoArt, the tile for a game without art
+    CoverImage.tsx          fit/contain logic + ambient fill; useCoverSrc
+    GamePage.tsx            full-screen game page (poster, download, versions,
+                            media, save-into)
     MediaGallery.tsx        screenshot strip + lightbox
-    DownloadsDrawer.tsx     download queue
-    LibraryPanel.tsx        installed games, uninstall (asks first)
-    SettingsModal.tsx       sources, library, performance, diagnostics
+    LibraryView.tsx         Library tab: installed games, drives, uninstall
+    DownloadsView.tsx       Downloads tab: running and finished downloads
+    SettingsView.tsx        Settings tab: section list + pane, saves by itself
+    ui.tsx                  shared parts: Glyph, Switch, Progress, EmptyState
+    useBackGuard.ts         the B button (history entries, see §9 UI structure)
+    gamepad.ts              pad constants, focus helpers
     common.ts               labels, formatting, per-console aspect ratios
     perf.ts                 one-shot fps/heap/node sample
 tests/                      offline backend tests (run in CI and before release)
@@ -147,26 +153,33 @@ npm run dev        # http://localhost:5174, rebuilds + reloads on save; drawn in
                    # Gamepad emulation: arrows = d-pad, Enter = A, Esc = B, X, Y,
                    # Q/E = L1/R1, or a real controller; the bar shows the hints
 npm run build      # bundle preview.tsx -> preview.js
-npm run shots      # store.png, detail.png, settings.png, downloads.png, installed.png
-npm run soak       # 70 rounds of search/page/open/close, samples frames+heap
+npm run shots      # walks the store with the pad (keys), checks where focus lands,
+                   # writes home.png, store.png, detail.png, library.png,
+                   # downloads.png, settings.png; exits 1 on a failed step
+npm run soak       # 70 rounds of search/page/open/close/tabs, samples frames+heap
 npm run aspects    # synthetic covers in 7 shapes -> aspects.png (no cropping)
 npm run back       # back button / history behaviour
 npm run perf       # first-card time, long tasks while scrolling, node count
 ```
 
-Then open the PNGs in `tools/preview/` (`store.png`, `detail.png`) and look at
-them. The mock catalogue is fake, so missing covers in the screenshots mean
+Then open the PNGs in `tools/preview/` (`home.png`, `store.png`, `detail.png`)
+and look at them. The mock catalogue is fake, so missing covers in the screenshots mean
 nothing; judge layout, spacing and typography.
 
 Expected results on a healthy build:
 
 | check | expected |
 |---|---|
-| `npm run shots` | 8 cards per row at 1280 wide, 12 total, **0 console errors** |
-| `npm run soak` | nodes flat at **296**, heap levels off ≈ 7.4 MB (`SOAK_ROUNDS=200` to see it), 95th-percentile frame ≈ **18 ms** |
-| `npm run back` | modal opens, history grows by one, back closes it, `historyLength` stops growing |
-| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 158 nodes |
+| `npm run shots` | every step `ok`, `failures: none`, 8 cards per row at 1280 wide, 12 total, **0 console errors** |
+| `npm run soak` | nodes flat at **251**, heap levels off ≈ 7.4 MB (`SOAK_ROUNDS=200` to see it), 95th-percentile frame ≈ **18 ms** |
+| `npm run back` | game page opens, history grows by one, back closes it, back again shows the home screen, `historyLength` never grows past that |
+| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 153 nodes |
 | `npm run aspects` | each frame takes its test image's shape; white border visible on all four sides |
+
+In these scripts wait for elements with `locator(...).waitFor()`, not
+`page.waitForSelector()`: the latter returns a handle, and a handle kept per
+round pins every grid that has been replaced since (the grid is rebuilt for
+each search). That reads as a leak of the store; it is a leak of the test.
 
 The harness is Chromium on macOS, not Steam's CEF on a Deck. Use it for layout
 and regression signal, not for absolute frame rates. Image rasterisation
@@ -346,7 +359,8 @@ Shapes (grid covers and the detail poster):
 destination folder, and hands the job to `Downloader`, which streams through
 `HttpClient` on a worker thread, reports progress, supports cancel, optionally
 extracts archives, and keeps only the 40 most recent jobs in memory. The UI polls
-`get_downloads()` only while the drawer is open or something is running.
+`get_downloads()` only while the Downloads tab is open or something is running.
+A job carries the game's `cover` for that tab.
 
 - The queue is saved to `downloads.json`. On unload `suspend_all()` stops the
   worker threads through their cancel events (cancelling the asyncio task alone
@@ -405,10 +419,17 @@ Steam only reads at start), so the plugin does its job live:
 - Region filter (header): `regionsOf()` reads region fields and title tags;
   games known to be only from other regions are hidden, unknown ones stay
   (most sources do not tag titles). It also picks the file offered first.
+- Provider speed (`speeds.py`, `source_speeds.json`): each finished download
+  (2 MB or more) records bytes over transfer time (resumed bytes excluded)
+  and the start delay (resolving the link: forms, RomsFun's countdown) as a
+  moving average per source. The game panel orders files by preferred region,
+  then by estimated time (delay + the game's median size / speed); unmeasured
+  sources count as the median; within one source its own order stays.
 - Favourites and recently viewed live in `shelves.json`; opening one searches
   for it and opens the game once it shows up (`openShelfItem`).
-- Installed games (`library.installed_games`): every console folder of the
-  library, files of one game grouped by `match_title()` (discs + .m3u), EmuDeck
+- Installed games (`library.installed_games`, box art added by
+  `service.installed_view` from the libretro index by file name): every
+  console folder of the library, files of one game grouped by `match_title()` (discs + .m3u), EmuDeck
   notes, saves and media folders skipped. `uninstall(root, id)` looks the game
   up again by id (the UI never sends paths) and deletes only entries directly
   inside a console folder that is itself a direct child of the library; a
@@ -416,31 +437,72 @@ Steam only reads at start), so the plugin does its job live:
 
 ### UI structure
 
+One screen, four tabs (`Store.tsx` is the shell):
+
+- **Top bar**: brand, the tabs between `L1`/`R1` glyphs (Downloads carries the
+  number of running downloads and a progress line), the search field.
+- **Store tab**: the home screen (`HomeView`: a hero for the game viewed last,
+  shelves for recently viewed / favourites / installed games, the consoles)
+  while there is no query and no console; otherwise the results: a filter bar
+  (console, region, source, sort), the grid, the pager, and the **info strip**
+  under the grid that names the focused cover (covers carry no title). The
+  strip keeps its own state behind a ref, so moving focus re-renders it, not
+  the store.
+- **Library / Downloads / Settings tabs**: `LibraryView`, `DownloadsView`,
+  `SettingsView`. They are mounted only while open. The Store tab stays
+  mounted behind them (`.rs-view.is-hidden`: `visibility: hidden` plus child
+  focus off), so its covers, scroll position and focus survive a tab switch.
+- **Game page** (`GamePage`): covers the whole store, top bar included. A game
+  from a shelf opens at once from the title and cover the shelf has (a stub
+  rom, id `stub:…`) while `openShelfItem` looks its links up in the
+  background, without touching the search on screen. Starting a download
+  keeps the page open; its button becomes that job's progress.
+- **Settings save by themselves** (`SettingsView`: 700 ms after the last
+  change, and when the tab closes). There is no Save button.
+
 `Store` is remounted when `reloadStore()` bumps the view epoch (`StoreHost`),
 which is both the escape hatch for a stale view and a diagnostic. The grid
 renders **one page of 30 cards**, keyed by slot so paging reuses the same card
-components and Steam focus nodes. `useBackGuard` pushes a history entry so the
-Steam back button closes overlays instead of leaving the plugin; guards stack,
-so B closes only the top overlay (a screenshot over the game panel). History
-entries carry a per-load token: entries from before a reload never count.
+components and Steam focus nodes.
+
+**The B button** is `useBackGuard(open, onClose)`: it pushes a history entry
+while something is open, so Steam's back navigation pops that entry and the
+plugin closes the thing instead of being left. The steps, bottom to top: a
+result list (`!home` → `goHome`), a tab other than Store (→ Store), the game
+page, a screenshot, the uninstall question. Guards stack, so B closes only the
+top one. Three details that matter:
+
+- Entries carry a per-load token: entries from before a reload never count.
+- A guard that closes without B (the X, a tab switch) leaves a stale entry; it
+  is popped as soon as it is on top (`sweep`).
+- A guard that opens in the same moment another closes (the game page handing
+  over to the Downloads tab) takes over the stale entry with `replaceState`
+  instead of pushing: popping the old entry afterwards would close what just
+  opened. Never call `history.back()` or `pushState` anywhere else.
 
 ### Gamepad
 
 Navigation is Steam's focus tree (see `src/components/gamepad.ts`). Every
 `Focusable` that groups several controls sets `flow-children` (`row`, `column`,
 `grid`); without it every direction steps through the children in order, which
-is the "left moves up" bug. Overlays trap focus by disabling child focus on
-`.rs-body` behind them, and focus goes back to the control (or cover) that
-opened them. Hints come from `on…ActionDescription` / `actionDescriptionMap`.
+is the "left moves up" bug. The game page traps focus by disabling child focus
+on `.rs-body` behind it, and focus goes back to the control (or cover) that
+opened it. Switching tabs puts focus inside the tab (`Store.focusTab`: the
+first game, the first download, the section list), and back in the Store on
+the cover that had it. Hints come from `on…ActionDescription` /
+`actionDescriptionMap`. Focus always looks the same: a white ring
+(`.rs-f.is-focus`); blue means selected or the main action.
 
 | where | buttons |
 |---|---|
-| store | d-pad header ↔ console chips ↔ grid (or home) ↔ pager · A details · X search · Y downloads · L1/R1 page · L2/R2 console |
-| game panel | starts on Download · A/X download · Y favourite · L1/R1 previous/next game · B close |
-| installed games | A Uninstall → Keep (focused) / Delete · B close |
-| screenshot viewer | ◀ ▶ / A next · B back to the panel |
-| downloads | X clear finished · B close |
-| settings | A flips switches · X save · B cancel |
+| anywhere (not on the game page) | L1/R1 previous/next tab · X search · B back one step |
+| home | d-pad hero ↔ shelves ↔ consoles · A open · Y favourite (shelf tiles) |
+| results | d-pad search ↔ filters ↔ grid ↔ pager · A game page · Y favourite · L2/R2 page · B home |
+| game page | starts on Download · A/X download (A on a running one: Downloads tab) · Y favourite · L1/R1 previous/next game · B close |
+| library | A Uninstall → Keep (focused) / Delete · B keeps · Y store page |
+| downloads | A cancel / open a finished game's page · X clear finished |
+| settings | up/down section (the pane follows focus), right into it · A flips a switch |
+| screenshot viewer | ◀ ▶ / A next · B back to the game page |
 
 ## 10. Hard-won constraints — do not regress these
 
@@ -458,6 +520,15 @@ opened them. Hints come from `on…ActionDescription` / `actionDescriptionMap`.
   with the d-pad at all.
 - **Every focus group needs `flow-children`**, and every overlay keeps focus
   inside itself (see §9 Gamepad). Check new UI with the d-pad in `npm run dev`.
+- **The Store tab stays mounted behind the other tabs; they mount on demand.**
+  Unmounting the store on a tab switch decodes a page of covers again on the
+  way back and loses scroll and focus. Hide it with `visibility`, never with
+  `display: none` (the grid would lose its layout) or a transform.
+- **B goes through `useBackGuard`.** Do not call `history.back()` or
+  `pushState` elsewhere; two views swapping in one moment is the case it
+  exists for (§9 UI structure).
+- **Focus is one look everywhere** (white ring), and nothing smaller than 12px
+  or shorter than 38px takes focus: it is read at arm's length on 1280x800.
 - **Poll downloads only while something is happening.**
 - **Keep the frontend free of `setInterval` work that runs while idle.**
 - **`plugin.json.name`, the zip asset name and the folder name are coupled.**
@@ -467,6 +538,15 @@ opened them. Hints come from `on…ActionDescription` / `actionDescriptionMap`.
 
 - No automated tests on the Deck itself; verification is the preview harness
   plus a manual install.
+- The tab layout (Store / Library / Downloads / Settings, the full-screen game
+  page, the info strip) has only been run in the preview harness so far. What
+  the harness cannot show and a Deck must: that `onGamepadFocus` fires on our
+  `Focusable`s (the info strip and the Settings section list follow it), that
+  the hidden Store tab takes no focus behind another tab, that the `!important`
+  sizes on Steam's `Button` / `TextField` / `Dropdown` hold in the client's
+  CSS, that focus lands on Steam's real `Dropdown` after a console is picked
+  (`pickConsole` guesses its markup), and that `history.replaceState` is as
+  harmless to Steam's router as `pushState` has been.
 - Scrapers break when a site changes its HTML. `get_status()` reports per-source
   errors and health, the UI shows them in the footer warning and in Settings.
 - Box art: libretro names arcade sets by ROM set, so arcade has no libretro art.

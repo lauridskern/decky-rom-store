@@ -16,7 +16,7 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 |---|---|
 | **Search** | One search box queries every enabled source in parallel and merges the hits. |
 | **Browse** | The console dropdown lists every console with live title counts (including Switch) and switching to one browses that catalogue. Counts are scraped once and cached on the Deck for a day. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
-| **Gamepad** | Cards are Steam-focusable — the A button opens a game, the shoulder buttons page through results. |
+| **Gamepad** | Built for the Deck's pad: L1/R1 switch between Store, Library, Downloads and Settings, A opens a game, X searches, Y marks a favourite, L2/R2 turn the page, B goes back one step. |
 | **Gallery** | Every game opens with a shelf of artwork that scrolls horizontally: the game's own screenshots, the artwork from the site the game came from, and a trailer. |
 | **Metadata** | The description, genres, developer and the community rating all come from IGDB, so every title looks the same no matter which site it was found on. | Click any item for a full screen lightbox, where the trailer plays. Artwork comes from the ROM sites themselves, not from Steam, so it works for every console. |
 | **Artwork** | Cover art is fetched by the backend, cached on the Deck and served locally, so nothing is re-downloaded and the Steam client never has to reach out to a third party. Every card uses the same poster frame with a blurred backdrop, so mixed artwork from different sites still looks uniform. Optionally, add free IGDB credentials in the settings to replace missing artwork with clean, high quality poster art. |
@@ -24,16 +24,32 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 | **Region variants** | Every source entry is kept as a variant, so the USA / Europe / Japan builds of a title can be picked individually. |
 | **One click download** | Press *Download*, the file is fetched in the background and written to the right system folder. |
 | **EmuDecky aware** | The ROM root is auto-detected (`~/EmuDecky/roms`, `~/Emulation/roms`, SD cards, …) and the system folder is matched against the folders that actually exist on your Deck. |
-| **Progress** | Live progress, speed, cancel button and *Open folder* for finished downloads. |
+| **Progress** | The Downloads tab shows live progress, speed and time left with a cancel button; the tab itself carries a progress line while something is running, and the game's own page turns its button into the progress. |
 
 ## User interface
 
-The plugin is built on `@decky/ui` and `@decky/api` — the maintained
-successors to the older `decky-frontend-lib` package that the current official
-Decky plugin template uses. That means the UI is built from the same React
-components the Steam client itself uses, so the console picker, the dropdowns
-and the buttons behave exactly like the rest of the Deck interface (and are
-gamepad navigable).
+The store fills the Deck's screen and is laid out for the pad, not for a
+mouse. Four tabs sit in the top bar and **L1 / R1** switch between them from
+anywhere:
+
+* **Store** – the home screen (the game you looked at last, recently viewed,
+  favourites, what is in your library, every console with its game count) and
+  the results: a grid of covers in their real box shapes. The line under the
+  grid names the cover that has focus, with its console, year, size and rating.
+* **Library** – the games in your ROM folders with their box art, the space
+  left on each drive, and uninstall.
+* **Downloads** – what is running (progress, speed, time left) and what
+  finished.
+* **Settings** – one section list on the left, the section on the right.
+  Changes save by themselves.
+
+A game opens as a full-screen page: the box on the left, the download button
+(which becomes the progress while that game is downloading), the other
+versions, screenshots, the description and where the file goes.
+
+It is built on `@decky/ui` and `@decky/api`, so dropdowns, text fields and
+buttons are the Steam client's own, take gamepad focus and open the on-screen
+keyboard.
 
 ## Requirements
 
@@ -173,14 +189,25 @@ The destination path is always shown before a download starts.
 Existing files are never overwritten silently — the new file is written as
 `Name (2).zip` instead.
 
-## Installed games
+## Fastest download first
 
-The disk button in the header (and the **Installed** row on the home screen)
-lists every game in your ROM folders, by console, with its size. **Uninstall**
-asks first ("Delete 3 files, 963 MB? This cannot be undone.", with *Keep*
-selected) and then removes that game's files: all discs of a multi-disc game
-together. Saves, EmuDeck's notes and artwork folders are never touched, and
-nothing outside the ROM folders can be deleted.
+Every download is timed. The store learns how fast each provider delivers, and
+how long it takes to hand out the link (some sites have a form or a countdown
+first). The game page then puts the file that should finish first on top,
+marked **Fastest**, and shows each provider's speed next to its files. Your
+preferred region still comes first. *Settings → Sources* shows each source's
+measured speed.
+
+## Library
+
+The **Library** tab (and the **In your library** row on the home screen) lists
+every game in your ROM folders with its box art and size: by console, newest
+first, largest first or A to Z. On top it shows how full each drive is.
+**A** on a game asks before it removes anything ("Delete 3 files, 963 MB? This
+cannot be undone.", with *Keep* selected; **B** also keeps) and then removes
+that game's files: all discs of a multi-disc game together. **Y** opens the
+game's store page. Saves, EmuDeck's notes and artwork folders are never
+touched, and nothing outside the ROM folders can be deleted.
 
 ## Steam library
 
@@ -208,16 +235,18 @@ shortcut API instead of running SRM.
 
 ## Settings
 
-* **EmuDecky ROM folder** — override the detected root.
-* **Sources** — enable/disable each site, change its address, and see how it
-  has been doing (last answer, failures in a row).
-* **IGDB client ID / secret** — optional. Create a free application at
-  twitch.tv/developers and the store fills in missing artwork with clean
-  poster art from the IGDB database.
+The Settings tab has six sections; every change is saved as you make it.
 
-* **Extract .zip archives** — unzip the download into the system folder.
-* **Keep the archive too** — keep the zip next to the extracted files.
-* **Results per source** / **Parallel downloads**.
+* **Library** — the ROM folder (detected, or your own) and the drives.
+* **Sources** — enable/disable each site, change its address, and see how it
+  has been doing (last answer, failures in a row, measured speed).
+* **Downloads** — extract .zip archives, keep the archive too, results per
+  source, parallel downloads.
+* **Artwork** — box art, the grid thumbnails, IGDB (optional: your own free
+  client ID / secret from twitch.tv/developers).
+* **Steam** — add downloads to the Steam library, collections, library
+  artwork, SteamGridDB key, sync, run Steam ROM Manager.
+* **Advanced** — layout offsets, the search cache, diagnostics.
 
 ## Troubleshooting
 
@@ -316,28 +345,39 @@ The store is built to stay quiet on a device that is also running a game:
   file, pruned to the 300 most recent.
 - **Artwork is fetched in parallel**, not queued behind the scraper's
   per-host politeness delay, so a page of covers arrives in one burst.
-- **Settings → Performance** shows a live sample (frame time, DOM nodes, image
-  count, JS heap) and has a *Reload the view* button that rebuilds the UI
+- **Settings → Advanced** shows a live sample (frame time, DOM nodes, image
+  count, JS heap) and has a *Reload the store* button that rebuilds the UI
   without restarting Steam.
+- **The Store tab stays loaded** behind the other tabs, so coming back to it
+  decodes no cover again; the other tabs exist only while they are open.
 
 ## Gamepad
 
-The cards are Decky `Focusable` elements, so the Steam client's d-pad moves
-the focus ring between them and **A** opens the selected game. The grid is
-rendered with a windowed (virtualised) list, so only the rows near the
-viewport exist in the DOM - that is what keeps the list smooth.
+Everything is reachable with the pad; Steam's bar at the bottom shows what the
+buttons do where you are.
+
+| where | buttons |
+|---|---|
+| anywhere | **L1 / R1** previous / next tab · **X** search · **B** back one step |
+| home | d-pad through the hero, the shelves and the consoles · **A** open · **Y** favourite |
+| results | **A** game page · **Y** favourite · **L2 / R2** previous / next page · **B** home |
+| game page | starts on Download · **A / X** download · **Y** favourite · **L1 / R1** previous / next game · **B** close |
+| library | **A** uninstall (asks, *Keep* selected) · **Y** store page |
+| downloads | **A** cancel, or open a finished game's page · **X** clear finished |
+| settings | d-pad up/down picks a section, right goes into it · **A** flips a switch |
+| screenshot viewer | **◀ ▶ / A** next · **B** back to the game page |
 
 ## The back button
 
-The Steam Deck's **B** button works inside the plugin:
+The Steam Deck's **B** button steps back the way you came:
 
-* **B** in the game details or the settings closes that overlay and you stay
-  in the store.
-* **B** again (with no overlay open) leaves the plugin and goes back to where
-  you came from, like any other Decky route.
+* in a screenshot → the game page; on the game page → where you opened it;
+* on the Library, Downloads or Settings tab → the Store;
+* on a result list → the home screen;
+* on the home screen → out of the plugin, like any other Decky route.
 
-That works because the plugin pushes a history entry while an overlay is
-open, so the Steam client's own back navigation lands on the overlay first.
+That works because the plugin pushes a history entry for each of those steps,
+so the Steam client's own back navigation lands on them first.
 
 ## Legal
 
