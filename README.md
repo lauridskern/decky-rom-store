@@ -243,6 +243,14 @@ when you open one. If artwork still does not show up,
 open **Settings → Diagnostics → Test image pipeline**; it prints the plugin
 folder, the resolved local URL and the cache folder.
 
+**Artwork is never cropped.** Console box art differs in shape: an NES box, a
+DS box and an arcade flyer are three different rectangles. Every card uses one
+poster frame so the rows stay even, but the picture inside it keeps its own
+proportions - it is fitted, and the space it leaves is filled with a dimmed,
+blown-up copy of the same art rather than black bars. The same rule applies to
+the poster in the game panel, which uses the shape of the console it belongs
+to. Only artwork within 4% of the frame is allowed to fill it.
+
 ## Performance
 
 The store is built to stay quiet on a device that is also running a game:

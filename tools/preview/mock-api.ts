@@ -237,6 +237,10 @@ const handlers: Record<string, (...args: any[]) => any> = {
         media: {
           appid: 367520,
           caption: rom.title,
+          summary:
+            "Mario is invited to Princess Peach's castle for cake, only to find that Bowser has " +
+            "sealed the princess and her servants inside the walls and scattered the Power Stars " +
+            "across fifteen courses. Run, swim, slide and fly through the castle to win them back.", 
           capsule: "https://cdn.cloudflare.steamstatic.com/steam/apps/367520/capsule_616x353.jpg",
           trailer: {
             kind: "video",

@@ -58,17 +58,13 @@ const MediaGallery: FC<Props> = ({ media }) => {
   if (!media) return null;
   const shots = media.shots ?? [];
   const trailer = media.trailer ?? null;
-  if (!shots.length && !trailer && !media.capsule) return null;
+  // The capsule is the game's portrait cover, which is already on screen in
+  // the detail panel; cropped into a 16:9 thumbnail it only looks wrong.
+  if (!shots.length && !trailer) return null;
 
   return (
     <>
       <div className="rs-gallery">
-        {media.capsule ? (
-          <button className="rs-shot" onClick={() => open({ kind: "image", thumb: media.capsule!, full: media.capsule! })}>
-            <ProxiedImage url={media.capsule} alt={media.caption || "cover"} eager />
-          </button>
-        ) : null}
-
         {trailer ? (
           <button className="rs-shot rs-shot-video" onClick={() => open(trailer)}>
             <ProxiedImage url={trailer.thumb} alt={trailer.name || "Trailer"} eager />

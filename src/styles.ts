@@ -91,78 +91,164 @@ export const CSS = `
 
 .rs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(142px, 1fr));
+  gap: 14px;
 }
 
+/* ---------------------------------------------------------------- grid item */
 .rs-card {
+  position: relative;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018));
   overflow: hidden;
   cursor: pointer;
-  display: flex; flex-direction: column;
-  /* No transform, no transition and no big blur shadow: each of those forced
-     the Steam client to promote and repaint every cover while moving through
-     the grid. A border and an outline are almost free. */
-  contain: layout paint style;
-  transition: border-color 100ms ease, background 100ms ease;
   outline: none;
+  /* No transform, no animated artwork and no big blur shadow: each of those
+     forced the Steam client to promote and repaint every cover while moving
+     through the grid. A border, a background colour and an outline are cheap. */
+  contain: layout paint style;
+  transition: border-color 110ms ease, background-color 110ms ease;
 }
 .rs-card:hover, .rs-card:focus, .rs-card--focus {
-  border-color: #66c0f4;
-  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(102, 192, 244, 0.75);
+  background-color: rgba(255, 255, 255, 0.05);
 }
 .rs-card--focus {
   outline: 2px solid #66c0f4;
   outline-offset: -2px;
+  background-color: rgba(102, 192, 244, 0.08);
 }
 
-.rs-cover {
+/* Every console gets the same poster frame so the rows stay even. 5:7 is the
+   shape IGDB publishes cover art in, so most artwork fills it exactly. Art
+   that is shaped differently is fitted inside the frame, never cropped. */
+.rs-card-art {
   position: relative;
-  aspect-ratio: 3 / 4;
-  background: #05070a;
-  display: flex; align-items: center; justify-content: center;
+  width: 100%;
+  aspect-ratio: 5 / 7;
   overflow: hidden;
+  background: #05070a;
 }
-.rs-cover > div { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
-.rs-cover-placeholder {
-  position: relative; width: 100%; height: 100%;
-  display: flex; align-items: center; justify-content: center;
-  color: rgba(255,255,255,0.13); font-size: 30px;
-  background: linear-gradient(135deg, #0d1116, #080a0d);
+/* A soft top-and-bottom scrim sits over the artwork so white covers still
+   separate from the card body. It does not touch the picture. */
+.rs-card-art::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.12) 0%, rgba(0, 0, 0, 0) 26%, rgba(0, 0, 0, 0.28) 100%);
 }
-.rs-cover img {
+
+.rs-cover-img {
   position: relative;
-  width: 100%; height: 100%;
-  /* Fill the poster frame: portrait art fits exactly, landscape art is
-     cropped to its centre instead of being letterboxed. */
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #05070a;
+}
+.rs-cover-img img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: block;
   object-fit: cover;
 }
-.rs-cover .rs-placeholder { font-size: 34px; color: rgba(255,255,255,0.14); display: flex; }
-.rs-pill.system {
-  background: rgba(102, 192, 244, 0.16);
-  color: #66c0f4;
-  font-weight: 700;
-  letter-spacing: 0.3px;
+/* Fitted art: the frame keeps its shape, the picture keeps its own. */
+.rs-cover-img--contain img { object-fit: contain; }
+/* A blown-up, dimmed copy of the art fills the space a fitted picture leaves,
+   so the letterboxing looks like a deliberate glow instead of a gap. */
+.rs-cover-ambient {
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+  background-position: center;
+  background-size: cover;
+  opacity: 0.5;
+  pointer-events: none;
 }
+.rs-cover-img--contain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 42%, rgba(5, 7, 10, 0.22) 0%, rgba(5, 7, 10, 0.72) 76%);
+}
+.rs-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.13);
+  font-size: 30px;
+  background: linear-gradient(135deg, #0d1116, #080a0d);
+}
+
+.rs-card-body {
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+.rs-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #f2f3f3;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 31px;
+  word-break: break-word;
+}
+.rs-card-meta { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 14px; }
+.rs-chip {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 3;
+  max-width: calc(100% - 14px);
+  padding: 1px 6px 2px;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(6, 10, 14, 0.74);
+  color: #e2e8ed;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rs-card-stats { display: inline-flex; gap: 8px; font-size: 10.5px; color: #8b949d; }
+.rs-stat { white-space: nowrap; }
+.rs-stat.rating { color: #ffd766; }
+
+.rs-pill {
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  color: #c3c8cd;
+  white-space: nowrap;
+}
+.rs-pill.system,
 .rs-pill.variants {
   background: rgba(102, 192, 244, 0.16);
   color: #66c0f4;
   font-weight: 700;
-}
-
-.rs-card-body { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; min-width: 0; overflow: hidden; }
-.rs-title {
-  font-size: 12px; font-weight: 600; color: #f2f3f3; line-height: 1.2;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  min-height: 29px;
-}
-.rs-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: #9aa4ad; }
-.rs-pill {
-  border-radius: 9px; padding: 0 6px; font-size: 9.5px; font-weight: 600;
-  background: rgba(255,255,255,0.08); color: #c3c8cd; white-space: nowrap;
+  letter-spacing: 0.3px;
 }
 .rs-pill.romspedia { background: rgba(102,192,244,0.16); color: #66c0f4; }
 .rs-pill.dumbroms { background: rgba(153,204,255,0.14); color: #99ccff; }
@@ -249,7 +335,7 @@ export const CSS = `
   display: flex; flex-direction: column; overflow: hidden;
   box-sizing: border-box;
 }
-.rs-panel.detail { width: min(1020px, 100%); }
+.rs-panel.detail { width: min(1060px, 100%); max-height: min(760px, 100%); }
 .rs-panel.settings { width: min(720px, 100%); }
 .rs-panel-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; min-width: 0; }
 .rs-detail-grid { min-width: 0; }
@@ -266,47 +352,207 @@ export const CSS = `
 .rs-panel-head h3 { margin: 0; font-size: 16px; color: #fff; }
 .rs-panel-body { padding: 16px 18px; overflow-y: auto; }
 
-.rs-detail-grid { display: grid; grid-template-columns: 190px 1fr; gap: 16px; }
-.rs-detail-cover {
+/* ------------------------------------------------------------ game detail */
+.rs-detail-hero {
   position: relative;
-  aspect-ratio: 3/4; width: 100%; background: #05070a;
-  border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);
-  overflow: hidden; display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
 }
-.rs-detail-cover img { position: relative; width: 100%; height: 100%; object-fit: cover; }
-.rs-detail-cover-sm { max-width: 190px; }
-.rs-detail-cover-placeholder {
-  aspect-ratio: 3/4; width: 100%; background: #05070a; border-radius: 8px;
-  display: flex; align-items: center; justify-content: center; font-size: 48px; color: rgba(255,255,255,0.1); font-weight: 800;
-  border: 1px solid rgba(255,255,255,0.08);
+.rs-detail-hero-art {
+  position: absolute;
+  inset: 0;
+  background-position: center 30%;
+  background-size: cover;
+  opacity: 0.28;
+  pointer-events: none;
 }
-.rs-detail-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
-.rs-detail-titlebar {
-  display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px;
+.rs-detail-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, rgba(27, 31, 36, 0.97) 0%, rgba(27, 31, 36, 0.88) 42%, rgba(27, 31, 36, 0.55) 100%);
 }
-.rs-detail-title { font-size: 20px; font-weight: 700; color: #fff; margin: 0; flex: 1 1 auto; }
+.rs-detail-hero-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.rs-detail-heading { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.rs-detail-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.rs-detail-sub { font-size: 12px; color: #9aa4ad; min-height: 15px; }
+.rs-detail-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .rs-close {
-  flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.06);
-  color: #d6d7d8; font-size: 14px; line-height: 1; cursor: pointer;
+  flex: 0 0 auto;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.35);
+  color: #d6d7d8;
+  font-size: 14px; line-height: 1; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
 }
-.rs-close:hover { background: rgba(255,255,255,0.16); color: #fff; }
+.rs-close:hover { background: rgba(255, 255, 255, 0.16); color: #fff; }
 
-.rs-variant {
+/* One scroll area for the whole body: poster, links and screenshots together. */
+.rs-detail-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  align-items: start;
+  gap: 22px;
+  padding: 18px 22px 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+.rs-detail-body::-webkit-scrollbar { width: 8px; }
+.rs-detail-body::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+.rs-detail-body::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.16); border-radius: 4px; }
+
+.rs-detail-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rs-detail-poster {
+  position: relative;
+  width: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #05070a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  contain: paint;
+}
+.rs-detail-cover-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 40px; font-weight: 800; color: rgba(255, 255, 255, 0.12);
+  background: #05070a;
+}
+
+.rs-save {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  min-width: 0;
+}
+.rs-save > * { max-width: 100%; }
+.rs-save-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: #79838c;
+}
+.rs-save-path {
+  font-family: monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  color: #8b949d;
+  word-break: break-all;
+  max-height: 2.8em;
+  overflow: hidden;
+}
+
+.rs-detail-main { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.rs-detail-loading {
   display: flex; align-items: center; gap: 10px;
-  padding: 9px 11px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px;
-  background: rgba(255,255,255,0.03); margin-bottom: 8px;
-  max-width: 100%; overflow: hidden; box-sizing: border-box;
+  font-size: 12px; color: #8b949d; padding: 4px 0;
 }
-.rs-variant:hover { border-color: rgba(102,192,244,0.5); }
-.rs-variant-main { flex: 1 1 0; min-width: 0; overflow: hidden; }
-.rs-variant .rs-btn { flex: 0 0 auto; }
-.rs-variant-name {
-  font-size: 13px; color: #e6e8ea; white-space: nowrap; overflow: hidden;
-  text-overflow: ellipsis; display: block; max-width: 100%;
+.rs-summary {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #a9b2ba;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.rs-variant-sub { font-size: 11px; color: #8b949d; margin-top: 2px; }
+
+.rs-file-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 10px; font-weight: 700; letter-spacing: 0.9px; text-transform: uppercase;
+  color: #79838c;
+}
+.rs-file-count { font-weight: 500; letter-spacing: 0.4px; color: #6f7a83; }
+.rs-file-group { display: flex; flex-direction: column; gap: 8px; }
+.rs-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.035);
+  min-width: 0;
+}
+.rs-file:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(102, 192, 244, 0.35); }
+.rs-file-main { flex: 1 1 0; min-width: 0; }
+.rs-file-name {
+  font-size: 12.5px; font-weight: 600; color: #e6e8ea;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rs-file-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+  margin-top: 3px; font-size: 11px; color: #8b949d;
+}
+.rs-file-source { color: #66c0f4; }
+.rs-sep { color: rgba(255, 255, 255, 0.22); }
+.rs-file-btn {
+  flex: 0 0 auto !important;
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px !important;
+  font-size: 12px !important;
+  border-radius: 7px !important;
+}
+
+.rs-detail-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 22px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(0, 0, 0, 0.22);
+  font-size: 11px;
+  color: #79838c;
+}
+.rs-detail-foot b { color: #c9ced3; font-weight: 600; }
+.rs-detail-foot-dest {
+  font-family: monospace;
+  font-size: 10.5px;
+  color: #8b949d;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .rs-btn {
   border: none; border-radius: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600;
@@ -396,7 +642,7 @@ export const CSS = `
 .rs-gallery::-webkit-scrollbar { height: 0; width: 0; display: none; }
 .rs-gallery { scrollbar-width: none; }
 .rs-shot {
-  position: relative; flex: 0 0 168px; width: 168px; height: 96px; padding: 0;
+  position: relative; flex: 0 0 190px; width: 190px; height: 107px; padding: 0;
   border-radius: 6px; overflow: hidden; cursor: pointer;
   border: 1px solid rgba(255,255,255,0.12); background: #05070a;
   contain: paint;
