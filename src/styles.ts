@@ -65,6 +65,13 @@ export const CSS = `
   outline-offset: 2px;
 }
 
+/* Steam's dropdowns take no noFocusRing; their focused button gets our ring. */
+.rs-store :is(.rs-filter, .rs-dest-select, .rs-dd) .gpfocus,
+.rs-store :is(.rs-filter, .rs-dest-select, .rs-dd) :focus-visible {
+  outline: 3px solid var(--rs-focus) !important; outline-offset: 2px; border-radius: 10px;
+  box-shadow: none !important;
+}
+
 /* ------------------------------------------------------------- small parts */
 .rs-h1 { margin: 0; font-size: 24px; line-height: 1.15; font-weight: 800; letter-spacing: -0.4px; color: var(--rs-text); }
 .rs-h2 { margin: 0; font-size: 18px; line-height: 1.2; font-weight: 800; letter-spacing: -0.2px; color: var(--rs-text); }
@@ -84,8 +91,9 @@ export const CSS = `
 .rs-glyph.round { min-width: 20px; width: 20px; padding: 0; border-radius: 50%; }
 
 /* Meta lines: "Retrostic • 5.7MB • USA". */
-.rs-meta { display: flex; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--rs-text-2); min-width: 0; }
-.rs-meta > span { min-width: 0; }
+.rs-meta { display: flex; flex-wrap: nowrap; align-items: center; font-size: 13px; color: var(--rs-text-2); min-width: 0; overflow: hidden; white-space: nowrap; }
+.rs-meta > span { flex: 0 0 auto; }
+.rs-meta > span:last-child { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rs-meta > span + span::before { content: "•"; margin: 0 8px; color: rgba(255, 255, 255, 0.24); }
 .rs-file-source { color: var(--rs-accent); font-weight: 600; }
 
@@ -138,8 +146,11 @@ export const CSS = `
 .rs-loading { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 64px 20px; color: var(--rs-text-2); font-size: 14px; }
 .rs-empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-  margin: auto; padding: 56px 20px; text-align: center;
+  margin: auto; padding: 40px 20px; text-align: center;
 }
+/* A view with nothing in it has nothing to scroll to. */
+.rs-view.rs-scroll.is-empty { overflow: hidden; }
+.rs-view.is-empty .rs-empty { flex: 1 1 auto; min-height: 0; margin: 0; padding: 12px 20px; }
 .rs-empty-icon {
   width: 64px; height: 64px; border-radius: 50%; margin-bottom: 4px;
   display: flex; align-items: center; justify-content: center;
@@ -224,10 +235,9 @@ export const CSS = `
 .rs-view-head { display: flex; align-items: center; gap: 14px; flex: 0 0 auto; min-height: 40px; }
 .rs-view-title { display: flex; align-items: baseline; gap: 12px; flex: 1 1 auto; min-width: 0; }
 
-.rs-main, .rs-view.rs-scroll, .rs-set-pane, .rs-page-main { scrollbar-width: thin; }
-.rs-store ::-webkit-scrollbar { width: 8px; height: 0; }
-.rs-store ::-webkit-scrollbar-track { background: transparent; }
-.rs-store ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 4px; }
+/* No scrollbars: the d-pad and the touch screen scroll, a bar only adds noise. */
+.rs-store, .rs-store * { scrollbar-width: none; }
+.rs-store ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
 /* The store's scroll area (home screen or the result grid). */
 .rs-main {
@@ -244,35 +254,6 @@ export const CSS = `
 
 /* ------------------------------------------------------------------ home */
 .rs-home { display: flex; flex-direction: column; gap: 30px; }
-
-.rs-hero {
-  position: relative; flex: 0 0 auto; overflow: hidden;
-  display: flex; align-items: center; gap: 28px;
-  height: 216px; padding: 0 32px; border-radius: 18px;
-  background: var(--rs-panel);
-}
-.rs-hero.welcome { background: linear-gradient(120deg, rgba(61, 155, 255, 0.34), rgba(111, 107, 255, 0.2) 55%, rgba(19, 24, 33, 0.9)); }
-/* The cover again, blown up and dimmed: its colours without its detail. */
-.rs-hero-bg { position: absolute; inset: -20px; background-position: center 30%; background-size: cover; opacity: 0.42; }
-.rs-hero::after {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(90deg, rgba(11, 14, 19, 0.94) 0%, rgba(11, 14, 19, 0.7) 42%, rgba(11, 14, 19, 0.3) 100%);
-}
-.rs-hero.welcome::after { display: none; }
-.rs-hero-art { position: relative; z-index: 2; flex: 0 0 auto; overflow: hidden; background: #05070a; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
-.rs-hero-text { position: relative; z-index: 2; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.rs-hero-title {
-  font-size: 32px; line-height: 1.1; font-weight: 800; letter-spacing: -0.6px; color: #fff;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.rs-hero-sub { font-size: 15px; color: var(--rs-text-2); }
-.rs-hero-cta {
-  display: inline-flex; align-items: center; gap: 9px; align-self: flex-start;
-  height: 38px; margin-top: 12px; padding: 0 18px; border-radius: 19px;
-  background: #fff; color: #0b0e13; font-size: 14px; font-weight: 800;
-}
-.rs-hero-cta svg { font-size: 12px; }
-.rs-hero-cta .rs-glyph { background: rgba(11, 14, 19, 0.14); color: #0b0e13; }
 
 .rs-shelf {
   display: flex; align-items: flex-start; gap: 16px;
@@ -477,8 +458,16 @@ export const CSS = `
 }
 .rs-close:hover, .rs-close.is-focus { background: rgba(255, 255, 255, 0.2); }
 
-.rs-page-side { position: relative; display: flex; flex-direction: column; gap: 22px; min-width: 0; min-height: 0; overflow: hidden; padding: 66px 0 28px 40px; }
-.rs-poster { position: relative; flex: 0 0 auto; width: 100%; max-height: 62%; overflow: hidden; background: #05070a; box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6); }
+/* A size container, so the poster can be measured against the column's height. */
+.rs-page-side { position: relative; display: flex; flex-direction: column; gap: 22px; min-width: 0; min-height: 0; overflow: hidden; padding: 66px 0 28px 40px; container-type: size; }
+/* The poster has its art's shape (--rs-ratio, width / height). A tall cover
+   is made narrower rather than shorter: capping the height of a full-width
+   frame would squash it towards a square and letterbox the art. */
+.rs-poster {
+  position: relative; flex: 0 0 auto; overflow: hidden; background: #05070a; box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
+  width: 100%;
+  width: min(100%, calc(66cqh * var(--rs-ratio, 0.714)));
+}
 /* Two columns: five facts under a tall poster still fit the 720px screen. */
 .rs-facts { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; align-content: start; min-height: 0; overflow: hidden; }
 .rs-fact { min-width: 0; }
@@ -533,7 +522,7 @@ export const CSS = `
 .rs-icon-btn.on { color: var(--rs-gold); }
 .rs-cta-file { flex: 1 1 auto; min-width: 0; margin-left: 8px; }
 .rs-cta-name { font-size: 15px; font-weight: 700; color: var(--rs-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.rs-cta-file .rs-meta { margin-top: 3px; }
+.rs-cta-file .rs-fastest { margin-top: 3px; font-size: 13px; }
 .rs-cta-wait { display: flex; align-items: center; gap: 12px; height: 58px; padding: 0 22px; border-radius: 16px; background: var(--rs-surface); font-size: 15px; color: var(--rs-text-2); }
 .rs-fastest { display: inline-flex; align-items: center; gap: 5px; color: var(--rs-good); font-weight: 700; }
 .rs-fastest svg { font-size: 10px; }
@@ -652,7 +641,6 @@ export const CSS = `
 .rs-dl-row:hover, .rs-dl-row.is-focus { background: var(--rs-surface-2); }
 .rs-dl-row .rs-dl-main { gap: 2px; }
 .rs-dl-row .rs-dl-title { font-size: 15px; }
-.rs-dl-row .rs-path { min-width: 0; max-width: 520px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; word-break: normal; color: var(--rs-text-3); }
 .rs-dl-state {
   flex: 0 0 auto; width: 34px; height: 34px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;

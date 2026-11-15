@@ -57,7 +57,7 @@ const RomCard: FC<Props> = memo(({ rom, favorite, onOpen, onFocus, onFavorite })
   const focus = () => onFocus(rom);
 
   return (
-    <Focusable
+    <Focusable noFocusRing
       className="rs-card"
       focusClassName="rs-card--focus"
       style={{ aspectRatio: shape }}

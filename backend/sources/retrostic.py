@@ -112,6 +112,10 @@ class RetrosticSource(Source):
         html = await self.http.get_text(f"{self.base}/roms/{slug}")
         return self._parse_rows(html)[:limit]
 
+    def browse_systems(self) -> set:
+        from ..systems import SYSTEMS
+        return {key for key in SYSTEMS if self._slug_for(key)}
+
     def _slug_for(self, system: str) -> Optional[str]:
         """Map a canonical system onto the console slug this site uses."""
         wanted = {

@@ -98,7 +98,7 @@ src/
   components/
     Store.tsx               the shell: top bar (tabs, search), results, paging,
                             info strip, polling, what B / L1 / R1 / L2 / R2 do
-    HomeView.tsx            home screen: hero, shelves, consoles
+    HomeView.tsx            home screen: shelves, consoles
     StoreHost.tsx           epoch-keyed mount + error boundary
     RomGrid.tsx             slot-keyed grid, 30 cards per page
     RomCard.tsx             one cover; NoArt, the tile for a game without art
@@ -171,9 +171,9 @@ Expected results on a healthy build:
 | check | expected |
 |---|---|
 | `npm run shots` | every step `ok`, `failures: none`, 8 cards per row at 1280 wide, 12 total, **0 console errors** |
-| `npm run soak` | nodes flat at **251**, heap levels off ≈ 7.4 MB (`SOAK_ROUNDS=200` to see it), 95th-percentile frame ≈ **18 ms** |
+| `npm run soak` | nodes flat at **272**, heap levels off ≈ 7.4 MB (`SOAK_ROUNDS=200` to see it), 95th-percentile frame ≈ **18 ms** |
 | `npm run back` | game page opens, history grows by one, back closes it, back again shows the home screen, `historyLength` never grows past that |
-| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 153 nodes |
+| `npm run perf` | first card ≈ 1.4 s (mock latency), **no long tasks**, ≈ 174 nodes (the preview's console `<select>` has an `<option>` per console) |
 | `npm run aspects` | each frame takes its test image's shape; white border visible on all four sides |
 
 In these scripts wait for elements with `locator(...).waitFor()`, not
@@ -427,8 +427,10 @@ Steam only reads at start), so the plugin does its job live:
   sources count as the median; within one source its own order stays.
 - Favourites and recently viewed live in `shelves.json`; opening one searches
   for it and opens the game once it shows up (`openShelfItem`).
-- Installed games (`library.installed_games`, box art added by
-  `service.installed_view` from the libretro index by file name): every
+- Installed games (`library.installed_games`; art added by
+  `service.installed_view`: the libretro index by file name, else the cover a
+  download of the game had, else IGDB (cached; uncached titles are looked up
+  in the background, so they have art the next time)): every
   console folder of the library, files of one game grouped by `match_title()` (discs + .m3u), EmuDeck
   notes, saves and media folders skipped. `uninstall(root, id)` looks the game
   up again by id (the UI never sends paths) and deletes only entries directly
@@ -441,8 +443,10 @@ One screen, four tabs (`Store.tsx` is the shell):
 
 - **Top bar**: brand, the tabs between `L1`/`R1` glyphs (Downloads carries the
   number of running downloads and a progress line), the search field.
-- **Store tab**: the home screen (`HomeView`: a hero for the game viewed last,
-  shelves for recently viewed / favourites / installed games, the consoles)
+- **Store tab**: the home screen (`HomeView`: shelves for recently viewed /
+  favourites / installed games, then every console: `get_consoles` lists each
+  console an enabled source can browse (`Source.browse_systems()`), with
+  Romspedia's game count where there is one)
   while there is no query and no console; otherwise the results: a filter bar
   (console, region, source, sort), the grid, the pager, and the **info strip**
   under the grid that names the focused cover (covers carry no title). The
@@ -496,7 +500,7 @@ the cover that had it. Hints come from `on…ActionDescription` /
 | where | buttons |
 |---|---|
 | anywhere (not on the game page) | L1/R1 previous/next tab · X search · B back one step |
-| home | d-pad hero ↔ shelves ↔ consoles · A open · Y favourite (shelf tiles) |
+| home | d-pad shelves ↔ consoles · A open · Y favourite (shelf tiles) |
 | results | d-pad search ↔ filters ↔ grid ↔ pager · A game page · Y favourite · L2/R2 page · B home |
 | game page | starts on Download · A/X download (A on a running one: Downloads tab) · Y favourite · L1/R1 previous/next game · B close |
 | library | A Uninstall → Keep (focused) / Delete · B keeps · Y store page |
@@ -529,6 +533,13 @@ the cover that had it. Hints come from `on…ActionDescription` /
   exists for (§9 UI structure).
 - **Focus is one look everywhere** (white ring), and nothing smaller than 12px
   or shorter than 38px takes focus: it is read at arm's length on 1280x800.
+  Steam's own focus ring is off: every `Focusable` and `Button` in the store
+  says `noFocusRing`, and while focus is inside the store `Store.tsx` hides
+  `focusRingClasses.FocusRing` for Steam's `Dropdown` / `TextField`, which
+  take no such prop. A dropdown sits in `.rs-filter`, `.rs-dest-select` or
+  `.rs-dd` so it gets our ring instead.
+- **No scrollbars** in the store, and a view with nothing in it (`.is-empty`)
+  does not scroll.
 - **Poll downloads only while something is happening.**
 - **Keep the frontend free of `setInterval` work that runs while idle.**
 - **`plugin.json.name`, the zip asset name and the folder name are coupled.**

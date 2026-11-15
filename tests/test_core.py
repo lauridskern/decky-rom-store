@@ -85,6 +85,61 @@ class BoxArtMatching(unittest.TestCase):
         self.assertTrue(games[0]["cover"].startswith("https://thumbnails.libretro.com/"))
 
 
+class LibraryCovers(unittest.TestCase):
+    def test_fallbacks_for_games_without_box_art(self):
+        from backend.service import StoreService
+        tmp = tempfile.mkdtemp()
+        svc = StoreService(Settings(os.path.join(tmp, "s.json")), plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
+        games = [
+            {"title": "Final Fantasy VII (USA)", "system": "psx"},   # a download had a cover
+            {"title": "Chrono Trigger (USA)", "system": "snes"},     # IGDB knows it already
+            {"title": "Mystery Game (Japan)", "system": "gb"},       # looked up on IGDB
+            {"title": "sf2", "system": "arcades"},                   # never looked up
+        ]
+        svc.downloads.snapshot = lambda: [{"title": "Final Fantasy VII", "system": "psx", "cover": "https://x.invalid/ff7.png"}]
+        svc.covers.cached = lambda title: {"cover": "https://x.invalid/ct.jpg"} if title == "Chrono Trigger" else None
+        asked = []
+
+        async def lookup_many(titles, limit=12):
+            asked.extend(titles)
+            return {title: {"cover": f"https://x.invalid/{title}.jpg"} for title in titles}
+
+        svc.covers.lookup_many = lookup_many
+        cls = type(svc.covers)
+        original = cls.__dict__["enabled"]
+        cls.enabled = property(lambda self: True)  # as if IGDB were set up
+        try:
+            asyncio.run(svc._library_fallback_covers(games))
+        finally:
+            cls.enabled = original
+        self.assertEqual(games[0]["cover"], "https://x.invalid/ff7.png")
+        self.assertEqual(games[1]["cover"], "https://x.invalid/ct.jpg")
+        self.assertEqual(games[2]["cover"], "https://x.invalid/Mystery Game.jpg")
+        self.assertNotIn("cover", games[3])
+        self.assertEqual(asked, ["Mystery Game"], "only the unknown game, by its bare title")
+
+
+class Consoles(unittest.TestCase):
+    def test_every_browsable_console_is_listed(self):
+        from backend.service import StoreService
+        tmp = tempfile.mkdtemp()
+        settings = Settings(os.path.join(tmp, "s.json"))
+        svc = StoreService(settings, plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
+
+        async def counts(refresh=False):
+            return {"snes": 782, "gba": 1204}
+
+        svc.system_counts = counts
+        listed = asyncio.run(svc.consoles())
+        keys = [item["key"] for item in listed]
+        self.assertEqual(keys[:2], ["gba", "snes"], "counted consoles first, most games first")
+        self.assertIsNone(next(item for item in listed if item["key"] == "dreamcast")["count"])
+        for key in ("switch", "dreamcast", "wonderswan", "pcengine"):
+            self.assertIn(key, keys)
+        self.assertEqual(len(keys), len(set(keys)))
+        self.assertNotIn("unknown", keys)
+
+
 class ImageLinks(unittest.TestCase):
     def test_igdb_screenshot_links_are_valid(self):
         # IGDB size names start with "t_"; links cached before v1.16.1 lack it.

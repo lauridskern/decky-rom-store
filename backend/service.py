@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import time
@@ -30,7 +31,7 @@ from .media import SteamMedia
 from .models import MergedRom, RomEntry, RomFile, match_title, normalize_title
 from .settings import Settings
 from .sources.base import Source
-from .systems import canonical_system
+from .systems import SYSTEMS, canonical_system
 from .sources.myabandonware import MyAbandonwareSource
 from .sources.nswpedia import NswpediaSource
 from .sources.retrostic import RetrosticSource
@@ -912,12 +913,56 @@ class StoreService:
         the art is matched from the box-art index by file name.
         """
         result = await asyncio.to_thread(self.installed)
+        games = result["games"]
         if self.settings.get("libretro_boxart", True):
             try:
-                await self.boxart.covers(result["games"], resize=bool(self.settings.get("boxart_resize", True)))
+                await self.boxart.covers(games, resize=bool(self.settings.get("boxart_resize", True)))
             except Exception as exc:  # pragma: no cover - art must never break the list
                 print(f"ROM Store: library box art lookup failed: {exc!r}")
+        try:
+            await self._library_fallback_covers(games)
+        except Exception as exc:  # pragma: no cover - art must never break the list
+            print(f"ROM Store: library cover fallback failed: {exc!r}")
         return result
+
+    async def _library_fallback_covers(self, games: List[Dict[str, Any]], wait: float = 2.0) -> None:
+        """Covers for installed games the box-art index has no scan for.
+
+        First what the store already knows without asking anyone: the cover a
+        download of the game had, then IGDB's cache. The rest is looked up on
+        IGDB in the background (bounded, at most ``wait`` seconds here), so
+        the next time the list is opened those games have art too.
+        """
+        missing = [game for game in games if not game.get("cover")]
+        if not missing:
+            return
+        by_title: Dict[str, str] = {}
+        for job in self.downloads.snapshot():
+            if job.get("cover") and job.get("title"):
+                by_title.setdefault(f"{job.get('system')}|{match_title(job['title'])}", job["cover"])
+        lookups: Dict[str, List[Dict[str, Any]]] = {}
+        for game in missing:
+            bare = re.sub(r"\s*[\(\[][^)\]]*[\)\]]", "", str(game.get("title") or "")).strip()
+            known = by_title.get(f"{game.get('system')}|{match_title(bare)}")
+            if known:
+                game["cover"] = known
+                continue
+            info = self.covers.cached(bare) if bare else None
+            if info and info.get("cover"):
+                game["cover"] = info["cover"]
+            elif bare and self.covers.enabled and game.get("system") not in ("arcades", "mame"):
+                lookups.setdefault(bare, []).append(game)
+        if not lookups:
+            return
+        task = asyncio.ensure_future(self.covers.lookup_many(list(lookups), limit=12))
+        try:
+            found = await asyncio.wait_for(asyncio.shield(task), timeout=wait)
+        except (asyncio.TimeoutError, Exception):
+            return
+        for title, info in (found or {}).items():
+            if info and info.get("cover"):
+                for game in lookups.get(title, []):
+                    game["cover"] = info["cover"]
 
     # ------------------------------------------------------------------ steam
     def steam_plan(self, paths: Optional[List[str]] = None, add: bool = True) -> Dict[str, Any]:
@@ -1302,6 +1347,29 @@ class StoreService:
             self._refresh_counts_in_background()
             return cached
         return await self._refresh_counts()
+
+    async def consoles(self) -> List[Dict[str, Any]]:
+        """Every console an enabled source can browse, with its game count.
+
+        The counts come from Romspedia's console pages (``system_counts``); a
+        console only other sites carry (RomsFun's Dreamcast, Retrostic's
+        WonderSwan, ...) is listed with ``count: None``. Most games first, then
+        by name.
+        """
+        try:
+            counts = await self.system_counts()
+        except Exception:
+            counts = self._read_counts_cache()
+        keys = set(counts)
+        for source in self.build_sources():
+            if source.supports_browse:
+                try:
+                    keys |= source.browse_systems()
+                except Exception:  # pragma: no cover - a broken table must not hide the rest
+                    pass
+        keys = {key for key in keys if key in SYSTEMS and key != "unknown"}
+        ordered = sorted(keys, key=lambda key: (-(counts.get(key) or 0), SYSTEMS[key][0].lower()))
+        return [{"key": key, "count": counts.get(key)} for key in ordered]
 
     async def _refresh_counts(self) -> Dict[str, int]:
         source = RomspediaSource(self.http, {"base_url": self.settings.get("romspedia_base_url")})

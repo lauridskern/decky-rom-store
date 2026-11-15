@@ -499,3 +499,5 @@ export const FocusRing = ({ className, children }: { className?: string; childre
 );
 
 export const staticClasses = { Title: "DeckyTitle" } as Record<string, string>;
+// Steam's focus ring classes; the preview has no ring of its own.
+export const focusRingClasses = {} as Record<string, string>;

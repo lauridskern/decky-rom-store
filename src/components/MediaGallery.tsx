@@ -127,9 +127,9 @@ const MediaGallery: FC<Props> = ({ media }) => {
 
   return (
     <>
-      <Focusable className="rs-gallery" flow-children="row">
+      <Focusable noFocusRing className="rs-gallery" flow-children="row">
         {items.map((item, at) => (
-          <Focusable
+          <Focusable noFocusRing
             key={`${item.thumb}-${at}`}
             className={`rs-shot${item.kind === "video" ? " rs-shot-video" : ""}`}
             focusClassName="is-focus"

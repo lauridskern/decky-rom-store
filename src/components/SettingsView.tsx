@@ -115,7 +115,7 @@ const ToggleRow: FC<{ label: string; hint?: ReactNode; on: boolean; onChange: (v
   on,
   onChange,
 }) => (
-  <Focusable
+  <Focusable noFocusRing
     className="rs-row rs-row-toggle rs-f"
     focusClassName="is-focus"
     role="switch"
@@ -299,17 +299,19 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
         </Row>
         {candidates.length ? (
           <Row label="Detected folders" hint="Pick one to use it as the ROM folder." wide>
-            <Dropdown
-              rgOptions={[
-                { label: "Select a detected location…", data: "" },
-                ...candidates.map((path) => ({ label: path, data: path })),
-              ]}
-              selectedOption=""
-              onChange={(option) => {
-                if (option.data) update({ roms_root: option.data });
-              }}
-              menuLabel="Detected folders"
-            />
+            <div className="rs-dd">
+              <Dropdown
+                rgOptions={[
+                  { label: "Select a detected location…", data: "" },
+                  ...candidates.map((path) => ({ label: path, data: path })),
+                ]}
+                selectedOption=""
+                onChange={(option) => {
+                  if (option.data) update({ roms_root: option.data });
+                }}
+                menuLabel="Detected folders"
+              />
+            </div>
           </Row>
         ) : null}
         <Note tone={library && !library.root_exists ? "warn" : undefined}>
@@ -359,17 +361,19 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
     body = (
       <>
         <Row label="Preferred region" hint="This region's file is offered first, as the big Download button.">
-          <Dropdown
-            rgOptions={[
-              { label: "No preference", data: "" },
-              { label: "USA", data: "USA" },
-              { label: "Europe", data: "Europe" },
-              { label: "Japan", data: "Japan" },
-            ]}
-            selectedOption={settings.preferred_region ?? ""}
-            onChange={(option) => update({ preferred_region: option.data })}
-            menuLabel="Preferred region"
-          />
+          <div className="rs-dd">
+            <Dropdown
+              rgOptions={[
+                { label: "No preference", data: "" },
+                { label: "USA", data: "USA" },
+                { label: "Europe", data: "Europe" },
+                { label: "Japan", data: "Japan" },
+              ]}
+              selectedOption={settings.preferred_region ?? ""}
+              onChange={(option) => update({ preferred_region: option.data })}
+              menuLabel="Preferred region"
+            />
+          </div>
         </Row>
         <ToggleRow
           label="Extract .zip archives"
@@ -507,7 +511,7 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
             )
           }
         >
-          <Button className="rs-btn ghost" disabled={syncing} onClick={syncNow}>
+          <Button noFocusRing className="rs-btn ghost" disabled={syncing} onClick={syncNow}>
             {syncing ? "Syncing…" : "Sync with Steam now"}
           </Button>
         </Row>
@@ -534,16 +538,16 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
           }
         >
           {srmAsking ? (
-            <Focusable className="rs-actions" flow-children="row">
-              <Button className="rs-btn ghost rs-srm-cancel" onClick={cancelSrm}>
+            <Focusable noFocusRing className="rs-actions" flow-children="row">
+              <Button noFocusRing className="rs-btn ghost rs-srm-cancel" onClick={cancelSrm}>
                 Cancel
               </Button>
-              <Button className="rs-btn danger" onClick={runSrm}>
+              <Button noFocusRing className="rs-btn danger" onClick={runSrm}>
                 Close Steam and run
               </Button>
             </Focusable>
           ) : (
-            <Button className="rs-btn ghost rs-srm-run" disabled={!srm?.found} onClick={askSrm}>
+            <Button noFocusRing className="rs-btn ghost rs-srm-run" disabled={!srm?.found} onClick={askSrm}>
               Run…
             </Button>
           )}
@@ -591,7 +595,7 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
           label="Stored searches"
           hint={cache ? `${cache.entries} entries, ${Math.round((cache.bytes ?? 0) / 1024)} kB on the Deck.` : undefined}
         >
-          <Button
+          <Button noFocusRing
             className="rs-btn ghost"
             onClick={() =>
               clearCache()
@@ -606,7 +610,7 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
 
         <div className="rs-group">Diagnostics</div>
         <Row fit label="Measure the client" hint="Frame time, DOM size and memory over a second and a half.">
-          <Button
+          <Button noFocusRing
             className="rs-btn ghost"
             disabled={perfBusy}
             onClick={() => {
@@ -631,7 +635,7 @@ search cache  : ${cache ? `${cache.entries} entries, ${Math.round(cache.bytes / 
           </pre>
         ) : null}
         <Row fit label="Artwork pipeline" hint="Checks that covers can be fetched, stored and served to the store.">
-          <Button
+          <Button noFocusRing
             className="rs-btn ghost"
             onClick={() =>
               getImageDiagnostics(null)
@@ -657,7 +661,7 @@ error         : ${diagnostics.error ?? "none"}`}
           label="Reload the store"
           hint="Rebuilds the store from scratch. If a long session has become sluggish, this recovers it without restarting Steam."
         >
-          <Button
+          <Button noFocusRing
             className="rs-btn ghost"
             onClick={() => {
               flush();
@@ -672,12 +676,12 @@ error         : ${diagnostics.error ?? "none"}`}
   }
 
   return (
-    <Focusable ref={viewRef} className="rs-view rs-settings" data-view="settings" flow-children="row">
-      <Focusable className="rs-set-nav" flow-children="column">
+    <Focusable noFocusRing ref={viewRef} className="rs-view rs-settings" data-view="settings" flow-children="row">
+      <Focusable noFocusRing className="rs-set-nav" flow-children="column">
         {SECTIONS.map((item) => {
           const pick = () => setSection(item.key);
           return (
-            <Focusable
+            <Focusable noFocusRing
               key={item.key}
               className={`rs-set-nav-item rs-f${section === item.key ? " active" : ""}`}
               focusClassName="is-focus"
@@ -704,7 +708,7 @@ error         : ${diagnostics.error ?? "none"}`}
         </div>
       </Focusable>
 
-      <Focusable key={section} className="rs-set-pane" flow-children="column">
+      <Focusable noFocusRing key={section} className="rs-set-pane" flow-children="column">
         <h1 className="rs-h1">{current.label}</h1>
         <p className="rs-set-lead">{current.lead}</p>
         {body}

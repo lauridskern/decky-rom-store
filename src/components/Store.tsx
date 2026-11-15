@@ -1,6 +1,6 @@
 import { FC, forwardRef, ReactNode, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { toaster } from "@decky/api";
-import { Dropdown, Focusable, GamepadEvent, TextField } from "@decky/ui";
+import { Dropdown, Focusable, focusRingClasses, GamepadEvent, TextField } from "@decky/ui";
 import { FaCheck, FaExclamationTriangle, FaGamepad, FaSearch, FaStar } from "react-icons/fa";
 import {
   addRecent,
@@ -11,13 +11,14 @@ import {
   uninstallGame,
   getShelves,
   ShelfItem,
+  ConsoleInfo,
   ShelvesPayload,
   toggleFavorite,
   DownloadJob,
   getDownloads,
   getLibrary,
   getSettings,
-  getSystemCounts,
+  getConsoles,
   LibraryInfo,
   MergedRom,
   searchRoms,
@@ -38,6 +39,9 @@ import GamePage from "./GamePage";
 import DownloadsView from "./DownloadsView";
 import SettingsView from "./SettingsView";
 import { EmptyState, Glyph } from "./ui";
+
+// The first thing on the home screen that takes focus.
+const HOME_FIRST = ".rs-home .rs-shelf-tile, .rs-home .rs-console";
 
 // One page is rendered at a time. A search fetches a few pages worth of
 // results up front, so paging is instant and never hits the network again.
@@ -137,7 +141,14 @@ const Store: FC = () => {
   const results = useMemo(() => allResults.filter((rom) => inRegion(rom, region)), [allResults, region]);
   const [sources, setSources] = useState<SourceInfo[]>([]);
   const [systems, setSystems] = useState<string[]>([]);
-  const [systemCounts, setSystemCounts] = useState<Record<string, number>>({});
+  const [consoles, setConsoles] = useState<ConsoleInfo[]>([]);
+  const systemCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    consoles.forEach((item) => {
+      if (item.count) counts[item.key] = item.count;
+    });
+    return counts;
+  }, [consoles]);
   const [library, setLibrary] = useState<LibraryInfo | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
@@ -194,9 +205,9 @@ const Store: FC = () => {
     getShelves().then(setShelves).catch(() => undefined);
     refreshInstalled();
     const loadCounts = () =>
-      getSystemCounts()
-        .then((counts) => {
-          if (counts && Object.keys(counts).length) setSystemCounts(counts);
+      getConsoles()
+        .then((list) => {
+          if (list && list.length) setConsoles(list);
         })
         .catch(() => undefined);
     loadCounts();
@@ -214,14 +225,40 @@ const Store: FC = () => {
     };
   }, [refreshDownloads, refreshLibrary, refreshInstalled]);
 
-  // The store opens on the home screen's first tile.
+  // Steam draws its own focus ring around whatever has focus, on top of ours
+  // and without our rounded corners. Our Focusables and Buttons say
+  // noFocusRing; Steam's Dropdown and TextField cannot, so while focus is in
+  // the store the ring is hidden (it is back as soon as focus leaves, in the
+  // Quick Access menu for example).
   useEffect(() => {
-    window.requestAnimationFrame(() => {
-      if (!storeRef.current?.contains(document.activeElement)) {
-        focusElement(storeRef.current?.querySelector(".rs-hero"));
-      }
-    });
+    const ring = (focusRingClasses as Record<string, string> | undefined)?.FocusRing;
+    if (!ring || typeof document === "undefined") return;
+    const root = document.documentElement;
+    const style = document.createElement("style");
+    style.textContent = `html.rs-no-ring .${CSS.escape(ring)} { opacity: 0 !important; }`;
+    document.head.appendChild(style);
+    const update = (event: FocusEvent) =>
+      root.classList.toggle("rs-no-ring", Boolean(storeRef.current?.contains(event.target as Node)));
+    document.addEventListener("focusin", update);
+    if (storeRef.current?.contains(document.activeElement)) root.classList.add("rs-no-ring");
+    return () => {
+      document.removeEventListener("focusin", update);
+      root.classList.remove("rs-no-ring");
+      style.remove();
+    };
   }, []);
+
+  // The store opens on the home screen's first tile. The shelves and the
+  // consoles arrive a moment after the store, so this waits for them, and it
+  // never takes focus the player has already moved somewhere.
+  const homeFilled = consoles.length > 0 || shelves.recent.length > 0 || shelves.favorites.length > 0;
+  useEffect(() => {
+    if (!homeFilled) return;
+    window.requestAnimationFrame(() => {
+      const root = storeRef.current;
+      if (root && !root.contains(document.activeElement)) focusElement(root.querySelector(HOME_FIRST));
+    });
+  }, [homeFilled]);
 
   const runSearch = useCallback(
     async (term: string, systemFilter: string, sourceFilter: string, sortBy: string) => {
@@ -355,7 +392,7 @@ const Store: FC = () => {
         if (which === "store") {
           const last = storeFocus.current;
           if (last && view?.contains(last) && focusElement(last)) return;
-          if (focusElement(view?.querySelector(".rs-card, .rs-hero"))) return;
+          if (focusElement(view?.querySelector(`.rs-card, ${HOME_FIRST}`))) return;
         } else if (view) {
           if (view.contains(document.activeElement)) return; // the view took focus itself
           const game = gameId
@@ -604,7 +641,7 @@ const Store: FC = () => {
         const root = storeRef.current;
         if (!root) return;
         const tile = from !== "all" ? root.querySelector(`.rs-console[data-key="${from}"]`) : null;
-        focusElement(tile ?? root.querySelector(".rs-hero"));
+        focusElement(tile ?? root.querySelector(HOME_FIRST));
       }),
     );
   }, [system]);
@@ -639,21 +676,13 @@ const Store: FC = () => {
     return list.length ? list : sources;
   }, [sources]);
 
-  // Every console we know about, most games first.
+  // Every console a source can browse (the backend's order: most games
+  // first), plus any console the current results have.
   const consoleOptions = useMemo(() => {
-    const keys = new Set<string>(Object.keys(systemCounts));
-    systems.forEach((key) => keys.add(key));
-    if (system !== "all") keys.add(system);
-    return Array.from(keys).sort((a, b) => (systemCounts[b] ?? 0) - (systemCounts[a] ?? 0));
-  }, [systems, systemCounts, system]);
-
-  const consoleTiles = useMemo(
-    () =>
-      Object.keys(systemCounts)
-        .sort((a, b) => (systemCounts[b] ?? 0) - (systemCounts[a] ?? 0))
-        .map((key) => ({ key, count: systemCounts[key] ?? 0 })),
-    [systemCounts],
-  );
+    const keys = consoles.map((item) => item.key);
+    const extra = [...systems, system].filter((key) => key !== "all" && key !== "unknown" && !keys.includes(key));
+    return [...keys, ...Array.from(new Set(extra))];
+  }, [consoles, systems, system]);
 
   const selected = solo ? (solo.rom ?? stub) : selectedIndex !== null ? (results[selectedIndex] ?? null) : null;
   const pageOpen = selected !== null;
@@ -667,7 +696,7 @@ const Store: FC = () => {
       <StoreStyles />
       {/* Everything behind the game page. While that is open the d-pad cannot
           wander back here. X searches and L1/R1 change tab from anywhere. */}
-      <Focusable
+      <Focusable noFocusRing
         className="rs-body"
         flow-children="column"
         {...childFocus(!pageOpen)}
@@ -675,17 +704,17 @@ const Store: FC = () => {
         onSecondaryActionDescription="Search"
         onButtonDown={onShellButton}
       >
-        <Focusable className="rs-top" flow-children="row">
+        <Focusable noFocusRing className="rs-top" flow-children="row">
           <div className="rs-brand">
             <span className="rs-brand-mark">
               <FaGamepad />
             </span>
             ROM Store
           </div>
-          <Focusable className="rs-tabs" flow-children="row">
+          <Focusable noFocusRing className="rs-tabs" flow-children="row">
             <Glyph>L1</Glyph>
             {TABS.map((item) => (
-              <Focusable
+              <Focusable noFocusRing
                 key={item.key}
                 className={`rs-tab rs-f${tab === item.key ? " active" : ""}`}
                 data-tab={item.key}
@@ -730,7 +759,7 @@ const Store: FC = () => {
         <div className="rs-views">
           {/* The store stays mounted behind the other tabs, so its covers,
               scroll position and focus are still there on the way back. */}
-          <Focusable
+          <Focusable noFocusRing
             className={`rs-view${tab === "store" ? "" : " is-hidden"}`}
             data-view="store"
             flow-children="column"
@@ -742,21 +771,19 @@ const Store: FC = () => {
             {home ? (
               <div className="rs-main rs-main-home">
                 <HomeView
-                  consoles={consoleTiles}
+                  consoles={consoles}
                   favorites={shelves.favorites}
                   recent={shelves.recent}
                   installed={installed?.games ?? []}
-                  sources={settings?.enabled_sources.length ?? 0}
                   onConsole={pickConsole}
                   onItem={openShelfItem}
                   onInstalled={openLibrary}
                   onFavorite={flipFavorite}
-                  onSearch={focusSearch}
                 />
               </div>
             ) : (
               <div className="rs-results">
-                <Focusable className="rs-filterbar" flow-children="row">
+                <Focusable noFocusRing className="rs-filterbar" flow-children="row">
                   <div className="rs-results-head">
                     <h1 className="rs-h1">{heading}</h1>
                     <span className="rs-count">
@@ -863,9 +890,9 @@ const Store: FC = () => {
                         onFavorite={flipFavorite}
                       />
                       {pageCount > 1 ? (
-                        <Focusable className="rs-pager" flow-children="row">
+                        <Focusable noFocusRing className="rs-pager" flow-children="row">
                           {page > 0 ? (
-                            <Focusable
+                            <Focusable noFocusRing
                               className="rs-pill rs-f"
                               focusClassName="is-focus"
                               onActivate={() => turnPage(-1)}
@@ -883,7 +910,7 @@ const Store: FC = () => {
                             Page {page + 1} of {pageCount}
                           </span>
                           {page < pageCount - 1 ? (
-                            <Focusable
+                            <Focusable noFocusRing
                               className="rs-pill rs-f"
                               focusClassName="is-focus"
                               onActivate={() => turnPage(1)}
@@ -925,7 +952,7 @@ const Store: FC = () => {
                   }
                 >
                   {issueCount > 0 ? (
-                    <Focusable
+                    <Focusable noFocusRing
                       className="rs-issues rs-f"
                       focusClassName="is-focus"
                       onActivate={() => setShowIssues((value) => !value)}

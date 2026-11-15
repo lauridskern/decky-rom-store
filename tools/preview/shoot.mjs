@@ -47,10 +47,10 @@ await page.goto(`file://${path.join(pluginDir, "tools/preview/index.html")}`);
 await page.waitForTimeout(1500);
 
 // --- home
-await expectFocus("store opens", ".rs-hero");
+await expectFocus("store opens on the first shelf", ".rs-shelf-tile");
 await page.screenshot({ path: out("home.png") });
 await key("ArrowDown");
-await expectFocus("down from the hero", ".rs-shelf-tile");
+await expectFocus("down to the next shelf", ".rs-shelf-tile");
 await key("ArrowUp");
 await key("ArrowUp");
 await expectFocus("up to the tabs", ".rs-tab");
@@ -115,8 +115,16 @@ await expectFocus("B on a tab: back in the store", ".rs-card");
 
 // --- back to the home screen
 await key("Escape", 700);
-await expectFocus("B on the results", ".rs-hero, .rs-console");
+await expectFocus("B on the results", ".rs-shelf-tile, .rs-console");
 const home = await page.evaluate(() => !!document.querySelector(".rs-home"));
+const tiles = await page.evaluate(() => document.querySelectorAll(".rs-console").length);
+console.log("console tiles:", tiles);
+if (tiles < 30) failures.push(`only ${tiles} consoles on the home screen`);
+// Nothing in the store shows a scrollbar.
+const bars = await page.evaluate(() =>
+  [...document.querySelectorAll(".rs-store *:not(input)")].filter((el) => el.offsetWidth - el.clientWidth > 1 && getComputedStyle(el).overflowY !== "visible").length,
+);
+if (bars) failures.push(`${bars} elements show a scrollbar`);
 if (!home) failures.push("B on the results did not bring the home screen back");
 
 console.log("failures:", failures.length ? failures : "none");

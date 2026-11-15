@@ -365,6 +365,12 @@ export const openFolder = callable<[string], { ok: boolean; error?: string }>("o
 export const getCover = callable<[string | null, string], string | null>("get_cover");
 export const prefetchCovers = callable<[string[], string], void>("prefetch_covers");
 export const getSystemCounts = callable<[], Record<string, number>>("get_system_counts");
+/** Every console a source can browse; `count` only where it is known. */
+export interface ConsoleInfo {
+  key: string;
+  count: number | null;
+}
+export const getConsoles = callable<[], ConsoleInfo[]>("get_consoles");
 export const getStatus = callable<[], StatusPayload>("get_status");
 export const getImageDiagnostics = callable<[string | null], ImageDiagnostics>("image_diagnostics");
 export const getCacheStats = callable<[], CacheStats>("cache_stats");

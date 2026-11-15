@@ -130,6 +130,9 @@ class RomspediaSource(Source):
         html = await self.http.get_text(f"{self.base}/roms/{slug}")
         return self._parse_cards(html)
 
+    def browse_systems(self) -> set:
+        return set(CONSOLE_MAP.values())
+
     def _slug_for(self, system: str) -> Optional[str]:
         for slug, key in CONSOLE_MAP.items():
             if key == system:

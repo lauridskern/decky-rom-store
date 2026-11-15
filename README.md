@@ -15,7 +15,7 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 | | |
 |---|---|
 | **Search** | One search box queries every enabled source in parallel and merges the hits. |
-| **Browse** | The console dropdown lists every console with live title counts (including Switch) and switching to one browses that catalogue. Counts are scraped once and cached on the Deck for a day. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
+| **Browse** | The console tiles and dropdown list every console any enabled source can browse, with title counts where known (including Switch), and switching to one browses that catalogue. Counts are scraped once and cached on the Deck for a day. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
 | **Gamepad** | Built for the Deck's pad: L1/R1 switch between Store, Library, Downloads and Settings, A opens a game, X searches, Y marks a favourite, L2/R2 turn the page, B goes back one step. |
 | **Gallery** | Every game opens with a shelf of artwork that scrolls horizontally: the game's own screenshots, the artwork from the site the game came from, and a trailer. |
 | **Metadata** | The description, genres, developer and the community rating all come from IGDB, so every title looks the same no matter which site it was found on. | Click any item for a full screen lightbox, where the trailer plays. Artwork comes from the ROM sites themselves, not from Steam, so it works for every console. |
@@ -32,8 +32,9 @@ The store fills the Deck's screen and is laid out for the pad, not for a
 mouse. Four tabs sit in the top bar and **L1 / R1** switch between them from
 anywhere:
 
-* **Store** – the home screen (the game you looked at last, recently viewed,
-  favourites, what is in your library, every console with its game count) and
+* **Store** – the home screen (recently viewed, favourites, what is in your
+  library, every console a source can browse, with its game count where the
+  store knows it) and
   the results: a grid of covers in their real box shapes. The line under the
   grid names the cover that has focus, with its console, year, size and rating.
 * **Library** – the games in your ROM folders with their box art, the space
@@ -359,7 +360,7 @@ buttons do where you are.
 | where | buttons |
 |---|---|
 | anywhere | **L1 / R1** previous / next tab · **X** search · **B** back one step |
-| home | d-pad through the hero, the shelves and the consoles · **A** open · **Y** favourite |
+| home | d-pad through the shelves and the consoles · **A** open · **Y** favourite |
 | results | **A** game page · **Y** favourite · **L2 / R2** previous / next page · **B** home |
 | game page | starts on Download · **A / X** download · **Y** favourite · **L1 / R1** previous / next game · **B** close |
 | library | **A** uninstall (asks, *Keep* selected) · **Y** store page |

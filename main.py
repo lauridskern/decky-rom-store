@@ -159,6 +159,10 @@ class Plugin:
     async def get_system_counts(self) -> Dict[str, int]:
         return await self._self().service.system_counts()
 
+    async def get_consoles(self) -> List[Dict[str, Any]]:
+        """Every console a source can browse, with its game count if known."""
+        return await self._self().service.consoles()
+
     # ------------------------------------------------------------------ artwork
     async def get_cover(self, url: Optional[str], kind: str = "card") -> Optional[str]:
         """Resolve a remote cover image to a locally cached URL."""

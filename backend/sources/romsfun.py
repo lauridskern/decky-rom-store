@@ -245,6 +245,9 @@ class RomsFunSource(Source):
             url = f"{self.base}/page/{page}/?s={quote_plus(query)}"
         return self._parse_list(await self._page(url))[:limit]
 
+    def browse_systems(self) -> set:
+        return set(SLUGS)
+
     async def browse(self, system: str, limit: int = 40) -> List[RomEntry]:
         slug = SLUGS.get(system)
         if not slug:

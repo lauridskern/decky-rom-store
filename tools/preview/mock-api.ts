@@ -326,6 +326,13 @@ const handlers: Record<string, (...args: any[]) => any> = {
     megadrive: 906,
     arcades: 9053,
   }),
+  // Counted consoles first, then the ones only other sources carry.
+  get_consoles: async () => [
+    ...Object.entries({ arcades: 9053, gbc: 2303, psx: 2180, gba: 1204, ps2: 1035, "3ds": 1015, genesis: 906, snes: 782, gc: 578, nes: 402, n64: 393, switch: 9 })
+      .map(([key, count]) => ({ key, count })),
+    ...["3do", "amiga", "atari2600", "atari7800", "dreamcast", "gamegear", "gb", "jaguar", "mastersystem", "nds", "neogeo", "ngpc", "pcengine", "psp", "psvita", "saturn", "sega32x", "segacd", "virtualboy", "wii", "wiiu", "wonderswan"]
+      .map((key) => ({ key, count: null })),
+  ],
   get_details: async (id: string) => {
     const rom = known.get(id);
     if (!rom) return null;

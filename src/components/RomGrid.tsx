@@ -32,7 +32,7 @@ interface Props {
  * filters it lands on the cover under the control that had focus.
  */
 const RomGrid: FC<Props> = ({ items, favorites, onOpen, onFocus, onFavorite }) => (
-  <Focusable className="rs-grid" flow-children="grid" navEntryPreferPosition={ENTER_KEEP_X}>
+  <Focusable noFocusRing className="rs-grid" flow-children="grid" navEntryPreferPosition={ENTER_KEEP_X}>
     {items.map((rom, slot) => (
       // Keyed by slot, not by game: paging then reuses the same 30 card
       // components (and the same Steam focus nodes) instead of destroying and

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from ..httpclient import HttpClient
 from ..models import RomEntry, RomFile
@@ -30,6 +30,10 @@ class Source:
 
     async def browse(self, system: str, limit: int = 40) -> List[RomEntry]:
         raise NotImplementedError
+
+    def browse_systems(self) -> Set[str]:
+        """Console keys this site has a catalogue for (empty: no browsing)."""
+        return set()
 
     async def resolve(self, entry: RomEntry) -> List[RomFile]:
         """Return the downloadable files for an entry (may be empty)."""

@@ -109,8 +109,13 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
   };
 
   return (
-    <Focusable ref={viewRef} className="rs-view rs-scroll" data-view="library" flow-children="column">
-      <Focusable className="rs-view-head" flow-children="row">
+    <Focusable noFocusRing
+      ref={viewRef}
+      className={`rs-view rs-scroll${games && games.length === 0 ? " is-empty" : ""}`}
+      data-view="library"
+      flow-children="column"
+    >
+      <Focusable noFocusRing className="rs-view-head" flow-children="row">
         <div className="rs-view-title">
           <h1 className="rs-h1">Library</h1>
           <span className="rs-count">
@@ -166,7 +171,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
           icon={<FaFolderOpen />}
           title="No games yet"
           action={
-            <Button className="rs-btn" onClick={onBrowse}>
+            <Button noFocusRing className="rs-btn" onClick={onBrowse}>
               Browse the store
             </Button>
           }
@@ -186,7 +191,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
               </span>
             </div>
           ) : null}
-          <Focusable className="rs-lib-grid" flow-children="grid">
+          <Focusable noFocusRing className="rs-lib-grid" flow-children="grid">
             {list.map((game) => {
               const files = game.files.length;
               const thumb = (
@@ -204,11 +209,11 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
                         Delete {files} {files === 1 ? "file" : "files"}, {formatBytes(game.size)}? This cannot be undone.
                       </div>
                     </div>
-                    <Focusable className="rs-actions" flow-children="row">
-                      <Button className="rs-btn ghost rs-lib-keep" onClick={() => keep(game)} onOKActionDescription="Keep">
+                    <Focusable noFocusRing className="rs-actions" flow-children="row">
+                      <Button noFocusRing className="rs-btn ghost rs-lib-keep" onClick={() => keep(game)} onOKActionDescription="Keep">
                         Keep
                       </Button>
-                      <Button
+                      <Button noFocusRing
                         className="rs-btn danger rs-lib-delete"
                         disabled={busy === game.id}
                         onClick={() => remove(game)}
@@ -221,7 +226,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
                 );
               }
               return (
-                <Focusable
+                <Focusable noFocusRing
                   key={game.id}
                   className="rs-lib-card rs-f"
                   data-game={game.id}

@@ -56,15 +56,15 @@ const DownloadsView: FC<Props> = ({ jobs, onRefresh, onOpen, onBrowse }) => {
   };
 
   return (
-    <Focusable
+    <Focusable noFocusRing
       ref={viewRef}
-      className="rs-view rs-scroll"
+      className={`rs-view rs-scroll${jobs.length ? "" : " is-empty"}`}
       data-view="downloads"
       flow-children="column"
       onSecondaryButton={finished.length ? clearFinished : undefined}
       onSecondaryActionDescription={finished.length ? "Clear finished" : undefined}
     >
-      <Focusable className="rs-view-head" flow-children="row">
+      <Focusable noFocusRing className="rs-view-head" flow-children="row">
         <div className="rs-view-title">
           <h1 className="rs-h1">Downloads</h1>
           <span className="rs-count">
@@ -72,7 +72,7 @@ const DownloadsView: FC<Props> = ({ jobs, onRefresh, onOpen, onBrowse }) => {
           </span>
         </div>
         {finished.length ? (
-          <Focusable
+          <Focusable noFocusRing
             className="rs-pill rs-f"
             focusClassName="is-focus"
             onActivate={clearFinished}
@@ -89,7 +89,7 @@ const DownloadsView: FC<Props> = ({ jobs, onRefresh, onOpen, onBrowse }) => {
           icon={<FaDownload />}
           title="Nothing downloaded yet"
           action={
-            <Button className="rs-btn" onClick={onBrowse}>
+            <Button noFocusRing className="rs-btn" onClick={onBrowse}>
               Browse the store
             </Button>
           }
@@ -100,7 +100,7 @@ const DownloadsView: FC<Props> = ({ jobs, onRefresh, onOpen, onBrowse }) => {
       ) : null}
 
       {active.length ? (
-        <Focusable className="rs-dl-list" flow-children="column">
+        <Focusable noFocusRing className="rs-dl-list" flow-children="column">
           {active.map((job) => {
             const progress = job.total ? Math.min(1, job.received / job.total) : 0;
             const left = job.speed > 0 && job.total ? (job.total - job.received) / job.speed : 0;
@@ -129,7 +129,7 @@ const DownloadsView: FC<Props> = ({ jobs, onRefresh, onOpen, onBrowse }) => {
                   </div>
                 </div>
                 {job.status !== "extracting" ? (
-                  <Button
+                  <Button noFocusRing
                     className="rs-btn ghost rs-dl-cancel"
                     onClick={() => {
                       cancelDownload(job.id)
@@ -153,9 +153,9 @@ const DownloadsView: FC<Props> = ({ jobs, onRefresh, onOpen, onBrowse }) => {
             <h2 className="rs-h2">Finished</h2>
             <span className="rs-count">{finished.length}</span>
           </div>
-          <Focusable className="rs-dl-list" flow-children="column">
+          <Focusable noFocusRing className="rs-dl-list" flow-children="column">
             {finished.map((job) => (
-              <Focusable
+              <Focusable noFocusRing
                 key={job.id}
                 className={`rs-dl-row rs-f ${job.status}`}
                 focusClassName="is-focus"
@@ -176,11 +176,6 @@ const DownloadsView: FC<Props> = ({ jobs, onRefresh, onOpen, onBrowse }) => {
                       <>
                         {job.total || job.received ? <span>{formatBytes(job.total || job.received)}</span> : null}
                         {job.finished ? <span>{timeAgo(job.finished)}</span> : null}
-                        {job.path ? (
-                          <span className="rs-path" title={job.extracted_to ?? job.path}>
-                            {job.extracted_to ?? job.path}
-                          </span>
-                        ) : null}
                       </>
                     ) : job.status === "error" ? (
                       <span className="rs-bad">{job.error || "Failed"}</span>

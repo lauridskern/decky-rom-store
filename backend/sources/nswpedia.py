@@ -151,6 +151,9 @@ class NswpediaSource(Source):
         return entries
 
     # ------------------------------------------------------------------ browse
+    def browse_systems(self) -> set:
+        return {"switch"}
+
     async def browse(self, system: str, limit: int = 200) -> List[RomEntry]:
         # Switch only; see SwitchRomsSource.browse.
         if system != "switch":

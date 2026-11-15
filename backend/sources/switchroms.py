@@ -52,6 +52,9 @@ class SwitchRomsSource(Source):
         html = await self.http.get_text(url)
         return self._parse_results(html)[:limit]
 
+    def browse_systems(self) -> set:
+        return {"switch"}
+
     async def browse(self, system: str, limit: int = 200) -> List[RomEntry]:
         """Walk the catalogue pages so the browse view shows the whole library."""
         # A Switch-only catalogue: browsing any other console would fetch a

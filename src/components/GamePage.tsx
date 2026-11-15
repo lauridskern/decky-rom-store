@@ -15,7 +15,7 @@ import {
   RomFile,
 } from "../types";
 import { Button, Dropdown, Focusable, GamepadEvent } from "@decky/ui";
-import { FaBolt, FaCheck, FaDownload, FaFolder, FaRegStar, FaSearch, FaStar, FaTimes } from "react-icons/fa";
+import { FaCheck, FaDownload, FaFolder, FaRegStar, FaSearch, FaStar, FaTimes } from "react-icons/fa";
 import { artRatios, clampArtRatio, formatBytes, formatCount, isResizedArt, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import { NoArt } from "./RomCard";
@@ -202,6 +202,7 @@ const GamePage: FC<Props> = ({
   const cover = primary?.cover_full ?? rom.cover ?? null;
   // Resized art (Romspedia) is stretched back into the console's box shape.
   const resizedCover = isResizedArt(cover);
+  const posterShape = posterRatio && !resizedCover ? String(clampArtRatio(posterRatio)) : systemAspect(rom.system);
   // A screenshot makes a far better hero than a blown-up cover.
   const hero = media?.header ?? media?.shots?.[0]?.thumb ?? cover;
 
@@ -251,8 +252,6 @@ const GamePage: FC<Props> = ({
   const files = listed.sort(
     (a, b) => a.rank - b.rank || (a.eta ?? typicalEta) - (b.eta ?? typicalEta) || a.index - b.index,
   );
-  // "Fastest" only means something with measurements for more than one provider.
-  const measuredSources = new Set(listed.filter((item) => item.eta !== null).map((item) => item.entry.source));
   // The backend ranks the files; the first one is offered as the main action.
   const best = files[0] ?? null;
   const others = files.slice(1);
@@ -346,13 +345,12 @@ const GamePage: FC<Props> = ({
 
   const waiting = loading || resolving;
   const mainAction = job ? onShowDownloads : best ? () => download(best.entry, best.file) : undefined;
-  const fastest = Boolean(best && measuredSources.size > 1 && speeds[best.entry.source]?.speed);
 
   return (
     // d-pad: the close button, then down through the download, the versions,
     // the pictures and the save target. B closes (useBackGuard), X downloads
     // from anywhere on the page, Y favourites, L1/R1 go to the neighbours.
-    <Focusable
+    <Focusable noFocusRing
       ref={panelRef}
       className="rs-page"
       flow-children="column"
@@ -370,7 +368,7 @@ const GamePage: FC<Props> = ({
       {/* Keyed by game: L1/R1 must not keep the last game's backdrop. */}
       <HeroBackdrop key={rom.id} url={hero} />
 
-      <Focusable className="rs-page-nav" flow-children="row">
+      <Focusable noFocusRing className="rs-page-nav" flow-children="row">
         {position ? (
           <span className="rs-page-pos">
             <Glyph>L1</Glyph>
@@ -378,7 +376,7 @@ const GamePage: FC<Props> = ({
             <Glyph>R1</Glyph>
           </span>
         ) : null}
-        <Focusable
+        <Focusable noFocusRing
           className="rs-close rs-f"
           focusClassName="is-focus"
           title="Close"
@@ -394,9 +392,12 @@ const GamePage: FC<Props> = ({
       <aside className="rs-page-side">
         <div
           className="rs-poster"
-          style={{
-            aspectRatio: posterRatio && !resizedCover ? String(clampArtRatio(posterRatio)) : systemAspect(rom.system),
-          }}
+          style={
+            {
+              aspectRatio: posterShape,
+              "--rs-ratio": posterShape,
+            } as CSSProperties
+          }
         >
           {cover ? (
             <CoverImage
@@ -427,7 +428,7 @@ const GamePage: FC<Props> = ({
       </aside>
 
       {/* Right: one scroll area, ordered by what people come here to do. */}
-      <Focusable ref={contentRef} className="rs-page-main" flow-children="column">
+      <Focusable noFocusRing ref={contentRef} className="rs-page-main" flow-children="column">
         <header className="rs-page-head">
           <div className="rs-eyebrow">{systemName}</div>
           <h1 className="rs-title">{rom.title}</h1>
@@ -449,9 +450,9 @@ const GamePage: FC<Props> = ({
         </header>
 
         {/* A row: left/right between the download and the star. */}
-        <Focusable className="rs-cta" flow-children="row">
+        <Focusable noFocusRing className="rs-cta" flow-children="row">
           {job ? (
-            <Button className="rs-cta-btn busy" onClick={onShowDownloads} onOKActionDescription="View downloads">
+            <Button noFocusRing className="rs-cta-btn busy" onClick={onShowDownloads} onOKActionDescription="View downloads">
               <span className="rs-cta-fill" style={{ width: `${Math.round(jobProgress * 100)}%` }} />
               <span className="rs-cta-label">
                 {job.status === "queued"
@@ -462,7 +463,7 @@ const GamePage: FC<Props> = ({
               </span>
             </Button>
           ) : best ? (
-            <Button
+            <Button noFocusRing
               className="rs-cta-btn"
               disabled={busy === best.file.id}
               onClick={() => download(best.entry, best.file)}
@@ -478,7 +479,7 @@ const GamePage: FC<Props> = ({
               </span>
             </Button>
           ) : missing ? (
-            <Button className="rs-cta-btn quiet" onClick={onSearchInstead} onOKActionDescription="Search">
+            <Button noFocusRing className="rs-cta-btn quiet" onClick={onSearchInstead} onOKActionDescription="Search">
               <span className="rs-cta-label">
                 <FaSearch /> Search for it
               </span>
@@ -495,7 +496,7 @@ const GamePage: FC<Props> = ({
             </div>
           )}
           {onToggleFavorite ? (
-            <Focusable
+            <Focusable noFocusRing
               className={`rs-icon-btn rs-f${favorite ? " on" : ""}`}
               focusClassName="is-focus"
               title={favorite ? "Remove from favourites" : "Add to favourites"}
@@ -508,33 +509,15 @@ const GamePage: FC<Props> = ({
           ) : null}
           {best && !job ? (
             <div className="rs-cta-file">
+              {/* One line: the file. Source, size and speed are in the versions list. */}
               <div className="rs-cta-name" title={fileName(best.file)}>
                 {fileName(best.file)}
-              </div>
-              <div className="rs-meta">
-                {fastest ? (
-                  <span className="rs-fastest" title="Fastest provider on your earlier downloads">
-                    <FaBolt /> Fastest
-                  </span>
-                ) : null}
-                {fileMeta(best.entry, best.file).map((part, index) => (
-                  <span key={index} className={index === 0 ? "rs-file-source" : undefined}>
-                    {part}
-                  </span>
-                ))}
               </div>
             </div>
           ) : job ? (
             <div className="rs-cta-file">
               <div className="rs-cta-name" title={job.filename}>
                 {job.filename}
-              </div>
-              <div className="rs-meta">
-                <span>
-                  {formatBytes(job.received) || "0B"}
-                  {job.total ? ` of ${formatBytes(job.total)}` : ""}
-                </span>
-                {job.speed > 0 ? <span>{formatBytes(job.speed)}/s</span> : null}
               </div>
             </div>
           ) : missing ? (
@@ -578,9 +561,9 @@ const GamePage: FC<Props> = ({
               {others.length > 0 ? <span className="rs-count">{others.length}</span> : null}
             </div>
             {/* Each row is one target: A downloads that version. */}
-            <Focusable className="rs-versions" flow-children="column">
+            <Focusable noFocusRing className="rs-versions" flow-children="column">
               {shownOthers.map(({ entry, file }) => (
-                <Focusable
+                <Focusable noFocusRing
                   key={file.id}
                   className={`rs-version rs-f${busy === file.id ? " busy" : ""}`}
                   focusClassName="is-focus"
@@ -605,7 +588,7 @@ const GamePage: FC<Props> = ({
               ))}
             </Focusable>
             {others.length > shownOthers.length ? (
-              <Focusable
+              <Focusable noFocusRing
                 className="rs-pill rs-f rs-versions-more"
                 focusClassName="is-focus"
                 onActivate={showAllVersions}
@@ -647,7 +630,7 @@ const GamePage: FC<Props> = ({
             <div className="rs-section-head">
               <h2 className="rs-h3">Save to</h2>
             </div>
-            <Focusable className="rs-dest" flow-children="row">
+            <Focusable noFocusRing className="rs-dest" flow-children="row">
               <FaFolder className="rs-dest-icon" />
               <div className="rs-dest-select">
                 <Dropdown
