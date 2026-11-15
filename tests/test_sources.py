@@ -78,6 +78,7 @@ class SourceParsers(unittest.TestCase):
     def test_romsdl(self): self.check("romsdl")
     def test_myabandonware(self): self.check("myabandonware")
     def test_switchroms(self): self.check("switchroms")
+    def test_homebrewhub(self): self.check("homebrewhub")
     def test_romsfun(self): self.check("romsfun")
 
 

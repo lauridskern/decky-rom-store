@@ -15,7 +15,7 @@ drops the file you pick straight into the matching **EmuDecky** ROM folder
 | | |
 |---|---|
 | **Search** | One search box queries every enabled source in parallel and merges the hits. |
-| **Browse** | The console tiles and dropdown list every console any enabled source can browse, with title counts where known (including Switch), and switching to one browses that catalogue. Counts are scraped once and cached on the Deck for a day. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
+| **Browse** | The console tiles and dropdown list every console any enabled source can browse (including Switch), the most played ones first, and switching to one browses that catalogue. Browsing a console walks the catalogue pages, so Switch shows the whole library (~90 titles) instead of one page. |
 | **Gamepad** | Built for the Deck's pad: L1/R1 switch between Store, Library, Downloads and Settings, A opens a game, X searches, Y marks a favourite, L2/R2 turn the page, B goes back one step. |
 | **Gallery** | Every game opens with a shelf of artwork that scrolls horizontally: the game's own screenshots, the artwork from the site the game came from, and a trailer. |
 | **Metadata** | The description, genres, developer and the community rating all come from IGDB, so every title looks the same no matter which site it was found on. | Click any item for a full screen lightbox, where the trailer plays. Artwork comes from the ROM sites themselves, not from Steam, so it works for every console. |
@@ -33,8 +33,7 @@ mouse. Four tabs sit in the top bar and **L1 / R1** switch between them from
 anywhere:
 
 * **Store** – the home screen (recently viewed, favourites, what is in your
-  library, every console a source can browse, with its game count where the
-  store knows it) and
+  library, every console a source can browse) and
   the results: a grid of covers in their real box shapes. The line under the
   grid names the cover that has focus, with its console, year, size and rating.
 * **Library** – the games in your ROM folders with their box art, the space
@@ -145,6 +144,7 @@ real ROM library.
 | **RomsDL** | `https://romsdl.com` — the same engine as Retrostic with a different catalogue; good for extra region builds. |
 | **RomsFun** | `https://romsfun.com` — large catalogue across 50+ consoles, including romhacks and fan translations (listed after the games). Each download waits out the site's 7-second countdown, as a visitor would. |
 | **MyAbandonware** | `https://www.myabandonware.com` — backed by a TypeSense index. The plugin reads the short-lived scoped search key out of the search page and queries the index directly. Older PC and console titles. |
+| **Homebrew Hub** | `https://hh.gbdev.io` — the gbdev community's archive of homebrew: new games for Game Boy, Game Boy Color, Game Boy Advance and NES, published by their authors to be played. A JSON API; downloads are direct. |
 
 Each source can be switched off individually if it is unreachable; failures are
 reported per source in the status bar instead of breaking the whole search.
@@ -172,7 +172,7 @@ What the catalogues actually contain is the limiting factor, not the plugin:
 For Switch games the **Switch ROMs** catalogue carries far more titles; it is
 searched and browsed alongside the others. (Nswpedia was removed as a source
 in v1.17.4: its files all sit behind datanodes.to's download page, which needs
-a browser. Its cover index still gives Switch games their box art.)
+a browser.) Switch box art comes from [GameTDB](https://www.gametdb.com).
 
 ## Where files land
 
@@ -320,6 +320,16 @@ size (about 30 kB) for the strip and only the full resolution is pulled in
 when you open one. If artwork still does not show up,
 open **Settings → Diagnostics → Test image pipeline**; it prints the plugin
 folder, the resolved local URL and the cache folder.
+
+**Where box art comes from:** real front scans from libretro-thumbnails
+(RetroArch's box-art library: some 60 consoles, arcade included) first; for
+Switch, which libretro does not cover, and for the Wii U, PS3, Wii, DS and
+3DS games it has no scan for, the case fronts from
+[GameTDB](https://www.gametdb.com); then the sites' own covers; then
+[SteamGridDB](https://www.steamgriddb.com)'s community covers (600×900) for
+games nothing else has art for, ROM hacks included; then IGDB's (cropped to
+3:4, so only as a last resort). The store has a SteamGridDB key built in; you
+can enter your own under *Settings → Steam*.
 
 **Artwork is never cropped.** Console box art differs in shape: an NES box, a
 DS box and an arcade flyer are three different rectangles. Every card uses one

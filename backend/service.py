@@ -16,6 +16,8 @@ from urllib.parse import urlparse
 from . import bios
 from .artwork import SteamArtwork
 from .boxart import BoxArt
+from .gametdb import PLATFORMS as GAMETDB_PLATFORMS, GameTDB
+from .sgdb import SteamGridCovers
 from .speedtest import SpeedTest
 from .covers import IgdbCovers
 from .dedupe import merge_entries, sort_roms
@@ -30,17 +32,26 @@ from .shelves import Shelves
 from .speeds import SpeedStats
 from .media import SteamMedia
 from .models import MergedRom, RomEntry, RomFile, match_title, normalize_title
-from .settings import Settings
+from .settings import Settings, DEFAULT_STEAMGRIDDB_KEY
 from .sources.base import Source
 from .systems import SYSTEMS, canonical_system
 from .sources.myabandonware import MyAbandonwareSource
-from .sources.nswpedia import NswpediaSource
 from .sources.retrostic import RetrosticSource
 from .sources.switchroms import SwitchRomsSource
 from .sources.romspedia import CONSOLE_MAP, RomspediaSource
 from .sources.romsfun import RomsFunSource
+from .sources.homebrewhub import HomebrewHubSource
 
 # id -> (class, label, homepage, default base url)
+# The console tiles and the console filter, in this order (the rest by name):
+# the systems people come for most, newest generations of each family first.
+POPULAR_CONSOLES = [
+    "switch", "ps2", "psx", "gba", "snes", "n64", "nds", "3ds", "gc", "wii", "nes", "gb", "gbc",
+    "psp", "genesis", "dreamcast", "ps3", "wiiu", "psvita", "saturn", "mastersystem", "gamegear",
+    "segacd", "sega32x", "arcades", "mame", "neogeo", "pcengine", "dos",
+]
+
+
 SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
     "switchroms": {
         "cls": SwitchRomsSource,
@@ -71,6 +82,12 @@ SOURCE_DEFS: Dict[str, Dict[str, Any]] = {
         "label": "RomsFun",
         "homepage": "https://romsfun.com",
         "base_key": "romsfun_base_url",
+    },
+    "homebrewhub": {
+        "cls": HomebrewHubSource,
+        "label": "Homebrew Hub",
+        "homepage": "https://hh3.gbdev.io",
+        "base_key": "homebrewhub_base_url",
     },
     "myabandonware": {
         "cls": MyAbandonwareSource,
@@ -104,7 +121,6 @@ class StoreService:
         self._page = 1
         self._last_page_count = 1
         self._runtime_dir = runtime_dir
-        self._COUNTS_TTL = 24 * 60 * 60
         self._browse_cache: Dict[str, tuple] = {}
         self._unreachable: Dict[str, float] = {}
         # Per source: last success, last failure and failures in a row.
@@ -117,6 +133,9 @@ class StoreService:
         self.images = ImageCache(self.http, runtime_dir=runtime_dir, plugin_name=plugin_name)
         self.media = SteamMedia(self.http, cache_dir=runtime_dir)
         self.boxart = BoxArt(self.http, cache_dir=runtime_dir)
+        self.gametdb = GameTDB(self.http, cache_dir=runtime_dir)
+        self.images.alternatives = GameTDB.alternatives
+        self.sgdb = SteamGridCovers(self.http, self.steamgriddb_key, cache_dir=runtime_dir)
         self.library_index = LibraryIndex()
         self.srm = SrmRunner(runtime_dir)
         self.speeds = SpeedStats(os.path.join(runtime_dir, "source_speeds.json") if runtime_dir else None)
@@ -251,7 +270,8 @@ class StoreService:
         """Remove the old single-file caches from earlier versions."""
         if not self._runtime_dir:
             return
-        for name in ("search_cache.json", "details_cache.json"):
+        # system_counts.json: console counts scraped from Romspedia, dropped in v1.17.5.
+        for name in ("search_cache.json", "details_cache.json", "system_counts.json"):
             path = os.path.join(self._runtime_dir, name)
             try:
                 if os.path.isfile(path):
@@ -558,6 +578,7 @@ class StoreService:
             entries = cached[1][:limit]
             # Covers looked up in the background since (IGDB) fill in now.
             await self._switch_covers(entries)
+            await self._fill_missing_covers(entries)
             return self._browse_payload(system, entries)
         entries: List[RomEntry] = []
         self._errors = {}
@@ -577,6 +598,7 @@ class StoreService:
 
         await self._apply_boxart(entries)
         await self._switch_covers(entries)
+        await self._fill_missing_covers(entries)
         merged = merge_entries(entries, self.settings.get("source_priority"))[:limit]
         self._last_page_count = 1
         for index, rom in enumerate(merged):
@@ -917,6 +939,13 @@ class StoreService:
                 await self.boxart.covers(games, resize=bool(self.settings.get("boxart_resize", True)))
             except Exception as exc:  # pragma: no cover - art must never break the list
                 print(f"ROM Store: library box art lookup failed: {exc!r}")
+        if self.settings.get("libretro_boxart", True):
+            try:
+                rest = [game for game in games if game.get("system") in GAMETDB_PLATFORMS and not game.get("cover")]
+                if rest:
+                    await self.gametdb.covers(rest)
+            except Exception as exc:  # pragma: no cover - art must never break the list
+                print(f"ROM Store: library GameTDB lookup failed: {exc!r}")
         try:
             await self._library_fallback_covers(games)
         except Exception as exc:  # pragma: no cover - art must never break the list
@@ -934,10 +963,33 @@ class StoreService:
         missing = [game for game in games if not game.get("cover")]
         if not missing:
             return
+        # The cover a download of the game had, then SteamGridDB, then IGDB.
         by_title: Dict[str, str] = {}
         for job in self.downloads.snapshot():
             if job.get("cover") and job.get("title"):
                 by_title.setdefault(f"{job.get('system')}|{match_title(job['title'])}", job["cover"])
+        for game in missing:
+            bare = re.sub(r"\s*[\(\[][^)\]]*[\)\]]", "", str(game.get("title") or "")).strip()
+            known = by_title.get(f"{game.get('system')}|{match_title(bare)}")
+            if known:
+                game["cover"] = known
+        missing = [game for game in missing if not game.get("cover")]
+        if not missing:
+            return
+        stand_ins = [
+            RomEntry(source="library", source_id=str(i), title=str(game.get("title") or ""), system=str(game.get("system")))
+            for i, game in enumerate(missing)
+        ]
+        try:
+            await self.sgdb.apply(stand_ins, wait=wait)
+        except Exception as exc:  # pragma: no cover - art must never break the list
+            print(f"ROM Store: library SteamGridDB lookup failed: {exc!r}")
+        for game, stand_in in zip(missing, stand_ins):
+            if stand_in.cover:
+                game["cover"] = stand_in.cover
+        missing = [game for game in missing if not game.get("cover")]
+        if not missing:
+            return
         lookups: Dict[str, List[Dict[str, Any]]] = {}
         for game in missing:
             bare = re.sub(r"\s*[\(\[][^)\]]*[\)\]]", "", str(game.get("title") or "")).strip()
@@ -976,7 +1028,7 @@ class StoreService:
         """Steam library art for a game, base64 per slot (see artwork.py)."""
         if not self.settings.get("steam_artwork", True):
             return {"source": None, "assets": {}}
-        art = SteamArtwork(self.http, self.covers, self.settings.get("steamgriddb_api_key") or "")
+        art = SteamArtwork(self.http, self.covers, self.steamgriddb_key())
         return await art.assets(title)
 
     def steam_report(self, added: Dict[str, Any], removed: List[str]) -> Dict[str, Any]:
@@ -1112,6 +1164,17 @@ class StoreService:
             await self.boxart.apply(entries, resize=bool(self.settings.get("boxart_resize", True)))
         except Exception as exc:  # pragma: no cover - art must never break a search
             print(f"ROM Store: box art lookup failed: {exc!r}")
+        # What libretro has no scan for, GameTDB may (Wii U, PS3, Wii, DS,
+        # 3DS). Switch is handled in _switch_covers, GameTDB first there.
+        rest = [
+            entry for entry in entries
+            if entry.system in GAMETDB_PLATFORMS and entry.system != "switch" and not entry.extra.get("boxart")
+        ]
+        if rest:
+            try:
+                await self.gametdb.apply(rest)
+            except Exception as exc:  # pragma: no cover - art must never break a search
+                print(f"ROM Store: GameTDB lookup failed: {exc!r}")
 
     async def _enrich_covers(self, roms: List[MergedRom]) -> None:
         """Fill in artwork and ratings from IGDB.
@@ -1119,7 +1182,11 @@ class StoreService:
         The lookups are slow (a couple of requests per game), so the grid is
         enriched in the background - the next search shows the ratings.
         """
-        await self._apply_portrait_covers(roms)
+        # Games no box-art library and no site has a cover for: SteamGridDB.
+        try:
+            await self.sgdb.apply([entry for rom in roms for entry in rom.entries])
+        except Exception as exc:  # pragma: no cover - art must never break a search
+            print(f"ROM Store: SteamGridDB lookup failed: {exc!r}")
         if not self.covers.enabled:
             return
         replace = bool(self.settings.get("igdb_replace_covers", False))
@@ -1189,38 +1256,46 @@ class StoreService:
             except (TypeError, ValueError):
                 pass
 
+    async def _fill_missing_covers(self, entries: List[RomEntry]) -> None:
+        """A console's catalogue: SteamGridDB for the games with no cover yet."""
+        try:
+            await self.sgdb.apply(entries)
+        except Exception as exc:  # pragma: no cover - art must never break a browse
+            print(f"ROM Store: SteamGridDB lookup failed: {exc!r}")
+
     async def _switch_covers(self, entries: List[RomEntry]) -> None:
         """Portrait box art for Switch games.
 
-        libretro has no Switch art, and the Switch sources disagree: Switch
-        ROMs publishes wide banners (1.7-1.9:1), Nswpedia real box covers
-        (about 0.61, like the case) behind a 3:4 crop in its listings. So:
-        Nswpedia's full cover, else the cover index, else IGDB's official
-        cover; a banner is never used as a cover (the placeholder is, with
-        the title).
+        libretro has no Switch art and Switch ROMs publishes wide banners
+        (1.7-1.9:1). So: GameTDB's case front (backend/gametdb.py), else
+        Romspedia's box art, else IGDB's official cover; a banner is never
+        used as a cover (the placeholder is, with the title).
         """
         switch = [entry for entry in entries if entry.system == "switch"]
         if not switch:
             return
-        index = self._cover_source().cached_index()
-        if not index:
-            self._build_cover_index_in_background()
-        by_title = {match_title(title): url for title, url in (index or {}).items()}
+        before = {id(entry): entry.cover for entry in switch}
+        try:
+            await self.gametdb.apply(switch)
+        except Exception as exc:  # pragma: no cover - art must never break a search
+            print(f"ROM Store: GameTDB lookup failed: {exc!r}")
         missing: List[RomEntry] = []
         for entry in switch:
-            if entry.source == "nswpedia" and entry.cover_full:
-                entry.cover = entry.cover_full
+            if entry.extra.get("gametdb"):
                 continue
-            url = by_title.get(match_title(entry.title))
-            if url:
-                entry.cover = entry.cover_full = url
-                continue
+            entry.cover = before[id(entry)]
             if entry.cover and "static.romspedia.com" in entry.cover:
                 continue  # resized box art; drawn back in the box shape
             if entry.cover:
                 entry.extra["banner"] = entry.cover
             entry.cover = entry.cover_full = None
             missing.append(entry)
+        if missing:
+            try:
+                await self.sgdb.apply(missing)
+            except Exception as exc:  # pragma: no cover - art must never break a search
+                print(f"ROM Store: SteamGridDB lookup failed: {exc!r}")
+            missing = [entry for entry in missing if not entry.cover]
         if not missing or not self.covers.enabled:
             return
         titles = list(dict.fromkeys(entry.title for entry in missing))
@@ -1237,51 +1312,6 @@ class StoreService:
             cover = (known.get(entry.title) or {}).get("cover")
             if cover:
                 entry.cover = entry.cover_full = cover
-
-    async def _apply_portrait_covers(self, roms: List[MergedRom]) -> None:
-        """Give Switch games the portrait box art from the cover index."""
-        switch_entries = [
-            entry
-            for rom in roms
-            for entry in rom.entries
-            if entry.system == "switch"
-        ]
-        if not switch_entries:
-            return
-        source = self._cover_source()
-        index = source.cached_index()
-        if not index:
-            # Building the index takes a while - do it in the background
-            # instead of stalling the search.
-            self._build_cover_index_in_background()
-            return
-        if not index:
-            return
-        lookup = {normalize_title(title): url for title, url in index.items()}
-        for entry in switch_entries:
-            url = lookup.get(normalize_title(entry.title))
-            if not url:
-                continue
-            # The portrait box art always looks better than a wallpaper.
-            entry.cover = url
-            entry.cover_full = url
-
-    def _cover_source(self) -> NswpediaSource:
-        """One shared cover source, so its cache survives between searches.
-
-        Nswpedia is no longer a download source (every file link it has opens
-        datanodes.to's download page, which needs a browser); its cover index
-        is still the best portrait box art for Switch games.
-        """
-        if getattr(self, "_nswpedia", None) is None:
-            self._nswpedia = NswpediaSource(
-                self.http,
-                {
-                    "base_url": self.settings.get("nswpedia_base_url"),
-                    "cache_dir": self._runtime_dir,
-                },
-            )
-        return self._nswpedia
 
     # ------------------------------------------------------------- speed test
     # Results older than this are tested again by themselves (see
@@ -1331,6 +1361,11 @@ class StoreService:
             loop = asyncio.get_running_loop()
         except RuntimeError:  # pragma: no cover - defensive
             return
+        # Switch box art: the GameTDB title list, before the first search.
+        try:
+            self.gametdb.prefetch()
+        except Exception:  # pragma: no cover - art must never stop the start
+            pass
 
         async def ticker():
             while True:
@@ -1359,18 +1394,6 @@ class StoreService:
 
         loop.create_task(ticker())
 
-    def _build_cover_index_in_background(self) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:  # pragma: no cover - defensive
-            return
-        async def build():
-            try:
-                await self._cover_source().cover_index(refresh=True)
-            except Exception:
-                pass
-        loop.create_task(build())
-
     def _prefetch_covers(self, entries: List[RomEntry]) -> None:
         urls = [entry.cover for entry in entries if entry.cover][:30]
         if not urls or not self.images.enabled:
@@ -1382,33 +1405,18 @@ class StoreService:
         loop.create_task(self.images.prefetch(urls))
 
     # ------------------------------------------------------------------ system counts
-    async def system_counts(self, refresh: bool = False) -> Dict[str, int]:
-        """How many titles each console has (used by the browse panel).
-
-        Scraping every console page takes a while, so the result is cached on
-        the Deck and refreshed in the background.
-        """
-        cached = self._read_counts_cache()
-        if cached and not refresh:
-            if self._counts_cache_age() < self._COUNTS_TTL:
-                return cached
-            self._refresh_counts_in_background()
-            return cached
-        return await self._refresh_counts()
+    def steamgriddb_key(self) -> str:
+        """The user's own SteamGridDB key, else the one built into the plugin."""
+        return (self.settings.get("steamgriddb_api_key") or "").strip() or DEFAULT_STEAMGRIDDB_KEY
 
     async def consoles(self) -> List[Dict[str, Any]]:
-        """Every console an enabled source can browse, with its game count.
+        """Every console an enabled source can browse, best known first.
 
-        The counts come from Romspedia's console pages (``system_counts``); a
-        console only other sites carry (RomsFun's Dreamcast, Retrostic's
-        WonderSwan, ...) is listed with ``count: None``. Most games first, then
-        by name.
+        There is no game count: the sites do not publish one that means
+        anything for the store (one site's catalogue, before merging), and
+        counting every catalogue would take hundreds of requests.
         """
-        try:
-            counts = await self.system_counts()
-        except Exception:
-            counts = self._read_counts_cache()
-        keys = set(counts)
+        keys: set = set()
         for source in self.build_sources():
             if source.supports_browse:
                 try:
@@ -1416,81 +1424,9 @@ class StoreService:
                 except Exception:  # pragma: no cover - a broken table must not hide the rest
                     pass
         keys = {key for key in keys if key in SYSTEMS and key != "unknown"}
-        ordered = sorted(keys, key=lambda key: (-(counts.get(key) or 0), SYSTEMS[key][0].lower()))
-        return [{"key": key, "count": counts.get(key)} for key in ordered]
-
-    async def _refresh_counts(self) -> Dict[str, int]:
-        source = RomspediaSource(self.http, {"base_url": self.settings.get("romspedia_base_url")})
-        try:
-            sections = await source.console_sections()
-        except Exception:
-            sections = [(slug, key) for slug, key in CONSOLE_MAP.items()]
-        semaphore = asyncio.Semaphore(4)
-
-        async def count_console(slug: str, label: str) -> Optional[Tuple[str, int]]:
-            key = canonical_system(label)
-            if key == "unknown":
-                key = canonical_system(slug)
-            async with semaphore:
-                try:
-                    entries = await source.console_entries(slug)
-                except Exception:
-                    return None
-                return (key, len(entries)) if entries else None
-
-        results = await asyncio.gather(*(count_console(slug, label) for slug, label in sections))
-        counts: Dict[str, int] = {}
-        for item in results:
-            if not item:
-                continue
-            key, value = item
-            counts[key] = max(counts.get(key, 0), value)
-        if counts:
-            self._write_counts_cache(counts)
-        return counts
-
-    def _refresh_counts_in_background(self) -> None:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:  # pragma: no cover - defensive
-            return
-        loop.create_task(self._refresh_counts())
-
-    def _counts_cache_path(self) -> Optional[str]:
-        if not self._runtime_dir:
-            return None
-        return os.path.join(self._runtime_dir, "system_counts.json")
-
-    def _read_counts_cache(self) -> Dict[str, int]:
-        path = self._counts_cache_path()
-        if not path or not os.path.isfile(path):
-            return {}
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-            return {str(k): int(v) for k, v in (data.get("counts") or {}).items()}
-        except (OSError, ValueError):
-            return {}
-
-    def _counts_cache_age(self) -> float:
-        path = self._counts_cache_path()
-        if not path or not os.path.isfile(path):
-            return float("inf")
-        try:
-            return time.time() - os.path.getmtime(path)
-        except OSError:
-            return float("inf")
-
-    def _write_counts_cache(self, counts: Dict[str, int]) -> None:
-        path = self._counts_cache_path()
-        if not path:
-            return
-        try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            with open(path, "w", encoding="utf-8") as fh:
-                json.dump({"counts": counts, "updated": time.time()}, fh)
-        except OSError:
-            pass
+        rank = {key: index for index, key in enumerate(POPULAR_CONSOLES)}
+        ordered = sorted(keys, key=lambda key: (rank.get(key, len(rank)), SYSTEMS[key][0].lower()))
+        return [{"key": key, "count": None} for key in ordered]
 
     def status(self) -> Dict[str, Any]:
         return {

@@ -72,9 +72,10 @@ backend/
   service.py                source fan-out, dedupe, IGDB enrichment, caches
   sources/                  one adapter per site (base.py is the contract)
     romspedia.py  retrostic.py  romsdl.py  switchroms.py
-    myabandonware.py  romsfun.py
-    nswpedia.py       not a source any more: only its Switch cover index
+    myabandonware.py  romsfun.py  homebrewhub.py
   boxart.py                 libretro-thumbnails box art: index, matching, resize
+  gametdb.py                GameTDB box art (Switch, and what libretro lacks for
+                            Wii U, PS3, Wii, DS, 3DS): title lists, regions
   covers.py                 IGDB client: covers, screenshots, trailer, rating
   media.py                  Steam and YouTube fallback media for PC titles
   images.py                 image download cache + variant selection
@@ -401,8 +402,9 @@ Steam only reads at start), so the plugin does its job live:
   the restart `reportSteamRomManager` shows the result once and syncs, which
   adopts SRM's shortcuts. Tests never run a real SRM (`find_srm` is mocked).
 - Artwork (`backend/artwork.py`), like SRM: capsule, header (wide cover),
-  hero, logo, icon via `SetCustomArtworkForApp`. SteamGridDB needs the user's
-  own key (`steamgriddb_api_key`; SRM's built-in key is SRM's and is not used);
+  hero, logo, icon via `SetCustomArtworkForApp`. SteamGridDB with the user's
+  own key (`steamgriddb_api_key`) or the store's built-in one (SRM's built-in
+  key is SRM's and is not used);
   without it IGDB gives capsule, hero and header, using only landscape images
   for the wide slots. A rejected key falls back to IGDB and is reported. A
   shortcut that already has custom art (an adopted SRM one) is never touched.
@@ -415,9 +417,36 @@ Steam only reads at start), so the plugin does its job live:
   a row. Three in a row rest the source for 15 minutes. Shown in Settings.
 - With a console filter, search also matches that console's catalogue (the
   cached browse list), because the sites return one page across all consoles.
-- Switch covers (`_switch_covers`): libretro has no Switch art; Nswpedia's
-  full cover, else its cover index, else IGDB's cover. Switch ROMs' wide
-  banners are never used as covers (kept in `extra.banner`).
+- Box art order: libretro-thumbnails (`boxart.py`, about 60 consoles incl.
+  FBNeo and MAME arcade, which libretro names by full title); for the games
+  of GameTDB's consoles (`gametdb.PLATFORMS`: Wii U, PS3, Wii, DS, 3DS) that
+  libretro has no scan for, GameTDB (`_apply_boxart`); then the site's cover;
+  then SteamGridDB (`sgdb.py`) for games still without a cover; then IGDB.
+  Switch (`_switch_covers`): GameTDB first, libretro has none.
+- SteamGridDB covers (`sgdb.py`): autocomplete search on the cleaned title,
+  accepted only when SteamGridDB's name is the same title (`match_title`) or
+  the start of it (10+ characters); the top static 600x900 grid (`thumb` for
+  the grid, `url` for the poster). Answers, found or not, are kept two weeks
+  in `sgdb_covers.json`; network or key errors are never recorded. A search or
+  browse waits 3 s for up to 32 new titles (4 at a time) and leaves the rest
+  for the next one. Used in search (`_enrich_covers`), browse
+  (`_fill_missing_covers`), Switch (`_switch_covers`) and the library. Key:
+  the user's `steamgriddb_api_key`, else `DEFAULT_STEAMGRIDDB_KEY` in
+  `settings.py` (the maintainer's free key, baked in on purpose like the IGDB
+  credentials: never log it; rotate it if it is abused).
+- GameTDB (`gametdb.py`): title lists (`<platform>tdb.txt`, two weeks;
+  Switch's fetched at plugin start, the others when their console first
+  shows up), matched by `match_title()`, then with the catalogues' noise
+  removed ("Download … NSP Full Game"), then as a cut-off title (the shortest
+  full title it starts, keys of 12+ characters). Nothing waits on the art
+  server: a game whose cover region is known gets it, one not looked up yet
+  gets its likeliest region at once and `ImageCache.alternatives` tries the
+  other regions if that file is missing, while a background HEAD lookup
+  (48 per search, 6 at a time) records the real region in
+  `gametdb/covers.json` (none: asked again after a week; network errors are
+  never recorded). Grid: `cover`, poster: `coverM` (Wii: `cover` only, PNG).
+  Switch ROMs' wide banners are never used as covers (`extra.banner`).
+  Installed games get the same art.
 - Region filter (header): `regionsOf()` reads region fields and title tags;
   games known to be only from other regions are hidden, unknown ones stay
   (most sources do not tag titles). It also picks the file offered first.
@@ -462,8 +491,9 @@ One screen, four tabs (`Store.tsx` is the shell):
   number of running downloads and a progress line), the search field.
 - **Store tab**: the home screen (`HomeView`: shelves for recently viewed /
   favourites / installed games, then every console: `get_consoles` lists each
-  console an enabled source can browse (`Source.browse_systems()`), with
-  Romspedia's game count where there is one)
+  console an enabled source can browse (`Source.browse_systems()`), the
+  most played first (`POPULAR_CONSOLES`); no game counts, the sites publish
+  none that mean anything after merging)
   while there is no query and no console; otherwise the results: a filter bar
   (console, region, source, sort), the grid, the pager, and the **info strip**
   under the grid that names the focused cover (covers carry no title). The
@@ -580,8 +610,17 @@ the cover that had it. Hints come from `on…ActionDescription` /
   harmless to Steam's router as `pushState` has been.
 - Scrapers break when a site changes its HTML. `get_status()` reports per-source
   errors and health, the UI shows them in the footer warning and in Settings.
-- Box art: libretro names arcade sets by ROM set, so arcade has no libretro art.
-  Grid thumbnails come from the third-party proxy wsrv.nl (setting
+- Box art gaps (live check, Nov 2026, IGDB off): most consoles have a box
+  scan for 75-100% of a browse page; C64 and ZX Spectrum have none for about
+  half (the sites publish no covers and libretro's names differ), PS Vita
+  mostly shows the sites' covers (libretro has few, GameTDB none). IGDB
+  fills much of the rest in normal use.
+- Sources looked at and left out (Nov 2026): Vimm's Lair (Cloudflare
+  Turnstile on game pages), ROMsGames (reCAPTCHA), EmulatorGames (403),
+  WoWroms (download link needs a token from obfuscated page script), Myrient
+  (shut down March 2026), CDRomance (now a news site), CoolROM (results are
+  rendered by script), Nswpedia (datanodes.to download pages).
+- Box art grid thumbnails come from the third-party proxy wsrv.nl (setting
   `boxart_resize`); without it the grid keeps the sites' covers.
 - Steam library sync is written against SRM's documented config format and
   EmuDeck's parsers, tested with synthetic configs and a mocked SteamClient in
@@ -599,10 +638,10 @@ the cover that had it. Hints come from `on…ActionDescription` /
   the link the way its page script does (admin-ajax `k_get_download`), as a
   guest. A guest download limit or a Cloudflare check is reported, never
   worked around. Romhacks are listed after the games.
-- Nswpedia was removed as a download source in v1.17.4 (settings revision 5
-  drops it from existing installs): every file link it has opens
-  datanodes.to's download page, which needs a browser. `nswpedia.py` stays
-  for `_cover_source()`, the Switch cover index.
+- Nswpedia was removed in v1.17.4 (settings revision 5 drops it from
+  existing installs, revision 6 its address): every file link it has opens
+  datanodes.to's download page, which needs a browser. Switch box art, which
+  came from its cover index, comes from GameTDB since v1.17.5.
 - RomsFun: its MAME sets come from a file server behind a Cloudflare check
   (reported, not worked around); its console games download normally. The
   speed test skips arcade sets for that reason.

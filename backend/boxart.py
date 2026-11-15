@@ -39,9 +39,10 @@ BASE = "https://thumbnails.libretro.com"
 RESIZER = "https://wsrv.nl/"
 INDEX_TTL = 14 * 24 * 60 * 60
 
-# Store console key -> libretro playlist name. Arcade sets are named after
-# their ROM set (e.g. "sf2.png"), not the game, so they cannot be matched by
-# title and are left out.
+# Store console key -> libretro playlist name. Arcade art is named by the
+# game's full title too ("Alien vs. Predator (USA 940520).png"), so FBNeo's
+# and MAME's sets match like any console. Switch is not in libretro at all
+# (backend/gametdb.py).
 SYSTEMS: Dict[str, str] = {
     "nes": "Nintendo - Nintendo Entertainment System",
     "snes": "Nintendo - Super Nintendo Entertainment System",
@@ -85,6 +86,28 @@ SYSTEMS: Dict[str, str] = {
     "c64": "Commodore - 64",
     "amiga": "Commodore - Amiga",
     "dos": "DOS",
+    "wiiu": "Nintendo - Wii U",
+    "ps3": "Sony - PlayStation 3",
+    "psvita": "Sony - PlayStation Vita",
+    "atarist": "Atari - ST",
+    "atari800": "Atari - 8-bit",
+    "amstradcpc": "Amstrad - CPC",
+    "zxspectrum": "Sinclair - ZX Spectrum",
+    "vic20": "Commodore - VIC-20",
+    "videopac": "Magnavox - Odyssey2",
+    "x68000": "Sharp - X68000",
+    "sharp-x1": "Sharp - X1",
+    "x1": "Sharp - X1",
+    "pc98": "NEC - PC-98",
+    "pcfx": "NEC - PC-FX",
+    "neogeo": "SNK - Neo Geo",
+    "neogeoaes": "SNK - Neo Geo",
+    "neogeocd": "SNK - Neo Geo CD",
+    "scummvm": "ScummVM",
+    "easyrpg": "RPG Maker",
+    "arcades": "FBNeo - Arcade Games",
+    "fba": "FBNeo - Arcade Games",
+    "mame": "MAME",
 }
 
 _HREF_RE = re.compile(r'href="([^"?/][^"]*\.png)"', re.I)

@@ -156,9 +156,6 @@ class Plugin:
     async def browse(self, system: str, limit: int = 60) -> Dict[str, Any]:
         return await self._self().service.browse(system, limit)
 
-    async def get_system_counts(self) -> Dict[str, int]:
-        return await self._self().service.system_counts()
-
     async def get_consoles(self) -> List[Dict[str, Any]]:
         """Every console a source can browse, with its game count if known."""
         return await self._self().service.consoles()

@@ -35,8 +35,8 @@ interface Props {
   onSaved: (settings: Settings) => void;
 }
 
-const SOURCE_ORDER = ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"] as const;
-const WITH_BASE_URL = new Set(["romspedia", "retrostic", "romsdl", "switchroms", "romsfun"]);
+const SOURCE_ORDER = ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware", "homebrewhub"] as const;
+const WITH_BASE_URL = new Set(["romspedia", "retrostic", "romsdl", "switchroms", "romsfun", "homebrewhub"]);
 
 const SOURCE_HINTS: Record<string, string> = {
   switchroms: "Switch specific catalogue with hundreds of NSP/XCI titles and direct file links.",
@@ -46,6 +46,7 @@ const SOURCE_HINTS: Record<string, string> = {
   romsfun:
     "Big catalogue across 50+ consoles, including romhacks and fan translations (listed after the games). Each download waits out the site's 7-second countdown first.",
   myabandonware: "TypeSense backed search for older PC and console titles.",
+  homebrewhub: "New games made for Game Boy, GBC, GBA and NES by their authors, free to download (gbdev.io).",
 };
 
 type SectionKey = "library" | "sources" | "downloads" | "artwork" | "steam" | "advanced";
@@ -599,7 +600,7 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
         />
         <Row
           label="SteamGridDB API key"
-          hint="Your own free key (steamgriddb.com → Preferences → API). Without one, covers and heroes come from IGDB, with no logos or icons."
+          hint="Optional: your own free key (steamgriddb.com → Preferences → API). Empty uses the key built into the store. SteamGridDB gives Steam library art and covers for games no box-art library has."
           wide
         >
           <TextField

@@ -7,10 +7,16 @@ import os
 import threading
 from typing import Any, Dict, Optional
 
+# SteamGridDB API key built into the plugin (the maintainer's free key), used
+# when the user has not entered their own in Settings -> Steam. Like the IGDB
+# credentials below: never log it, and rotate it if it is abused.
+DEFAULT_STEAMGRIDDB_KEY = "226014b82073506b73fd9a462806a065"
+
+
 DEFAULTS: Dict[str, Any] = {
     "roms_root": "",
-    "source_priority": ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
-    "enabled_sources": ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware"],
+    "source_priority": ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware", "homebrewhub"],
+    "enabled_sources": ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware", "homebrewhub"],
     "extract_archives": False,
     "keep_archive": True,
     "max_concurrent": 2,
@@ -19,9 +25,8 @@ DEFAULTS: Dict[str, Any] = {
     "retrostic_base_url": "https://www.retrostic.com",
     "romsdl_base_url": "https://romsdl.com",
     "switchroms_base_url": "https://nintendo-switch-roms.com",
-    # Not a download source any more; only its Switch cover index is used.
-    "nswpedia_base_url": "https://nswpedia.io",
     "romsfun_base_url": "https://romsfun.com",
+    "homebrewhub_base_url": "https://hh3.gbdev.io",
     "myabandonware_base_url": "https://www.myabandonware.com",
     "show_nsfw": False,
     "search_cache_hours": 72,
@@ -31,7 +36,7 @@ DEFAULTS: Dict[str, Any] = {
     # its art only fills in games that have no cover unless this is turned on.
     "igdb_replace_covers": False,
     # Bumped when a stored value has to be migrated (see Settings.load).
-    "settings_revision": 5,
+    "settings_revision": 6,
     # Box art from libretro-thumbnails (see backend/boxart.py), and whether the
     # grid gets small copies through the wsrv.nl resizing proxy.
     # Region whose file the game panel offers first ("" picks no favourite).
@@ -118,6 +123,14 @@ class Settings:
                 value = self._values.get(key)
                 if isinstance(value, list):
                     self._values[key] = [s for s in value if s != "nswpedia"]
+        if revision < 6:
+            # Switch box art comes from GameTDB now; Nswpedia is gone entirely.
+            self._values.pop("nswpedia_base_url", None)
+            # New source: Homebrew Hub, added once (switching it off sticks).
+            for key in ("enabled_sources", "source_priority"):
+                value = self._values.get(key)
+                if isinstance(value, list) and "homebrewhub" not in value:
+                    self._values[key] = value + ["homebrewhub"]
         self._values["settings_revision"] = DEFAULTS["settings_revision"]
         return True
 

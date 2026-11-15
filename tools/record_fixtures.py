@@ -30,6 +30,7 @@ QUERIES = {
     "myabandonware": "doom",
     "switchroms": "zelda",
     "romsfun": "super mario world",
+    "homebrewhub": "orion",
 }
 
 

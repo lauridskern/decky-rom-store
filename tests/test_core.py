@@ -96,6 +96,7 @@ class LibraryCovers(unittest.TestCase):
             {"title": "Mystery Game (Japan)", "system": "gb"},       # looked up on IGDB
             {"title": "sf2", "system": "arcades"},                   # never looked up
         ]
+        svc.sgdb._key = lambda: ""  # no SteamGridDB in tests (offline)
         svc.downloads.snapshot = lambda: [{"title": "Final Fantasy VII", "system": "psx", "cover": "https://x.invalid/ff7.png"}]
         svc.covers.cached = lambda title: {"cover": "https://x.invalid/ct.jpg"} if title == "Chrono Trigger" else None
         asked = []
@@ -126,14 +127,10 @@ class Consoles(unittest.TestCase):
         settings = Settings(os.path.join(tmp, "s.json"))
         svc = StoreService(settings, plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
 
-        async def counts(refresh=False):
-            return {"snes": 782, "gba": 1204}
-
-        svc.system_counts = counts
         listed = asyncio.run(svc.consoles())
         keys = [item["key"] for item in listed]
-        self.assertEqual(keys[:2], ["gba", "snes"], "counted consoles first, most games first")
-        self.assertIsNone(next(item for item in listed if item["key"] == "dreamcast")["count"])
+        self.assertEqual(keys[:3], ["switch", "ps2", "psx"], "the popular ones first")
+        self.assertTrue(all(item["count"] is None for item in listed), "no made-up counts")
         for key in ("switch", "dreamcast", "wonderswan", "pcengine"):
             self.assertIn(key, keys)
         self.assertEqual(len(keys), len(set(keys)))
@@ -152,29 +149,173 @@ class ImageLinks(unittest.TestCase):
 
 
 class SwitchCovers(unittest.TestCase):
-    def test_portrait_art_never_a_banner(self):
+    def test_gametdb_box_art_never_a_banner(self):
         from backend.service import StoreService
         tmp = tempfile.mkdtemp()
         svc = StoreService(Settings(os.path.join(tmp, "s.json")), plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
+        svc.sgdb._key = lambda: ""  # no SteamGridDB in tests (offline)
         svc.covers._client_id = ""  # no IGDB in tests
-        svc._build_cover_index_in_background = lambda: None  # no network
+        tdb = svc.gametdb
+        tdb._index["switch"] = tdb.group({"AABPA": "Mario Kart 8 Deluxe", "AABPK": "Mario Kart 8 Deluxe Bundle (Game + Pass)",
+                                          "ACBAA": "Animal Crossing: New Horizons", "AXN7A": "Some Japan Game"})
+        tdb._loaded_at["switch"] = time.time()
+        tdb._found_loaded = True
+        tdb._found = {"switch/AABPA": ["US", time.time()], "switch/ACBAA": ["", time.time()], "switch/AXN7A": ["JA", time.time()]}
         entries = [
-            RomEntry(source="switchroms", source_id="1", title="Some Game", system="switch",
+            RomEntry(source="switchroms", source_id="1", title="Mario Kart 8 Deluxe", system="switch",
                      cover="https://nintendo-switch-roms.com/banner.jpg"),
-            RomEntry(source="nswpedia", source_id="2", title="Kirby", system="switch",
-                     cover="https://nswpedia.io/k-200x300.jpg", cover_full="https://nswpedia.io/k.jpg"),
+            RomEntry(source="switchroms", source_id="2", title="Animal Crossing: New Horizons", system="switch",
+                     cover="https://nintendo-switch-roms.com/ac-banner.jpg"),
             RomEntry(source="romspedia", source_id="3", title="Sonic", system="switch",
                      cover="https://static.romspedia.com/webp/roms/sonic-cover.webp"),
-            RomEntry(source="romspedia", source_id="4", title="Mario", system="n64",
+            RomEntry(source="romspedia", source_id="4", title="Some Japan Game (Japan)", system="switch"),
+            RomEntry(source="romspedia", source_id="5", title="Mario", system="n64",
                      cover="https://nintendo-switch-roms.com/not-switch.jpg"),
         ]
         asyncio.run(svc._switch_covers(entries))
-        banner, kirby, sonic, n64 = entries
-        self.assertIsNone(banner.cover, "a wide banner is not a cover")
-        self.assertEqual(banner.extra.get("banner"), "https://nintendo-switch-roms.com/banner.jpg")
-        self.assertEqual(kirby.cover, "https://nswpedia.io/k.jpg", "the full cover, not the 3:4 crop")
+        kart, crossing, sonic, japan, n64 = entries
+        self.assertEqual(kart.cover, "https://art.gametdb.com/switch/cover/US/AABPA.jpg", "the plain game, not the bundle")
+        self.assertEqual(kart.cover_full, "https://art.gametdb.com/switch/coverM/US/AABPA.jpg")
+        self.assertIsNone(crossing.cover, "no GameTDB cover and a wide banner: no cover")
+        self.assertEqual(crossing.extra.get("banner"), "https://nintendo-switch-roms.com/ac-banner.jpg")
         self.assertTrue(sonic.cover.startswith("https://static.romspedia.com/"))
+        self.assertEqual(japan.cover, "https://art.gametdb.com/switch/cover/JA/AXN7A.jpg")
         self.assertEqual(n64.cover, "https://nintendo-switch-roms.com/not-switch.jpg", "only Switch games")
+
+    def test_cut_off_titles_and_other_consoles(self):
+        from backend.gametdb import GameTDB, cover_url
+        tdb = GameTDB(http=None, cache_dir=tempfile.mkdtemp())  # type: ignore[arg-type]
+        tdb._index["switch"] = GameTDB.group({"AC2GA": "Mario + Rabbids: Kingdom Battle",
+                                              "BAANA": "Mario + Rabbids Kingdom Battle Gold Edition",
+                                              "AABPA": "Mario Kart 8 Deluxe"})
+        self.assertEqual(tdb.ids("Mario + Rabbids Kingdom Switch", "switch"), ["AC2GA"], "cut off: the shortest full title")
+        self.assertEqual(tdb.ids("Mario Kart", "switch"), [], "too short to guess from")
+        self.assertEqual(tdb.ids("Mario Kart 8 Deluxe", "n64"), [], "a console GameTDB does not have")
+        self.assertEqual(cover_url("wii", "RMCE01", "US"), "https://art.gametdb.com/wii/cover/US/RMCE01.png")
+        self.assertEqual(cover_url("ds", "AMCE", "US", "coverM"), "https://art.gametdb.com/ds/coverM/US/AMCE.jpg")
+
+    def test_gametdb_only_fills_in_after_libretro(self):
+        from backend.service import StoreService
+        tmp = tempfile.mkdtemp()
+        svc = StoreService(Settings(os.path.join(tmp, "s.json")), plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
+        svc.boxart._index["wiiu"] = svc.boxart._group(["Mario Kart 8 (USA).png"])
+        svc.boxart._loaded_at["wiiu"] = time.time()
+        tdb = svc.gametdb
+        tdb._index["wiiu"] = tdb.group({"AMKE01": "Mario Kart 8", "ARDE01": "Super Mario 3D World"})
+        tdb._loaded_at["wiiu"] = time.time()
+        tdb._found_loaded = True
+        tdb._found = {"wiiu/AMKE01": ["US", time.time()], "wiiu/ARDE01": ["US", time.time()]}
+        kart = RomEntry(source="x", source_id="1", title="Mario Kart 8", system="wiiu")
+        world = RomEntry(source="x", source_id="2", title="Super Mario 3D World", system="wiiu")
+        asyncio.run(svc._apply_boxart([kart, world]))
+        self.assertIn("thumbnails.libretro.com", kart.cover_full, "libretro's scan first")
+        self.assertEqual(world.cover, "https://art.gametdb.com/wiiu/cover/US/ARDE01.jpg")
+        self.assertEqual(world.cover_full, "https://art.gametdb.com/wiiu/coverM/US/ARDE01.jpg")
+
+    def test_title_list_and_probing(self):
+        from backend.gametdb import GameTDB
+        from backend.httpclient import HttpError
+        titles = GameTDB.parse("TITLES = https://www.gametdb.com (type: Switch)\nAAACA = Super Mario Odyssey\n"
+                               "AAAC3 = Super Mario Odyssey [Starter Pack]\nnot a line\n")
+        self.assertEqual(titles, {"AAACA": "Super Mario Odyssey", "AAAC3": "Super Mario Odyssey [Starter Pack]"})
+        self.assertEqual(GameTDB.group(titles)[match_title("Super Mario Odyssey")], ["AAACA", "AAAC3"])
+
+        class Http:
+            asked = []
+
+            async def request(self, url, method="GET", polite=True, retries=2, max_bytes=0):
+                Http.asked.append(url)
+                if "/US/" in url:
+                    raise HttpError("HTTP 404", 404, url)
+                if "/EN/" in url:
+                    class Ok:
+                        status = 200
+                    return Ok()
+                raise HttpError("Network error", None, url)
+
+        tdb = GameTDB(Http(), cache_dir=tempfile.mkdtemp())
+        tdb._index["switch"] = GameTDB.group(titles)
+        tdb._loaded_at["switch"] = time.time()
+        entry = RomEntry(source="x", source_id="1", title="Super Mario Odyssey", system="switch")
+
+        async def first_and_second():
+            await tdb.apply([entry], wait=2)
+            first = entry.cover
+            await tdb.settle()
+            again = RomEntry(source="x", source_id="2", title="Super Mario Odyssey", system="switch")
+            await tdb.apply([again], wait=2)
+            return first, again.cover
+
+        first, second = asyncio.run(first_and_second())
+        self.assertEqual(first, "https://art.gametdb.com/switch/cover/US/AAACA.jpg", "at once, the likeliest region")
+        self.assertEqual(second, "https://art.gametdb.com/switch/cover/EN/AAACA.jpg", "then the region that has it")
+        self.assertEqual(tdb.known("switch", "AAACA"), "EN")
+        self.assertEqual(GameTDB(Http(), cache_dir=tdb._dir[: -len("/gametdb")]).known("switch", "AAACA"), "EN", "kept on disk")
+        self.assertEqual(GameTDB.alternatives("https://art.gametdb.com/switch/cover/US/AAACA.jpg"), [
+            "https://art.gametdb.com/switch/cover/EN/AAACA.jpg", "https://art.gametdb.com/switch/cover/JA/AAACA.jpg",
+            "https://art.gametdb.com/switch/cover/other/AAACA.jpg"])
+        self.assertEqual(GameTDB.alternatives("https://example.invalid/x.jpg"), [])
+
+
+class SteamGridDBCovers(unittest.TestCase):
+    def test_matching_caching_and_the_built_in_key(self):
+        from backend.sgdb import SteamGridCovers, clean_title
+        from backend.httpclient import HttpError
+        from backend.settings import DEFAULT_STEAMGRIDDB_KEY
+
+        self.assertEqual(clean_title("Download Super Mario Odyssey NSP Full Game"), "Super Mario Odyssey")
+        self.assertEqual(clean_title("Tetris (World) (Rev 1)"), "Tetris")
+        games = [{"id": 1, "name": "Mario Party 5"}, {"id": 2, "name": "Kirby: Super Star Ultra"}]
+        self.assertEqual(SteamGridCovers.pick(games, "Kirby Super Star Ultra (USA)")["id"], 2)
+        self.assertIsNone(SteamGridCovers.pick(games, "Kirby"), "never a different game")
+        self.assertEqual(SteamGridCovers.pick([{"id": 3, "name": "Mario + Rabbids Kingdom Battle"}],
+                                              "Mario + Rabbids Kingdom")["id"], 3, "a cut-off title")
+
+        class Http:
+            calls = []
+            down = False
+
+            async def request(self, url, headers=None, polite=True, retries=2):
+                Http.calls.append(url)
+                assert headers["Authorization"] == "Bearer k"
+                if Http.down:
+                    raise HttpError("Network error", None, url)
+
+                class Resp:
+                    def json(self_inner):
+                        if "/search/" in url:
+                            return {"success": True, "data": [{"id": 9, "name": "Bubble Bobble"}] if "Bubble" in url else []}
+                        return {"success": True, "data": [{"url": "https://cdn.invalid/full.png", "thumb": "https://cdn.invalid/thumb.png", "mime": "image/png"}]}
+                return Resp()
+
+        cache = tempfile.mkdtemp()
+        sgdb = SteamGridCovers(Http(), lambda: "k", cache_dir=cache)
+        bubble = RomEntry(source="x", source_id="1", title="Bubble Bobble (USA)", system="nes")
+        nothing = RomEntry(source="x", source_id="2", title="Unknown Homebrew", system="nes")
+        boxed = RomEntry(source="x", source_id="3", title="Bubble Bobble", system="nes", cover="https://box.invalid/x.png")
+        asyncio.run(sgdb.apply([bubble, nothing, boxed]))
+        self.assertEqual((bubble.cover, bubble.cover_full), ("https://cdn.invalid/thumb.png", "https://cdn.invalid/full.png"))
+        self.assertIsNone(nothing.cover)
+        self.assertEqual(boxed.cover, "https://box.invalid/x.png", "a game with a cover keeps it")
+        asked = len(Http.calls)
+        again = SteamGridCovers(Http(), lambda: "k", cache_dir=cache)
+        twice = [RomEntry(source="x", source_id="4", title="Bubble Bobble", system="nes"),
+                 RomEntry(source="x", source_id="5", title="Unknown Homebrew", system="nes")]
+        asyncio.run(again.apply(twice))
+        self.assertEqual(len(Http.calls), asked, "found and not found are both remembered on disk")
+        self.assertEqual(twice[0].cover, "https://cdn.invalid/thumb.png")
+
+        Http.down = True
+        offline = SteamGridCovers(Http(), lambda: "k", cache_dir=tempfile.mkdtemp())
+        self.assertIsNone(asyncio.run(offline.lookup("Bubble Bobble")), "a network error is not an answer")
+        self.assertIsNone(offline.cached("Bubble Bobble"))
+
+        from backend.service import StoreService
+        tmp = tempfile.mkdtemp()
+        svc = StoreService(Settings(os.path.join(tmp, "s.json")), plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
+        self.assertEqual(svc.steamgriddb_key(), DEFAULT_STEAMGRIDDB_KEY)
+        svc.settings.update({"steamgriddb_api_key": " mine "})
+        self.assertEqual(svc.steamgriddb_key(), "mine", "the user's own key wins")
 
 
 class Library(unittest.TestCase):
@@ -287,9 +428,21 @@ class SettingsMigration(unittest.TestCase):
         with open(path, "w") as fh:
             json.dump({"settings_revision": 3, "enabled_sources": ["romspedia", "myabandonware"]}, fh)
         settings = Settings(path)
-        self.assertEqual(settings.get("enabled_sources"), ["romspedia", "romsfun", "myabandonware"])
+        self.assertEqual(settings.get("enabled_sources"), ["romspedia", "romsfun", "myabandonware", "homebrewhub"])
         settings.update({"enabled_sources": ["romspedia", "myabandonware"]})
         self.assertNotIn("romsfun", Settings(path).get("enabled_sources"))
+
+    def test_nswpedia_gone_and_homebrew_hub_added_once(self):
+        path = os.path.join(tempfile.mkdtemp(), "s.json")
+        with open(path, "w") as fh:
+            json.dump({"settings_revision": 4, "enabled_sources": ["switchroms", "nswpedia", "romspedia"],
+                       "source_priority": ["switchroms", "nswpedia", "romspedia"], "nswpedia_base_url": "https://nswpedia.io"}, fh)
+        settings = Settings(path)
+        self.assertEqual(settings.get("enabled_sources"), ["switchroms", "romspedia", "homebrewhub"])
+        self.assertEqual(settings.get("source_priority"), ["switchroms", "romspedia", "homebrewhub"])
+        self.assertIsNone(settings.get("nswpedia_base_url"))
+        settings.update({"enabled_sources": ["switchroms", "romspedia"]})
+        self.assertNotIn("homebrewhub", Settings(path).get("enabled_sources"), "switching it off sticks")
 
 
 if __name__ == "__main__":

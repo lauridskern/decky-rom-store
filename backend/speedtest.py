@@ -52,7 +52,7 @@ async def _picks(source: Source, count: int = 2):
     found: List[Tuple[RomEntry, RomFile]] = []
     seen = set()
     last = "no game found to test with"
-    for term in TERMS:
+    for term in getattr(source, "speed_test_terms", None) or TERMS:
         try:
             entries = await source.search(term, limit=12)
         except Exception as exc:

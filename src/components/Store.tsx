@@ -142,13 +142,7 @@ const Store: FC = () => {
   const [sources, setSources] = useState<SourceInfo[]>([]);
   const [systems, setSystems] = useState<string[]>([]);
   const [consoles, setConsoles] = useState<ConsoleInfo[]>([]);
-  const systemCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    consoles.forEach((item) => {
-      if (item.count) counts[item.key] = item.count;
-    });
-    return counts;
-  }, [consoles]);
+
   const [library, setLibrary] = useState<LibraryInfo | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [jobs, setJobs] = useState<DownloadJob[]>([]);
@@ -676,8 +670,8 @@ const Store: FC = () => {
     return list.length ? list : sources;
   }, [sources]);
 
-  // Every console a source can browse (the backend's order: most games
-  // first), plus any console the current results have.
+  // Every console a source can browse (the backend's order: the popular
+  // ones first), plus any console the current results have.
   const consoleOptions = useMemo(() => {
     const keys = consoles.map((item) => item.key);
     const extra = [...systems, system].filter((key) => key !== "all" && key !== "unknown" && !keys.includes(key));
@@ -797,7 +791,7 @@ const Store: FC = () => {
                       rgOptions={[
                         { label: "All consoles", data: "all" },
                         ...consoleOptions.map((key) => ({
-                          label: `${systemLabel(key)}${systemCounts[key] ? ` (${systemCounts[key].toLocaleString()})` : ""}`,
+                          label: systemLabel(key),
                           data: key,
                         })),
                       ]}

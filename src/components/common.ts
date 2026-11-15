@@ -6,6 +6,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   retrostic: "Retrostic",
   romsdl: "RomsDL",
   nswpedia: "Nswpedia",
+  homebrewhub: "Homebrew Hub",
   romsfun: "RomsFun",
   myabandonware: "MyAbandonware",
 };

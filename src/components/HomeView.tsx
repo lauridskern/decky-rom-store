@@ -9,7 +9,7 @@ import { NoArt } from "./RomCard";
 type Item = Pick<ShelfItem, "title" | "system" | "cover">;
 
 interface Props {
-  /** Every console a source can browse; the count where it is known. */
+  /** Every console a source can browse, the popular ones first. */
   consoles: { key: string; count: number | null }[];
   favorites: ShelfItem[];
   recent: ShelfItem[];

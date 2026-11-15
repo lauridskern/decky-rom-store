@@ -394,7 +394,6 @@ export const addRecent = callable<[Partial<ShelfItem>], ShelvesPayload>("add_rec
 export const openFolder = callable<[string], { ok: boolean; error?: string }>("open_folder");
 export const getCover = callable<[string | null, string], string | null>("get_cover");
 export const prefetchCovers = callable<[string[], string], void>("prefetch_covers");
-export const getSystemCounts = callable<[], Record<string, number>>("get_system_counts");
 /** Every console a source can browse; `count` only where it is known. */
 export interface ConsoleInfo {
   key: string;

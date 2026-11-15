@@ -18,7 +18,7 @@ import hashlib
 import os
 import re
 import time
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from urllib.parse import quote
 
@@ -92,6 +92,9 @@ class ImageCache:
         self._last_prune = 0.0
         # Do not hammer the Deck with dozens of parallel image downloads.
         self._semaphore: Optional[asyncio.Semaphore] = None
+        # Other places the same picture may be, tried when a download fails
+        # (set by the service: GameTDB's other regions).
+        self.alternatives: Optional[Callable[[str], List[str]]] = None
 
     # ------------------------------------------------------------------ paths
     @property
@@ -141,10 +144,22 @@ class ImageCache:
                 async with self._semaphore:
                     await self._download(target, path)
             except Exception:
-                # No local copy: report it as missing so the UI can show the
-                # placeholder straight away instead of waiting for a remote
-                # image the Steam client would block anyway.
-                return None
+                # Some art exists in several places (GameTDB keeps a cover per
+                # region): try the others before giving up.
+                found = False
+                for other in (self.alternatives(target) if self.alternatives else []):
+                    try:
+                        async with self._semaphore:
+                            await self._download(other, path)
+                        found = True
+                        break
+                    except Exception:
+                        continue
+                if not found:
+                    # No local copy: report it as missing so the UI can show
+                    # the placeholder straight away instead of waiting for a
+                    # remote image the Steam client would block anyway.
+                    return None
             if not os.path.exists(path):
                 return url
             # The download may have written a different extension - the url we
