@@ -25,7 +25,7 @@ import {
   Settings,
   SourceInfo,
 } from "../types";
-import { formatBytes, inRegion, matchKey, REGIONS, shelfKey, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
+import { configuredSources, formatBytes, inRegion, matchKey, REGIONS, shelfKey, SOURCE_LABELS, systemAspect, systemLabel } from "./common";
 import { childFocus, focusElement, PAD } from "./gamepad";
 import StoreStyles from "./StoreStyles";
 import { useChromeInsets } from "./useChromeInsets";
@@ -37,11 +37,11 @@ import { syncWithSteam } from "../steam";
 import LibraryView from "./LibraryView";
 import GamePage from "./GamePage";
 import DownloadsView from "./DownloadsView";
-import SettingsView from "./SettingsView";
+import SettingsView, { SectionKey } from "./SettingsView";
 import { EmptyState, Glyph } from "./ui";
 
 // The first thing on the home screen that takes focus.
-const HOME_FIRST = ".rs-home .rs-shelf-tile, .rs-home .rs-console";
+const HOME_FIRST = ".rs-home .rs-setup, .rs-home .rs-shelf-tile, .rs-home .rs-console";
 
 // One page is rendered at a time. A search fetches a few pages worth of
 // results up front, so paging is instant and never hits the network again.
@@ -131,6 +131,8 @@ InfoStrip.displayName = "InfoStrip";
 
 const Store: FC = () => {
   const [tab, setTab] = useState<Tab>("store");
+  // The section Settings opens on (the home screen's "Set up sources").
+  const [settingsSection, setSettingsSection] = useState<SectionKey | undefined>(undefined);
   const [query, setQuery] = useState("");
   const [system, setSystem] = useState("all");
   const [source, setSource] = useState("all");
@@ -245,7 +247,9 @@ const Store: FC = () => {
   // The store opens on the home screen's first tile. The shelves and the
   // consoles arrive a moment after the store, so this waits for them, and it
   // never takes focus the player has already moved somewhere.
-  const homeFilled = consoles.length > 0 || shelves.recent.length > 0 || shelves.favorites.length > 0;
+  // Sources ship without addresses; until one has one there is nothing to search.
+  const noSources = settings !== null && configuredSources(settings as unknown as Record<string, unknown>).length === 0;
+  const homeFilled = noSources || consoles.length > 0 || shelves.recent.length > 0 || shelves.favorites.length > 0;
   useEffect(() => {
     if (!homeFilled) return;
     window.requestAnimationFrame(() => {
@@ -405,6 +409,7 @@ const Store: FC = () => {
   const selectTab = useCallback(
     (next: Tab, gameId: string | null = null) => {
       tabRef.current = next;
+      if (next !== "settings") setSettingsSection(undefined);
       setTab(next);
       if (next === "library") refreshInstalled();
       if (next === "downloads") refreshDownloads();
@@ -412,6 +417,11 @@ const Store: FC = () => {
     },
     [focusTab, refreshDownloads, refreshInstalled],
   );
+
+  const setUpSources = useCallback(() => {
+    setSettingsSection("sources");
+    selectTab("settings");
+  }, [selectTab]);
 
   const stepTab = (delta: number) => {
     const index = TABS.findIndex((item) => item.key === tab);
@@ -773,6 +783,7 @@ const Store: FC = () => {
                   onItem={openShelfItem}
                   onInstalled={openLibrary}
                   onFavorite={flipFavorite}
+                  onSetup={noSources ? setUpSources : undefined}
                 />
               </div>
             ) : (
@@ -864,7 +875,14 @@ const Store: FC = () => {
                     </EmptyState>
                   ) : null}
 
-                  {!loading && allResults.length === 0 && searched ? (
+                  {!loading && allResults.length === 0 && searched && noSources ? (
+                    <EmptyState icon={<FaSearch />} title="No sources set up">
+                      ROM Store does not come with any sites to search. In Settings → Sources, enter the address of
+                      each site you want to use.
+                    </EmptyState>
+                  ) : null}
+
+                  {!loading && allResults.length === 0 && searched && !noSources ? (
                     <EmptyState icon={<FaSearch />} title="Nothing found">
                       {query.trim()
                         ? `No games matched “${query.trim()}”${system !== "all" ? ` on ${systemLabel(system)}` : ""}. Try a different title${
@@ -992,9 +1010,14 @@ const Store: FC = () => {
 
           {tab === "settings" ? (
             <SettingsView
+              initialSection={settingsSection}
               onSaved={(value) => {
                 setSettings(value);
                 refreshLibrary();
+                // An address entered or removed changes what can be browsed.
+                getConsoles()
+                  .then((list) => setConsoles(list ?? []))
+                  .catch(() => undefined);
               }}
             />
           ) : null}

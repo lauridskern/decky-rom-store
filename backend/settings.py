@@ -13,6 +13,20 @@ from typing import Any, Dict, Optional
 DEFAULT_STEAMGRIDDB_KEY = "226014b82073506b73fd9a462806a065"
 
 
+# The addresses installs before settings revision 7 had as defaults. Those
+# installs keep them (see Settings._migrate and keep_addresses); new installs
+# start without any.
+_LEGACY_ADDRESSES: Dict[str, str] = {
+    "romspedia_base_url": "https://www.romspedia.com",
+    "retrostic_base_url": "https://www.retrostic.com",
+    "romsdl_base_url": "https://romsdl.com",
+    "switchroms_base_url": "https://nintendo-switch-roms.com",
+    "romsfun_base_url": "https://romsfun.com",
+    "homebrewhub_base_url": "https://hh3.gbdev.io",
+    "myabandonware_base_url": "https://www.myabandonware.com",
+}
+
+
 DEFAULTS: Dict[str, Any] = {
     "roms_root": "",
     "source_priority": ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware", "homebrewhub"],
@@ -21,13 +35,15 @@ DEFAULTS: Dict[str, Any] = {
     "keep_archive": True,
     "max_concurrent": 2,
     "results_per_source": 30,
-    "romspedia_base_url": "https://www.romspedia.com",
-    "retrostic_base_url": "https://www.retrostic.com",
-    "romsdl_base_url": "https://romsdl.com",
-    "switchroms_base_url": "https://nintendo-switch-roms.com",
-    "romsfun_base_url": "https://romsfun.com",
-    "homebrewhub_base_url": "https://hh3.gbdev.io",
-    "myabandonware_base_url": "https://www.myabandonware.com",
+    # Every source's address is the user's to enter (Settings -> Sources): the
+    # plugin ships the parsers, not the sites. A source without one is skipped.
+    "romspedia_base_url": "",
+    "retrostic_base_url": "",
+    "romsdl_base_url": "",
+    "switchroms_base_url": "",
+    "romsfun_base_url": "",
+    "homebrewhub_base_url": "",
+    "myabandonware_base_url": "",
     "show_nsfw": False,
     "search_cache_hours": 72,
     "chrome_top_offset": 0,
@@ -36,7 +52,7 @@ DEFAULTS: Dict[str, Any] = {
     # its art only fills in games that have no cover unless this is turned on.
     "igdb_replace_covers": False,
     # Bumped when a stored value has to be migrated (see Settings.load).
-    "settings_revision": 6,
+    "settings_revision": 7,
     # Box art from libretro-thumbnails (see backend/boxart.py), and whether the
     # grid gets small copies through the wsrv.nl resizing proxy.
     # Region whose file the game panel offers first ("" picks no favourite).
@@ -131,8 +147,27 @@ class Settings:
                 value = self._values.get(key)
                 if isinstance(value, list) and "homebrewhub" not in value:
                     self._values[key] = value + ["homebrewhub"]
+        if revision < 7:
+            # Addresses are no longer filled in for new installs; an existing
+            # one keeps the addresses it has been using.
+            self._keep_addresses()
         self._values["settings_revision"] = DEFAULTS["settings_revision"]
         return True
+
+    def _keep_addresses(self) -> None:
+        for key, address in _LEGACY_ADDRESSES.items():
+            if not self._values.get(key):
+                self._values[key] = address
+
+    def keep_addresses(self) -> None:
+        """An install from before revision 7 that never wrote a settings file
+        (nothing was ever changed): keep the addresses it has been using."""
+        if self._path and os.path.isfile(self._path):
+            return
+        with self._lock:
+            self._keep_addresses()
+            self._values["settings_revision"] = DEFAULTS["settings_revision"]
+        self.save()
 
     def save(self) -> None:
         if not self._path:

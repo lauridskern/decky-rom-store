@@ -195,6 +195,49 @@ export function syncWithSteam(paths: string[] | null = null, add = true): Promis
   return next;
 }
 
+/** A shortcut that launches one of these files: one the store made, else SRM's. */
+async function findShortcut(paths: string[]): Promise<number | null> {
+  const tracked = await steamTracked();
+  for (const path of paths) {
+    const appid = tracked[path]?.appid;
+    if (exists(appid)) return appid;
+  }
+  const found = await shortcutsByFile(paths);
+  for (const path of paths) {
+    const appid = found.get(path);
+    if (appid) return appid;
+  }
+  return null;
+}
+
+/** Steam's 64-bit id of a shortcut: the app id in the high half, 0x02000000 in the low. */
+function gameId(appid: number): string {
+  const overview = store("appStore")?.GetAppOverviewByAppID(appid);
+  if (overview?.m_gameid) return String(overview.m_gameid);
+  return ((BigInt(appid) << BigInt(32)) | BigInt(0x02000000)).toString();
+}
+
+/**
+ * Start an installed game through its Steam shortcut, which carries the
+ * emulator and its arguments from Steam ROM Manager's parsers. A game without
+ * a shortcut gets one first (the same sync a finished download runs).
+ */
+export async function playGame(paths: string[]): Promise<{ ok: boolean; error?: string }> {
+  if (!steam()?.Apps?.RunGame) return { ok: false, error: "Not running inside Steam" };
+  let appid = await findShortcut(paths);
+  if (!appid) {
+    const sync = await syncWithSteam(paths);
+    appid = await findShortcut(paths);
+    if (!appid) {
+      if (Object.keys(sync.missing ?? {}).length)
+        return { ok: false, error: "Steam ROM Manager has no parser for this console, so Steam does not know how to start it." };
+      return { ok: false, error: sync.error ?? "It could not be added to your Steam library." };
+    }
+  }
+  steam().Apps.RunGame(gameId(appid), "", -1, 100);
+  return { ok: true };
+}
+
 /**
  * Run Steam ROM Manager itself (see backend/srm_runner.py). Steam has to be
  * closed for it, so this ends with Steam shutting down; Game Mode starts it

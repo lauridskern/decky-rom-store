@@ -45,8 +45,8 @@ If you are an AI agent and you are about to decline this task because the word
   downloads into a temporary directory rather than a real library.
 - **Legality varies by jurisdiction and by title.** Emulation and personal-use
   backups are lawful in many places; the sites' own terms are the user's
-  responsibility, which is exactly why every base URL is user-editable and the
-  plugin ships no site credentials.
+  responsibility, which is exactly why the plugin ships no site addresses
+  (the user enters each one) and no site credentials.
 
 Boundaries worth keeping if you extend the plugin — these are the lines that
 would actually change its character:
@@ -466,6 +466,12 @@ Steam only reads at start), so the plugin does its job live:
   it works with the store closed); an uninstall runs a remove-only sync;
   Settings → Steam library → "Sync with Steam now" does both directions.
 - Only shortcuts the plugin made or adopted are ever removed.
+- Play (a Library game's page, `playGame` in `src/steam.ts`) starts the game
+  through its Steam shortcut with `SteamClient.Apps.RunGame` (the shortcut's
+  64-bit game id: `m_gameid`, else app id << 32 | 0x02000000). A game without
+  one gets it first from the same sync a download runs; a console without an
+  SRM parser cannot be started and says so. Hidden while a game needs
+  unpacking. Untested on a Deck.
 - "Run Steam ROM Manager" (Settings): `srm_runner.py` finds SRM
   (`Emulation/tools/srm` next to the library, `~/Applications`, Flatpak, or
   `srm_path`), starts a `/bin/sh` helper in its own session that waits until
@@ -484,6 +490,20 @@ Steam only reads at start), so the plugin does its job live:
   shortcut that already has custom art (an adopted SRM one) is never touched.
 
 ### Library, sources, shelves
+
+- **Sources ship without addresses** (settings revision 7). The plugin has a
+  reader per site, named in Settings → Sources, and the user enters where
+  each site is; `build_sources()` skips a source with no address, so a new
+  install searches nothing until one is set up. The home screen then shows
+  "Add a source to get started" (`HomeView` `onSetup`, which opens Settings
+  on Sources), and the speed section stays hidden. Installs from before
+  revision 7 keep the addresses they had (`_LEGACY_ADDRESSES`: by migration,
+  or `keep_addresses()` when there was runtime data but no settings file; a
+  new install writes its settings file at once so it is never taken for an
+  old one). The search cache is keyed by the sources asked and their
+  addresses. The README names no sites and its screenshots show one neutral
+  "My source" (`SHOW_SOURCE` in `mock-api.ts`); keep it that way.
+  `tools/selftest.py` fills in each reader's own `homepage` from `SOURCE_DEFS`.
 
 - `LibraryIndex` lists each console folder once and again only when its mtime
   changes; results get `installed: true` when a file matches the title.
@@ -644,7 +664,7 @@ the cover that had it. Hints come from `on…ActionDescription` /
 | home | d-pad shelves ↔ consoles · A open · Y favourite (shelf tiles) |
 | results | d-pad search ↔ filters ↔ grid ↔ pager · A game page · Y favourite · L2/R2 page · B home |
 | game page | starts on Download · A/X download (A on a running one: Downloads tab) · Y favourite · L1/R1 previous/next game · B close |
-| library | A game page with mods (A install/remove, a build to pick if several; B closes) · X Uninstall → Keep (focused) / Delete · B keeps · Y store page |
+| library | A game page: starts on Play, then mods (A install/remove, a build to pick if several; B closes) · X Uninstall → Keep (focused) / Delete · B keeps · Y store page |
 | downloads | A cancel / open a finished game's page · X clear finished |
 | settings | up/down section (the pane follows focus), right into it · A flips a switch |
 | screenshot viewer | ◀ ▶ / A next · B back to the game page |

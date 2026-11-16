@@ -126,6 +126,8 @@ class Consoles(unittest.TestCase):
         from backend.service import StoreService
         tmp = tempfile.mkdtemp()
         settings = Settings(os.path.join(tmp, "s.json"))
+        from backend.settings import _LEGACY_ADDRESSES
+        settings.update(dict(_LEGACY_ADDRESSES))
         svc = StoreService(settings, plugin_name="ROM-Store", runtime_dir=os.path.join(tmp, "d"))
 
         listed = asyncio.run(svc.consoles())
@@ -577,6 +579,51 @@ class SettingsMigration(unittest.TestCase):
         self.assertIsNone(settings.get("nswpedia_base_url"))
         settings.update({"enabled_sources": ["switchroms", "romspedia"]})
         self.assertNotIn("homebrewhub", Settings(path).get("enabled_sources"), "switching it off sticks")
+
+
+class SourceAddresses(unittest.TestCase):
+    """New installs start without source addresses; older ones keep theirs."""
+
+    def service(self, settings):
+        from backend.service import StoreService
+        return StoreService(settings, plugin_name="ROM-Store", runtime_dir=os.path.join(tempfile.mkdtemp(), "d"))
+
+    def test_new_install_has_no_addresses_and_no_sources(self):
+        settings = Settings(os.path.join(tempfile.mkdtemp(), "s.json"))
+        self.assertTrue(all(not settings.get(key) for key in settings.all() if key.endswith("_base_url")))
+        svc = self.service(settings)
+        self.assertEqual(svc.build_sources(), [])
+        described = {item["id"]: item for item in svc.describe_sources()}
+        self.assertFalse(described["romspedia"]["configured"])
+        self.assertEqual(described["romspedia"]["base_url"], "")
+
+    def test_an_entered_address_turns_the_source_on(self):
+        settings = Settings(os.path.join(tempfile.mkdtemp(), "s.json"))
+        settings.update({"retrostic_base_url": " example.invalid/ "})
+        sources = self.service(settings).build_sources()
+        self.assertEqual([s.id for s in sources], ["retrostic"])
+        self.assertEqual(sources[0].base, "https://example.invalid")
+
+    def test_older_settings_file_keeps_its_addresses(self):
+        path = os.path.join(tempfile.mkdtemp(), "s.json")
+        with open(path, "w") as fh:
+            json.dump({"settings_revision": 6, "romspedia_base_url": "https://mirror.invalid", "retrostic_base_url": ""}, fh)
+        settings = Settings(path)
+        self.assertEqual(settings.get("romspedia_base_url"), "https://mirror.invalid", "an edited address stays")
+        self.assertEqual(settings.get("retrostic_base_url"), "https://www.retrostic.com", "empty meant the default")
+        self.assertEqual(settings.get("settings_revision"), 7)
+        settings.update({"retrostic_base_url": ""})
+        self.assertEqual(Settings(path).get("retrostic_base_url"), "", "clearing it afterwards sticks")
+
+    def test_older_install_without_a_settings_file_keeps_addresses(self):
+        path = os.path.join(tempfile.mkdtemp(), "s.json")
+        settings = Settings(path)
+        settings.keep_addresses()
+        self.assertEqual(Settings(path).get("switchroms_base_url"), "https://nintendo-switch-roms.com")
+        cleared = Settings(path)
+        cleared.update({"switchroms_base_url": ""})
+        cleared.keep_addresses()  # the file exists now: nothing is filled in again
+        self.assertEqual(Settings(path).get("switchroms_base_url"), "")
 
 
 if __name__ == "__main__":

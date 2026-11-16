@@ -25,7 +25,7 @@ import {
   updateSettings,
 } from "../types";
 import { runSteamRomManager, syncWithSteam, SyncResult } from "../steam";
-import { formatBytes, SOURCE_LABELS, systemLabel, timeAgo } from "./common";
+import { configuredSources, formatBytes, SOURCE_IDS, SOURCE_LABELS, systemLabel, timeAgo } from "./common";
 import { measurePerformance, PerfSample } from "./perf";
 import { reloadStore } from "../state";
 import { Spinner, Switch } from "./ui";
@@ -33,10 +33,9 @@ import { Spinner, Switch } from "./ui";
 interface Props {
   /** Called with the stored settings after every save. */
   onSaved: (settings: Settings) => void;
+  /** Open on this section (the home screen's "Set up sources"). */
+  initialSection?: SectionKey;
 }
-
-const SOURCE_ORDER = ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware", "homebrewhub"] as const;
-const WITH_BASE_URL = new Set(["romspedia", "retrostic", "romsdl", "switchroms", "romsfun", "homebrewhub"]);
 
 const SOURCE_HINTS: Record<string, string> = {
   switchroms: "Switch specific catalogue with hundreds of NSP/XCI titles and direct file links.",
@@ -46,13 +45,13 @@ const SOURCE_HINTS: Record<string, string> = {
   romsfun:
     "Big catalogue across 50+ consoles, including romhacks and fan translations (listed after the games). Each download waits out the site's 7-second countdown first.",
   myabandonware: "TypeSense backed search for older PC and console titles.",
-  homebrewhub: "New games made for Game Boy, GBC, GBA and NES by their authors, free to download (gbdev.io).",
+  homebrewhub: "New games made for Game Boy, GBC, GBA and NES by their authors, free to download.",
 };
 
-type SectionKey = "library" | "sources" | "downloads" | "artwork" | "steam" | "advanced";
+export type SectionKey = "library" | "sources" | "downloads" | "artwork" | "steam" | "advanced";
 const SECTIONS: { key: SectionKey; label: string; icon: ReactNode; lead: string }[] = [
   { key: "library", label: "Library", icon: <FaFolderOpen />, lead: "Where your games are kept." },
-  { key: "sources", label: "Sources", icon: <FaGlobe />, lead: "The catalogue sites a search asks, and how each one is doing." },
+  { key: "sources", label: "Sources", icon: <FaGlobe />, lead: "The sites a search asks: you enter where each one is." },
   { key: "downloads", label: "Downloads", icon: <FaDownload />, lead: "Which file is offered first and what happens to it." },
   { key: "artwork", label: "Artwork", icon: <FaImage />, lead: "Where covers come from." },
   { key: "steam", label: "Steam", icon: <FaSteam />, lead: "Downloaded games in your Steam library." },
@@ -194,9 +193,9 @@ const Note: FC<{ tone?: "warn" | "bad"; children: ReactNode }> = ({ tone, childr
  * Gamepad: up/down through the sections (the right side follows), right into
  * the settings; A flips a switch, opens a list or the keyboard.
  */
-const SettingsView: FC<Props> = ({ onSaved }) => {
+const SettingsView: FC<Props> = ({ onSaved, initialSection }) => {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [section, setSection] = useState<SectionKey>("library");
+  const [section, setSection] = useState<SectionKey>(initialSection ?? "library");
   const [library, setLibrary] = useState<LibraryInfo | null>(null);
   const [diagnostics, setDiagnostics] = useState<ImageDiagnostics | null>(null);
   const [cache, setCache] = useState<CacheStats | null>(null);
@@ -419,8 +418,47 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
     const current = speedTest?.current ? (SOURCE_LABELS[speedTest.current] ?? speedTest.current) : null;
     const done = Object.keys(speedTest?.results ?? {}).length;
     const total = done + (speedTest?.pending?.length ?? 0);
+    // Switched on and given an address: only these are asked and measured.
+    const configured = configuredSources(settings as unknown as Record<string, unknown>);
     body = (
       <>
+        <div className="rs-group">Sources</div>
+        <Note>
+          ROM Store comes without any site addresses. It knows how to read each site below, not where to find it:
+          look up the address of a site you want to use and enter it under its name.
+        </Note>
+        {SOURCE_IDS.map((id) => {
+          const address = text(`${id}_base_url` as keyof Settings).trim();
+          return (
+            <div className="rs-source" key={id}>
+              <ToggleRow
+                label={SOURCE_LABELS[id]}
+                on={settings.enabled_sources.includes(id)}
+                onChange={(value) => toggleSource(id, value)}
+                hint={
+                  <>
+                    {address ? (
+                      <SourceHealth info={sources.find((item) => item.id === id)} />
+                    ) : (
+                      <span className="rs-health idle">No address yet</span>
+                    )}
+                    {SOURCE_HINTS[id]}
+                  </>
+                }
+              />
+              <Row label="Address" wide>
+                <TextField
+                  label=""
+                  placeholder={`Where ${SOURCE_LABELS[id]} is, e.g. https://…`}
+                  value={text(`${id}_base_url` as keyof Settings)}
+                  onChange={(event) => update({ [`${id}_base_url`]: event.target.value } as unknown as Partial<Settings>)}
+                />
+              </Row>
+            </div>
+          );
+        })}
+        {configured.length ? (
+          <>
         <div className="rs-group">Speed</div>
         <Row
           label="Provider speed"
@@ -443,38 +481,15 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
             )}
           </Button>
         </Row>
-        <SpeedRanking sources={sources} enabled={settings.enabled_sources} />
+        <SpeedRanking sources={sources} enabled={configured} />
         <ToggleRow
           label="Test again every week"
           hint="By itself, a couple of minutes after the store starts, when nothing is downloading."
           on={settings.speed_test_auto !== false}
           onChange={(value) => update({ speed_test_auto: value })}
         />
-        <div className="rs-group">Sources</div>
-        {SOURCE_ORDER.map((id) => (
-          <div className="rs-source" key={id}>
-            <ToggleRow
-              label={SOURCE_LABELS[id]}
-              on={settings.enabled_sources.includes(id)}
-              onChange={(value) => toggleSource(id, value)}
-              hint={
-                <>
-                  <SourceHealth info={sources.find((item) => item.id === id)} />
-                  {SOURCE_HINTS[id]}
-                </>
-              }
-            />
-            {WITH_BASE_URL.has(id) ? (
-              <Row label="Address" wide>
-                <TextField
-                  label=""
-                  value={text(`${id}_base_url` as keyof Settings)}
-                  onChange={(event) => update({ [`${id}_base_url`]: event.target.value } as unknown as Partial<Settings>)}
-                />
-              </Row>
-            ) : null}
-          </div>
-        ))}
+          </>
+        ) : null}
       </>
     );
   } else if (section === "downloads") {

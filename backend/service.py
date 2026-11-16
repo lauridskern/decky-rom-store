@@ -368,24 +368,32 @@ class StoreService:
     # ------------------------------------------------------------------ sources
     def build_sources(self) -> List[Source]:
         enabled = self.settings.get("enabled_sources") or []
-        options = {
-            "romspedia": {"base_url": self.settings.get("romspedia_base_url")},
-            "myabandonware": {"base_url": self.settings.get("myabandonware_base_url")},
-        }
         sources: List[Source] = []
         for source_id, definition in SOURCE_DEFS.items():
-            if source_id not in enabled:
+            address = self.source_address(source_id)
+            # No address entered: the user has not set this source up.
+            if source_id not in enabled or not address:
                 continue
             options = {
                 "source_id": source_id,
                 "label": definition["label"],
-                "homepage": definition["homepage"],
-                "base_url": self.settings.get(definition["base_key"]) or definition["homepage"],
+                "homepage": address,
+                "base_url": address,
             }
             if definition.get("search_url_key"):
                 options["search_url"] = self.settings.get(definition["search_url_key"])
             sources.append(definition["cls"](self.http, options))
         return sources
+
+    def source_address(self, source_id: str) -> str:
+        """The address the user entered for a source, normalised, or ""."""
+        definition = SOURCE_DEFS.get(source_id)
+        value = str(self.settings.get(definition["base_key"]) or "").strip() if definition else ""
+        if not value:
+            return ""
+        if "://" not in value:
+            value = "https://" + value
+        return value.rstrip("/")
 
     # ------------------------------------------------------------------ health
     FAILURES_BEFORE_REST = 3
@@ -434,12 +442,13 @@ class StoreService:
             info = {
                 "id": source_id,
                 "label": definition["label"],
-                "homepage": definition["homepage"],
+                "homepage": self.source_address(source_id),
                 "supports_browse": bool(definition["cls"].supports_browse),
                 "enabled": source_id in enabled,
+                "configured": bool(self.source_address(source_id)),
                 "status": "idle",
                 "error": self._errors.get(source_id),
-                "base_url": self.settings.get(definition["base_key"]) or definition["homepage"],
+                "base_url": self.source_address(source_id),
             }
             health = self._health.get(source_id) or {}
             info["last_ok"] = health.get("ok_at")
@@ -472,7 +481,9 @@ class StoreService:
         # Long lived cache: the catalogues barely change, so a query that was
         # made a few days ago is served straight from disk.
         ttl = float(self.settings.get("search_cache_hours", 72)) * 3600
-        cache_key = self._cache_key(query, system, source_ids, sort)
+        # Keyed by the sources actually asked and their addresses: setting up,
+        # switching off or moving a source must not serve the old answer.
+        cache_key = self._cache_key(query, system, [f"{s.id}@{s.options.get('base_url', '')}" for s in sources], sort)
         cached = self._cache_read("search", cache_key)
         if cached and (time.time() - float(cached.get("at", 0))) < ttl:
             try:

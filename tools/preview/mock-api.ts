@@ -60,6 +60,8 @@ const shelfItem = (title: string) => ({
 });
 // A first start: nothing viewed, nothing installed, nothing downloading.
 const FRESH = Boolean((globalThis as any).__FRESH);
+// The one source of the README screenshots (the UI shows an unknown id as is).
+const SHOW_SOURCE = "My source";
 const ALL_TITLES = [...TITLES, ...Array.from({ length: 48 }, (_, i) => `Test Game ${i + 1}`)];
 
 const makeRom = (title: string, index: number, system: string, id: string): MergedRom => {
@@ -174,9 +176,10 @@ const makeRom = (title: string, index: number, system: string, id: string): Merg
 const showRom = (game: ShowGame, index: number): MergedRom => {
   const rom = makeRom(game.title!, index, game.system, `rom-${index}`);
   const facts = { cover: game.cover, year: game.year, rating: game.rating, size: game.size };
-  // Switch games come from the Switch catalogue, as .nsp files.
+  // Switch games are .nsp files. The README names no sites: every game comes
+  // from one source the reader set up, shown under a neutral name.
   const switchGame = game.system === "switch";
-  const sources = switchGame ? ["switchroms"] : rom.sources;
+  const sources = [SHOW_SOURCE];
   const name = (file: string) => (switchGame ? file.replace(/ \(USA\)\.zip$/, " [v0].nsp").replace(/\.zip$/, ".nsp") : file);
   return {
     ...rom,
@@ -215,7 +218,7 @@ const browseConsole = (system: string): MergedRom[] =>
 const showJob = (id: string, title: string, status: string, received: number, speed: number): DownloadJob => {
   const game = SHOW_GAMES[title];
   return {
-    id, title, system: game.system, source: "switchroms", filename: `${title}.nsp`, url: "https://example.invalid",
+    id, title, system: game.system, source: SHOW_SOURCE, filename: `${title}.nsp`, url: "https://example.invalid",
     destination: `/home/deck/EmuDecky/roms/${game.system}`, status, received, total: game.size ?? received, speed,
     error: null, path: status === "done" ? `/home/deck/EmuDecky/roms/${game.system}/${title}.zip` : null,
     extracted_to: null, created: Date.now() / 1000 - 600, finished: status === "done" ? Date.now() / 1000 - 120 : null,
@@ -347,10 +350,11 @@ const settings: Settings = {
   keep_archive: true,
   max_concurrent: 2,
   results_per_source: 30,
-  romspedia_base_url: "https://www.romspedia.com",
-  retrostic_base_url: "https://www.retrostic.com",
-  romsdl_base_url: "https://romsdl.com",
-  myabandonware_base_url: "https://www.myabandonware.com",
+  // A first start has no source addresses (the plugin ships none).
+  romspedia_base_url: FRESH ? "" : "https://www.romspedia.com",
+  retrostic_base_url: FRESH ? "" : "https://www.retrostic.com",
+  romsdl_base_url: FRESH ? "" : "https://romsdl.com",
+  myabandonware_base_url: FRESH ? "" : "https://www.myabandonware.com",
   show_nsfw: false,
   chrome_top_offset: 0,
   chrome_bottom_offset: 0,
@@ -396,9 +400,9 @@ const handlers: Record<string, (...args: any[]) => any> = {
   // Counted consoles first, then the ones only other sources carry.
   // As the backend: every console a source can browse, the popular ones first, no counts.
   get_consoles: async () =>
-    ["switch", "ps2", "psx", "gba", "snes", "n64", "nds", "3ds", "gc", "wii", "nes", "gb", "gbc", "psp", "genesis",
+    (FRESH && !settings.romspedia_base_url ? [] : ["switch", "ps2", "psx", "gba", "snes", "n64", "nds", "3ds", "gc", "wii", "nes", "gb", "gbc", "psp", "genesis",
       "dreamcast", "ps3", "wiiu", "psvita", "saturn", "mastersystem", "gamegear", "segacd", "sega32x", "arcades",
-      "neogeo", "pcengine", "3do", "amiga", "atari2600", "atari7800", "jaguar", "ngpc", "virtualboy", "wonderswan"]
+      "neogeo", "pcengine", "3do", "amiga", "atari2600", "atari7800", "jaguar", "ngpc", "virtualboy", "wonderswan"])
       .map((key) => ({ key, count: null })),
   get_details: async (id: string) => {
     const rom = known.get(id);
@@ -440,7 +444,7 @@ const handlers: Record<string, (...args: any[]) => any> = {
   cancel_download: async () => ({ ok: true }),
   clear_downloads: async () => ({ ok: true }),
   get_settings: async () => settings,
-  update_settings: async (values: Partial<Settings>) => ({ ...settings, ...values }),
+  update_settings: async (values: Partial<Settings>) => ({ ...Object.assign(settings, values) }),
   get_library: async () => library,
   get_shelves: async () => shelves,
   // Measured provider speeds (see the speed test below).

@@ -5,8 +5,8 @@
 # ROM Store
 
 **A game store for the Steam Deck's emulators.**
-Search the catalogue sites you choose, pick a game by its box art, and it lands
-in the right EmuDeck folder and in your Steam library.
+Search the sites you set up, pick a game by its box art, and it lands in the
+right EmuDeck folder and in your Steam library.
 
 [![Latest release](https://img.shields.io/github/v/release/lauridskern/decky-rom-store?style=flat-square&label=release&color=3b82f6)](https://github.com/lauridskern/decky-rom-store/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/lauridskern/decky-rom-store/total?style=flat-square&color=3b82f6)](https://github.com/lauridskern/decky-rom-store/releases)
@@ -26,7 +26,8 @@ and paste:
 https://github.com/lauridskern/decky-rom-store/releases/latest/download/ROM-Store.zip
 ```
 
-ROM Store then appears in the Quick Access menu (`…` button). It needs
+ROM Store then appears in the Quick Access menu (`…` button). Before the first
+search, [add your sources](#adding-sources). It needs
 [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader) and works best with
 [EmuDeck](https://www.emudeck.com) (or EmuDecky) installed; any folder will do
 for the games. Nothing else to install: the backend is plain Python.
@@ -58,19 +59,19 @@ Then restart Decky: `sudo systemctl restart plugin_loader.service`.
     <td width="50%" valign="top">
       <img src="docs/screenshots/home.jpg" alt="Home screen" /><br />
       <b>Home.</b> What you looked at last, your favourites, what is already
-      on the Deck, and every console the sources can browse.
+      on the Deck, and every console you can browse.
     </td>
     <td width="50%" valign="top">
       <img src="docs/screenshots/game.jpg" alt="Game page" /><br />
       <b>Game page.</b> Box art, rating, screenshots and trailer, the
-      description, every version the sources have, and where it will be saved.
+      description, every version that was found, and where it will be saved.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
       <img src="docs/screenshots/library.jpg" alt="Library" /><br />
       <b>Library.</b> The games in your ROM folders under their real names,
-      how full each drive is, and uninstall.
+      how full each drive is. Play a game from its page, or uninstall it.
     </td>
     <td width="50%" valign="top">
       <img src="docs/screenshots/mods.jpg" alt="Mods for a Switch game" /><br />
@@ -85,16 +86,16 @@ Then restart Decky: `sudo systemctl restart plugin_loader.service`.
       after a restart.
     </td>
     <td width="50%" valign="top">
-      <img src="docs/screenshots/settings.jpg" alt="Settings: sources and their speed" /><br />
-      <b>Settings.</b> Sources, their health and measured speed, artwork,
-      Steam. Changes save by themselves.
+      <img src="docs/screenshots/settings.jpg" alt="Settings: the Steam library" /><br />
+      <b>Settings.</b> Your sources, where games go, artwork and the Steam
+      library. Changes save by themselves.
     </td>
   </tr>
 </table>
 
 ## What it does
 
-- **One search, every source.** All enabled sites are asked at once. The same
+- **One search, every site.** Every site you set up is asked at once. The same
   game from several sites becomes one cover, with every region and revision
   kept as a version you can pick.
 - **Real box art.** Front scans from
@@ -120,24 +121,18 @@ Then restart Decky: `sudo systemctl restart plugin_loader.service`.
 - **Made for the pad.** Every control is reachable with the d-pad, Steam's
   on-screen keyboard opens for search, and **B** always goes back one step.
 
-## Sources
+## Adding sources
 
-Every source can be switched off or pointed at another address in
-*Settings → Sources*, and a source that keeps failing is rested for a while
-instead of slowing every search down.
+ROM Store comes without any sites to search. It knows how to read a fixed set of
+sites, listed by name in *Settings → Sources*, but not where they are: look up
+the address of each site you want to use and enter it under its name. A site
+without an address is left out, and the home screen points you to Settings
+until at least one is set up.
 
-| Source | What it has |
-|---|---|
-| [Switch ROMs](https://nintendo-switch-roms.com) | Nintendo Switch games, NSP/XCI with direct links |
-| [Romspedia](https://www.romspedia.com) | Classic consoles, region-specific builds |
-| [Retrostic](https://www.retrostic.com) | About 46 classic consoles, direct zip downloads |
-| [RomsDL](https://romsdl.com) | Same engine as Retrostic, a different catalogue |
-| [RomsFun](https://romsfun.com) | 50+ consoles, ROM hacks and translations; waits out the site's countdown |
-| [MyAbandonware](https://www.myabandonware.com) | Older PC and console games |
-| [Homebrew Hub](https://hh.gbdev.io) | New homebrew for Game Boy, GBC, GBA and NES, published by their authors |
-
-BIOS and firmware files are never offered. If a site starts requiring a login
-or a captcha, its source is dropped rather than worked around.
+Every source can be switched off or its address changed at any time. One that
+keeps failing is rested for a while instead of slowing every search down.
+BIOS and firmware files are never offered, and if a site starts requiring a
+login or a captcha, its reader is removed rather than worked around.
 
 ## Controls
 
@@ -147,7 +142,7 @@ or a captcha, its source is dropped rather than worked around.
 | Home | d-pad through shelves and consoles · **A** open · **Y** favourite |
 | Results | **A** game page · **Y** favourite · **L2 / R2** previous / next page |
 | Game page | **A / X** download · **Y** favourite · **L1 / R1** previous / next game |
-| Library | **A** game page and mods · **X** uninstall (asks first) · **Y** store page |
+| Library | **A** game page: Play, mods · **X** uninstall (asks first) · **Y** store page |
 | Downloads | **A** cancel, or open a finished game · **X** clear finished |
 | Settings | up / down picks a section, right goes into it · **A** flips a switch |
 
@@ -237,4 +232,4 @@ to you and the laws where you live.
 
 MIT licensed. Box art from libretro-thumbnails, GameTDB and SteamGridDB;
 metadata from IGDB; mods from GameBanana. Not affiliated with Valve,
-Nintendo, Sony, Sega or any of the sites above.
+Nintendo, Sony, Sega or any site the store can read.

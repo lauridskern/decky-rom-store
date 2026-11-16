@@ -77,6 +77,15 @@ class Plugin:
 
     def __init__(self) -> None:
         self.settings = Settings(os.path.join(SETTINGS_DIR, "rom-store.json"))
+        # No settings file yet. Runtime data from an earlier start means an
+        # older install whose settings were never changed: it keeps the source
+        # addresses it has been using. Otherwise this is a new install, and the
+        # file is written now so it is never taken for an older one later.
+        if not os.path.isfile(self.settings.path or ""):
+            if os.path.isdir(os.path.join(RUNTIME_DIR, "cache")) or os.path.isfile(os.path.join(RUNTIME_DIR, "source_health.json")):
+                self.settings.keep_addresses()
+            else:
+                self.settings.save()
         # Decky serves plugin files under the plugin *name* (from
         # plugin.json), not the folder it happens to live in.
         plugin_name = (

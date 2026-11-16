@@ -28,6 +28,9 @@ async def main(term: str) -> int:
     tmp = tempfile.mkdtemp(prefix="romstore-selftest-")
     settings = Settings(os.path.join(tmp, "settings.json"))
     settings.update({"roms_root": os.path.join(tmp, "roms"), "max_concurrent": 2})
+    # Sources ship without addresses; the test uses each reader's own site.
+    from backend.service import SOURCE_DEFS
+    settings.update({d["base_key"]: d["homepage"] for d in SOURCE_DEFS.values()})
     service = StoreService(settings)
 
     banner("library detection")

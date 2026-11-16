@@ -112,6 +112,10 @@ if (!(window as any).SteamClient) {
         shortcuts.get(appid)?.art.add(slot);
       },
       SetShortcutStartDir: () => undefined,
+      RunGame: (gameId: string) => {
+        (window as any).steamMockRunning = gameId;
+        console.info("[steam mock] RunGame", gameId);
+      },
       SetShortcutLaunchOptions: () => undefined,
     },
   };

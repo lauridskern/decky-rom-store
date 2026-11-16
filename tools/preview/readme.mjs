@@ -75,8 +75,10 @@ await shot("mods");
 await key("Escape", 600);
 await key("e", 1000);
 await shot("downloads");
+// Settings on the Steam section (Library, Sources, Downloads, Artwork, Steam).
 await key("e", 1000);
-await key("ArrowDown", 800);
+for (let i = 0; i < 4; i += 1) await key("ArrowDown", 300);
+await page.waitForTimeout(800);
 await shot("settings");
 
 await browser.close();

@@ -1,7 +1,7 @@
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { toaster } from "@decky/api";
 import { Button, Focusable } from "@decky/ui";
-import { FaBoxOpen, FaCheck, FaDownload, FaHeart, FaPuzzlePiece, FaStore, FaTimes, FaTrash } from "react-icons/fa";
+import { FaBoxOpen, FaCheck, FaDownload, FaHeart, FaPlay, FaPuzzlePiece, FaStore, FaTimes, FaTrash } from "react-icons/fa";
 import {
   cancelMod,
   getGameMods,
@@ -14,7 +14,7 @@ import {
   removeMod,
   unpackGame,
 } from "../types";
-import { syncWithSteam } from "../steam";
+import { playGame, syncWithSteam } from "../steam";
 import { boxRatio, formatBytes, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import { NoArt } from "./RomCard";
@@ -50,6 +50,25 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage, onChang
   const [choosing, setChoosing] = useState<number | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
   const [unpacking, setUnpacking] = useState(false);
+  const [starting, setStarting] = useState(false);
+
+  // Through the game's Steam shortcut, made first if it has none.
+  const play = () => {
+    if (starting) return;
+    setStarting(true);
+    const folder = game.folder.replace(/\/+$/, "");
+    // Shortest name first: for a multi-disc game that is the .m3u.
+    const paths = game.files
+      .filter((file) => !file.folder)
+      .map((file) => `${folder}/${file.name}`)
+      .sort((a, b) => a.length - b.length);
+    playGame(paths)
+      .then((result) => {
+        if (!result.ok) toaster.toast({ title: "Could not start the game", body: result.error ?? name, icon: "Error" });
+      })
+      .catch((error) => toaster.toast({ title: "Could not start the game", body: String(error), icon: "Error" }))
+      .finally(() => setStarting(false));
+  };
 
   // A game kept in an archive its emulator cannot open: unpack it, then it
   // can be played and goes into the Steam library.
@@ -109,6 +128,7 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage, onChang
     window.requestAnimationFrame(() =>
       focusElement(
         panelRef.current?.querySelector(".rs-unpack") ??
+          panelRef.current?.querySelector(".rs-launch") ??
           panelRef.current?.querySelector(".rs-mod.rs-f") ??
           panelRef.current?.querySelector(".rs-close"),
       ),
@@ -295,7 +315,19 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage, onChang
                 </>
               )}
             </Button>
-          ) : null}
+          ) : (
+            <Button noFocusRing className="rs-btn rs-launch" disabled={starting} onClick={play}>
+              {starting ? (
+                <>
+                  <Spinner /> Starting…
+                </>
+              ) : (
+                <>
+                  <FaPlay /> Play
+                </>
+              )}
+            </Button>
+          )}
           <Button noFocusRing className="rs-btn ghost" onClick={onStorePage}>
             <FaStore /> Store page
           </Button>

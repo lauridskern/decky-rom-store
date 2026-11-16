@@ -1,5 +1,18 @@
 /** Small helpers shared by the store UI. */
 
+/** Every source the store can read, in the order Settings lists them. */
+export const SOURCE_IDS = ["switchroms", "romspedia", "retrostic", "romsdl", "romsfun", "myabandonware", "homebrewhub"] as const;
+
+/**
+ * Sources ship without addresses: one counts once it is switched on and the
+ * user has entered where the site is.
+ */
+export function configuredSources(settings: Record<string, any> | null | undefined): string[] {
+  if (!settings) return [];
+  const enabled: string[] = settings.enabled_sources ?? [];
+  return SOURCE_IDS.filter((id) => enabled.includes(id) && String(settings[`${id}_base_url`] ?? "").trim());
+}
+
 export const SOURCE_LABELS: Record<string, string> = {
   switchroms: "Switch ROMs",
   romspedia: "Romspedia",

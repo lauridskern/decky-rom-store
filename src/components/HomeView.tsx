@@ -1,10 +1,11 @@
 import { CSSProperties, FC, memo, useReducer } from "react";
-import { Focusable } from "@decky/ui";
-import { FaArrowRight } from "react-icons/fa";
+import { Button, Focusable } from "@decky/ui";
+import { FaArrowRight, FaGlobe } from "react-icons/fa";
 import { InstalledGame, ShelfItem } from "../types";
 import { artRatios, boxRatio, clampArtRatio, formatBytes, isResizedArt, systemLabel, systemTint } from "./common";
 import CoverImage from "./CoverImage";
 import { NoArt } from "./RomCard";
+import { EmptyState } from "./ui";
 
 type Item = Pick<ShelfItem, "title" | "system" | "cover">;
 
@@ -19,6 +20,8 @@ interface Props {
   /** Open the Library tab, on one game if given. */
   onInstalled: (focusId?: string | null) => void;
   onFavorite: (item: Item) => void;
+  /** No source has an address yet: ask for one first (Settings -> Sources). */
+  onSetup?: () => void;
 }
 
 /**
@@ -104,12 +107,26 @@ const Shelf: FC<{
  *
  * Gamepad: each shelf is a row, the consoles a grid; A opens, Y favourites.
  */
-const HomeView: FC<Props> = ({ consoles, favorites, recent, installed, onConsole, onItem, onInstalled, onFavorite }) => {
+const HomeView: FC<Props> = ({ consoles, favorites, recent, installed, onConsole, onItem, onInstalled, onFavorite, onSetup }) => {
   const favoriteKeys = new Set(favorites.map((item) => item.key));
   const size = installed.reduce((sum, game) => sum + game.size, 0);
 
   return (
     <div className="rs-home">
+      {onSetup ? (
+        <EmptyState
+          icon={<FaGlobe />}
+          title="Add a source to get started"
+          action={
+            <Button noFocusRing className="rs-btn rs-setup" onClick={onSetup}>
+              Set up sources
+            </Button>
+          }
+        >
+          ROM Store does not come with any sites to search. In Settings → Sources, enter the address of each site you
+          want to use.
+        </EmptyState>
+      ) : null}
       {recent.length ? (
         <Shelf title="Recently viewed" items={recent.slice(0, 15)} favorites={favoriteKeys} onItem={onItem} onFavorite={onFavorite} />
       ) : null}

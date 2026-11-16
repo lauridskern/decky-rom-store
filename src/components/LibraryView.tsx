@@ -246,7 +246,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
                   focusClassName="is-focus"
                   onActivate={() => setOpen(game)}
                   onClick={() => setOpen(game)}
-                  onOKActionDescription="Mods"
+                  onOKActionDescription="Open"
                   onSecondaryButton={() => ask(game)}
                   onSecondaryActionDescription="Uninstall"
                   onOptionsButton={() => onStorePage({ title: game.name ?? game.title, system: game.system, cover: game.cover })}

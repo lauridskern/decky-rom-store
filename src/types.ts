@@ -80,6 +80,8 @@ export interface SourceInfo {
   homepage: string;
   supports_browse: boolean;
   enabled: boolean;
+  /** The user entered an address for it (sources ship without one). */
+  configured?: boolean;
   status: string;
   error: string | null;
   base_url?: string;
@@ -172,6 +174,8 @@ export interface Settings {
   romsdl_base_url: string;
   switchroms_base_url: string;
   myabandonware_base_url: string;
+  romsfun_base_url?: string;
+  homebrewhub_base_url?: string;
   show_nsfw: boolean;
   search_cache_hours: number;
   chrome_top_offset: number;
