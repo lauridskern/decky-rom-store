@@ -170,7 +170,13 @@ npm run soak       # 70 rounds of search/page/open/close/tabs, samples frames+he
 npm run aspects    # synthetic covers in 7 shapes -> aspects.png (no cropping)
 npm run back       # back button / history behaviour
 npm run perf       # first-card time, long tasks while scrolling, node count
+npm run readme     # the README screenshots -> docs/screenshots/*.jpg (needs network)
 ```
+
+`npm run readme` draws the store with `showcase.json` (`__SHOWCASE` in
+`mock-api.ts`): real games with the cover links the store itself would use,
+on a 1:1 Deck screen at 2x. `python3 tools/preview/showcase.py` rebuilds that
+file from libretro, GameTDB and IGDB. `docs/` is left out of the release zip.
 
 Then open the PNGs in `tools/preview/` (`home.png`, `store.png`, `detail.png`)
 and look at them. The mock catalogue is fake, so missing covers in the screenshots mean

@@ -1,0 +1,332 @@
+{
+ "_about": "Showcase catalogue for the README screenshots (npm run readme). Cover URLs are the ones the store itself uses: libretro-thumbnails and GameTDB through wsrv.nl. Regenerate with showcase.py.",
+ "query": "zelda",
+ "search": [
+  {
+   "title": "The Legend of Zelda: Ocarina of Time",
+   "system": "n64",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Nintendo%252064%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520Ocarina%2520of%2520Time%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20Ocarina%20of%20Time%20%28USA%29.png",
+   "year": 1998,
+   "rating": 5.0,
+   "size": 16800000
+  },
+  {
+   "title": "The Legend of Zelda: A Link to the Past",
+   "system": "snes",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Super%2520Nintendo%2520Entertainment%2520System%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520A%2520Link%2520to%2520the%2520Past%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20A%20Link%20to%20the%20Past%20%28USA%29.png",
+   "year": 1991,
+   "rating": 4.2,
+   "size": 1050000
+  },
+  {
+   "title": "The Legend of Zelda: Breath of the Wild",
+   "system": "switch",
+   "cover": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2Fcover%2FUS%2FAAAAA.jpg&output=webp&q=85",
+   "cover_full": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2FcoverM%2FUS%2FAAAAA.jpg&output=webp&q=85",
+   "year": 2017,
+   "rating": 4.2,
+   "size": 14400000000
+  },
+  {
+   "title": "The Legend of Zelda: The Wind Waker",
+   "system": "gc",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520GameCube%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520The%2520Wind%2520Waker%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20The%20Wind%20Waker%20%28USA%29.png",
+   "year": 2002,
+   "rating": 4.4,
+   "size": 1420000000
+  },
+  {
+   "title": "The Legend of Zelda: The Minish Cap",
+   "system": "gba",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Game%2520Boy%2520Advance%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520The%2520Minish%2520Cap%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20The%20Minish%20Cap%20%28USA%29.png",
+   "year": 2004,
+   "rating": 4.2,
+   "size": 8400000
+  },
+  {
+   "title": "The Legend of Zelda",
+   "system": "nes",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Nintendo%2520Entertainment%2520System%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20%28USA%29.png",
+   "year": 1986,
+   "rating": 4.0,
+   "size": 131000
+  },
+  {
+   "title": "The Legend of Zelda: Majora's Mask",
+   "system": "n64",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Nintendo%252064%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520Majora%2527s%2520Mask%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20Majora%27s%20Mask%20%28USA%29.png",
+   "year": 2000,
+   "rating": 4.3,
+   "size": 16800000
+  },
+  {
+   "title": "The Legend of Zelda: Tears of the Kingdom",
+   "system": "switch",
+   "cover": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2Fcover%2FUS%2FAXN7A.jpg&output=webp&q=85",
+   "cover_full": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2FcoverM%2FUS%2FAXN7A.jpg&output=webp&q=85",
+   "year": 2023,
+   "rating": 4.6,
+   "size": 14400000000,
+   "media": {
+    "summary": "An epic adventure across the land and skies of Hyrule awaits in The Legend of Zelda: Tears of the Kingdom for Nintendo Switch. The adventure is yours to create in a world fueled by your imagination.\n\nIn this sequel to The Legend of Zelda: Breath of the Wild, you'll decide your own path through the sprawling landscapes of Hyrule and the mysterious islands floating in the vast skies above. Can you harness the power of Link's new abilities to fight back against the malevolent forces that threaten the kingdom?",
+    "genres": [
+     "Puzzle",
+     "Adventure"
+    ],
+    "developers": [
+     "Monolith Soft",
+     "Nintendo EPD Production Group No. 3"
+    ],
+    "trailer": {
+     "kind": "video",
+     "thumb": "https://img.youtube.com/vi/3fr1Z07AV00/mqdefault.jpg",
+     "full": "https://www.youtube.com/embed/3fr1Z07AV00?autoplay=1&rel=0",
+     "watch": "https://www.youtube.com/watch?v=3fr1Z07AV00",
+     "name": "Trailer"
+    },
+    "shots": [
+     {
+      "kind": "image",
+      "thumb": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj8.jpg",
+      "full": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj8.jpg"
+     },
+     {
+      "kind": "image",
+      "thumb": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj9.jpg",
+      "full": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj9.jpg"
+     },
+     {
+      "kind": "image",
+      "thumb": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj7.jpg",
+      "full": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj7.jpg"
+     },
+     {
+      "kind": "image",
+      "thumb": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj6.jpg",
+      "full": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/scaoj6.jpg"
+     },
+     {
+      "kind": "image",
+      "thumb": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/sc6lnr.jpg",
+      "full": "https://images.igdb.com/igdb/image/upload/t_screenshot_huge/sc6lnr.jpg"
+     }
+    ]
+   }
+  },
+  {
+   "title": "The Legend of Zelda: Link's Awakening DX",
+   "system": "gbc",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Game%2520Boy%2520Color%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520Link%2527s%2520Awakening%2520DX%2520%2528USA%252C%2520Europe%2529%2520%2528SGB%2520Enhanced%2529%2520%2528GB%2520Compatible%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Color/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20Link%27s%20Awakening%20DX%20%28USA%2C%20Europe%29%20%28SGB%20Enhanced%29%20%28GB%20Compatible%29.png",
+   "year": 1998,
+   "rating": 4.4,
+   "size": 1020000
+  },
+  {
+   "title": "The Legend of Zelda: Twilight Princess",
+   "system": "gc",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520GameCube%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520Twilight%2520Princess%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20Twilight%20Princess%20%28USA%29.png",
+   "year": 2006,
+   "rating": 4.0,
+   "size": 1420000000
+  },
+  {
+   "title": "The Legend of Zelda: Skyward Sword",
+   "system": "wii",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Wii%2FNamed_Boxarts%2FThe%2520Legend%2520of%2520Zelda_%2520Skyward%2520Sword%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Wii/Named_Boxarts/The%20Legend%20of%20Zelda_%20Skyward%20Sword%20%28USA%29.png",
+   "year": 2011,
+   "rating": 4.1,
+   "size": 4380000000
+  },
+  {
+   "title": "The Legend of Zelda: A Link Between Worlds",
+   "system": "3ds",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Nintendo%25203DS%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520A%2520Link%2520Between%2520Worlds%2520%2528USA%2529%2520%2528En%252CFr%252CEs%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%203DS/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20A%20Link%20Between%20Worlds%20%28USA%29%20%28En%2CFr%2CEs%29.png",
+   "year": 2013,
+   "rating": 4.4,
+   "size": 1300000000
+  },
+  {
+   "title": "The Legend of Zelda: Phantom Hourglass",
+   "system": "nds",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Nintendo%2520DS%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520Phantom%2520Hourglass%2520%2528USA%2529%2520%2528DPAD%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20DS/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20Phantom%20Hourglass%20%28USA%29%20%28DPAD%29.png",
+   "year": 2007,
+   "rating": 3.8,
+   "size": 64000000
+  },
+  {
+   "title": "Zelda II: The Adventure of Link",
+   "system": "nes",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Nintendo%2520Entertainment%2520System%2FNamed_Boxarts%2FZelda%2520II%2520-%2520The%2520Adventure%2520of%2520Link%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%20Entertainment%20System/Named_Boxarts/Zelda%20II%20-%20The%20Adventure%20of%20Link%20%28USA%29.png",
+   "year": 1987,
+   "rating": 3.3,
+   "size": 131000
+  },
+  {
+   "title": "The Legend of Zelda: Link's Awakening",
+   "system": "switch",
+   "cover": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2Fcover%2FUS%2FAR3NA.jpg&output=webp&q=85",
+   "cover_full": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2FcoverM%2FUS%2FAR3NA.jpg&output=webp&q=85",
+   "year": 2019,
+   "rating": 4.4,
+   "size": 14400000000
+  },
+  {
+   "title": "The Legend of Zelda: Oracle of Seasons",
+   "system": "gbc",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Game%2520Boy%2520Color%2FNamed_Boxarts%2FLegend%2520of%2520Zelda%252C%2520The%2520-%2520Oracle%2520of%2520Seasons%2520%2528USA%252C%2520Australia%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Color/Named_Boxarts/Legend%20of%20Zelda%2C%20The%20-%20Oracle%20of%20Seasons%20%28USA%2C%20Australia%29.png",
+   "year": 2001,
+   "rating": 4.1,
+   "size": 1020000
+  }
+ ],
+ "recent": [
+  "Metroid Dread",
+  "Super Metroid",
+  "Castlevania: Symphony of the Night",
+  "Hollow Knight",
+  "Metroid Prime"
+ ],
+ "favorites": [
+  "Chrono Trigger",
+  "Super Mario Odyssey",
+  "Pokemon Emerald Version",
+  "Sonic the Hedgehog 2",
+  "Kirby and the Forgotten Land",
+  "Mario Kart Wii"
+ ],
+ "games": {
+  "Metroid Dread": {
+   "system": "switch",
+   "cover": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2Fcover%2FUS%2FAYL8A.jpg&output=webp&q=85",
+   "cover_full": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2FcoverM%2FUS%2FAYL8A.jpg&output=webp&q=85",
+   "year": 2021,
+   "rating": 4.2,
+   "size": 14400000000
+  },
+  "Super Metroid": {
+   "system": "snes",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Super%2520Nintendo%2520Entertainment%2520System%2FNamed_Boxarts%2FSuper%2520Metroid%2520%2528Japan%252C%2520USA%2529%2520%2528En%252CJa%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Super%20Metroid%20%28Japan%2C%20USA%29%20%28En%2CJa%29.png",
+   "year": 1994,
+   "rating": 4.6,
+   "size": 1050000
+  },
+  "Castlevania: Symphony of the Night": {
+   "system": "psx",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FSony%2520-%2520PlayStation%2FNamed_Boxarts%2FCastlevania%2520-%2520Symphony%2520of%2520the%2520Night%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Castlevania%20-%20Symphony%20of%20the%20Night%20%28USA%29.png",
+   "year": 1997,
+   "rating": 4.6,
+   "size": 690000000
+  },
+  "Chrono Trigger": {
+   "system": "snes",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Super%2520Nintendo%2520Entertainment%2520System%2FNamed_Boxarts%2FChrono%2520Trigger%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Chrono%20Trigger%20%28USA%29.png",
+   "year": 1995,
+   "rating": 4.0,
+   "size": 1050000
+  },
+  "Pokemon Emerald Version": {
+   "system": "gba",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Game%2520Boy%2520Advance%2FNamed_Boxarts%2FPokemon%2520-%2520Emerald%2520Version%2520%2528USA%252C%2520Europe%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy%20Advance/Named_Boxarts/Pokemon%20-%20Emerald%20Version%20%28USA%2C%20Europe%29.png",
+   "year": 2004,
+   "rating": null,
+   "size": 8400000
+  },
+  "Super Mario 64": {
+   "system": "n64",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Nintendo%252064%2FNamed_Boxarts%2FSuper%2520Mario%252064%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Nintendo%2064/Named_Boxarts/Super%20Mario%2064%20%28USA%29.png",
+   "year": 1996,
+   "rating": 4.2,
+   "size": 16800000
+  },
+  "Super Mario Odyssey": {
+   "system": "switch",
+   "cover": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2Fcover%2FUS%2FAAACA.jpg&output=webp&q=85",
+   "cover_full": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2FcoverM%2FUS%2FAAACA.jpg&output=webp&q=85",
+   "year": 2017,
+   "rating": 4.4,
+   "size": 14400000000
+  },
+  "Final Fantasy VII": {
+   "system": "psx",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FSony%2520-%2520PlayStation%2FNamed_Boxarts%2FFinal%2520Fantasy%2520VII%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Sony%20-%20PlayStation/Named_Boxarts/Final%20Fantasy%20VII%20%28USA%29.png",
+   "year": 1998,
+   "rating": 4.3,
+   "size": 690000000
+  },
+  "God of War: Chains of Olympus": {
+   "system": "psp",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FSony%2520-%2520PlayStation%2520Portable%2FNamed_Boxarts%2FGod%2520of%2520War%2520-%2520Chains%2520of%2520Olympus%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Sony%20-%20PlayStation%20Portable/Named_Boxarts/God%20of%20War%20-%20Chains%20of%20Olympus%20%28USA%29.png",
+   "year": 2008,
+   "rating": 3.7,
+   "size": 1100000000
+  },
+  "Tetris": {
+   "system": "gb",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Game%2520Boy%2FNamed_Boxarts%2FTetris%2520%2528World%2529%2520%2528Rev%25201%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Game%20Boy/Named_Boxarts/Tetris%20%28World%29%20%28Rev%201%29.png",
+   "year": 1989,
+   "rating": null,
+   "size": 33000
+  },
+  "Sonic the Hedgehog 2": {
+   "system": "genesis",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FSega%2520-%2520Mega%2520Drive%2520-%2520Genesis%2FNamed_Boxarts%2FSonic%2520The%2520Hedgehog%25202%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Sega%20-%20Mega%20Drive%20-%20Genesis/Named_Boxarts/Sonic%20The%20Hedgehog%202%20%28USA%29.png",
+   "year": 1992,
+   "rating": 4.3,
+   "size": 1050000
+  },
+  "Kirby and the Forgotten Land": {
+   "system": "switch",
+   "cover": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2Fcover%2FUS%2FARZGA.jpg&output=webp&q=85",
+   "cover_full": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2FcoverM%2FUS%2FARZGA.jpg&output=webp&q=85",
+   "year": 2022,
+   "rating": 4.1,
+   "size": 14400000000
+  },
+  "Hollow Knight": {
+   "system": "switch",
+   "cover": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2Fcover%2FUS%2FAKLHA.jpg&output=webp&q=85",
+   "cover_full": "https://wsrv.nl/?url=art.gametdb.com%2Fswitch%2FcoverM%2FUS%2FAKLHA.jpg&output=webp&q=85",
+   "year": 2017,
+   "rating": 4.6,
+   "size": 14400000000
+  },
+  "Mario Kart Wii": {
+   "system": "wii",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520Wii%2FNamed_Boxarts%2FMario%2520Kart%2520Wii%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20Wii/Named_Boxarts/Mario%20Kart%20Wii%20%28USA%29.png",
+   "year": 2008,
+   "rating": 4.0,
+   "size": 4380000000
+  },
+  "Metroid Prime": {
+   "system": "gc",
+   "cover": "https://wsrv.nl/?url=thumbnails.libretro.com%2FNintendo%2520-%2520GameCube%2FNamed_Boxarts%2FMetroid%2520Prime%2520%2528USA%2529.png&w=320&h=320&fit=inside&output=webp&q=82",
+   "cover_full": "https://thumbnails.libretro.com/Nintendo%20-%20GameCube/Named_Boxarts/Metroid%20Prime%20%28USA%29.png",
+   "year": 2002,
+   "rating": 4.6,
+   "size": 1420000000
+  }
+ }
+}

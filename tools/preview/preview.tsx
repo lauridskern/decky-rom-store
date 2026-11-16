@@ -16,7 +16,9 @@ injectStyles();
  */
 const DECK_W = 1280;
 const DECK_H = 800;
-const deck = location.protocol.startsWith("http") && !new URLSearchParams(location.search).has("full");
+// The README screenshots (readme.mjs): the Deck's screen at 1:1, nothing around it.
+const showcase = Boolean((window as any).__SHOWCASE);
+const deck = showcase || (location.protocol.startsWith("http") && !new URLSearchParams(location.search).has("full"));
 
 interface Hint {
   button: string;
@@ -48,7 +50,7 @@ const ButtonBar: FC = () => {
 const DeckFrame: FC<{ children: ReactNode }> = ({ children }) => {
   const [scale, setScale] = useState(1);
   useEffect(() => {
-    const fit = () => setScale(Math.min(1, (window.innerWidth - 24) / DECK_W, (window.innerHeight - 24) / DECK_H));
+    const fit = () => setScale(showcase ? 1 : Math.min(1, (window.innerWidth - 24) / DECK_W, (window.innerHeight - 24) / DECK_H));
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
@@ -65,10 +67,10 @@ const DeckFrame: FC<{ children: ReactNode }> = ({ children }) => {
           <ButtonBar />
         </div>
       </div>
-      <div className="deck-caption">
+      {showcase ? null : <div className="deck-caption">
         Steam Deck · 1280 × 800 · {Math.round(scale * 100)}% · arrows = d-pad · Enter = A · Esc = B · X · Y · Q/E = L1/R1 · Z/C = L2/R2 ·
         controllers work · ?full fills the window
-      </div>
+      </div>}
     </div>
   );
 };

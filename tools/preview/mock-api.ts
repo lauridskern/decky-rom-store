@@ -3,6 +3,7 @@
  * the Steam client (used by tools/preview).
  */
 import type { MergedRom, DownloadJob, LibraryInfo, Settings } from "../../src/types";
+import showcase from "./showcase.json";
 
 export const toaster = {
   toast: (data: { title?: string; body?: string }) => {
@@ -45,6 +46,18 @@ const TITLES = [
 const SYSTEMS = ["n64", "wii", "3ds", "switch", "snes", "dos", "nes", "gc"];
 
 const MANY = Number((globalThis as any).__ROM_COUNT ?? 0);
+// The README screenshots (readme.mjs): real games with their real art.
+const SHOWCASE = Boolean((globalThis as any).__SHOWCASE);
+type ShowGame = { title?: string; system: string; cover: string | null; cover_full: string | null; year: number | null; rating: number | null; size: number | null; media?: any };
+const SHOW_SEARCH: ShowGame[] = showcase.search;
+const SHOW_GAMES: Record<string, ShowGame> = { ...Object.fromEntries(SHOW_SEARCH.map((g) => [g.title!, g])), ...showcase.games };
+const shelfItem = (title: string) => ({
+  key: `${SHOW_GAMES[title].system}|${title.toLowerCase().replace(/[^a-z0-9]/g, "")}`,
+  title,
+  system: SHOW_GAMES[title].system,
+  cover: SHOW_GAMES[title].cover,
+  at: 0,
+});
 // A first start: nothing viewed, nothing installed, nothing downloading.
 const FRESH = Boolean((globalThis as any).__FRESH);
 const ALL_TITLES = [...TITLES, ...Array.from({ length: 48 }, (_, i) => `Test Game ${i + 1}`)];
@@ -157,9 +170,37 @@ const makeRom = (title: string, index: number, system: string, id: string): Merg
   } as MergedRom;
 };
 
-const roms: MergedRom[] = (MANY ? ALL_TITLES : TITLES).map((title, index) =>
-  makeRom(title, index, SYSTEMS[index % SYSTEMS.length], `rom-${index}`),
-);
+/** A showcase game: the mock's versions and files, the game's own art and facts. */
+const showRom = (game: ShowGame, index: number): MergedRom => {
+  const rom = makeRom(game.title!, index, game.system, `rom-${index}`);
+  const facts = { cover: game.cover, year: game.year, rating: game.rating, size: game.size };
+  // Switch games come from the Switch catalogue, as .nsp files.
+  const switchGame = game.system === "switch";
+  const sources = switchGame ? ["switchroms"] : rom.sources;
+  const name = (file: string) => (switchGame ? file.replace(/ \(USA\)\.zip$/, " [v0].nsp").replace(/\.zip$/, ".nsp") : file);
+  return {
+    ...rom,
+    ...facts,
+    sources,
+    variants: sources.length,
+    regions: index % 3 === 0 ? ["USA"] : [],
+    entries: rom.entries.slice(0, sources.length).map((entry, n) => ({
+      ...entry,
+      ...facts,
+      source: sources[n],
+      cover_full: game.cover_full,
+      developer: game.media?.developers?.[0] ?? "Nintendo",
+      genres: game.media?.genres ?? ["Adventure"],
+      files: entry.files.map((file) => ({ ...file, filename: name(file.filename), size: game.size ?? file.size })),
+    })),
+  } as MergedRom;
+};
+
+const roms: MergedRom[] = SHOWCASE
+  ? SHOW_SEARCH.map(showRom)
+  : (MANY ? ALL_TITLES : TITLES).map((title, index) =>
+      makeRom(title, index, SYSTEMS[index % SYSTEMS.length], `rom-${index}`),
+    );
 
 // Like the backend: browsing a console returns that console's catalogue.
 // Every game made here is registered, so the game panel can find it.
@@ -171,7 +212,24 @@ const browseConsole = (system: string): MergedRom[] =>
     return rom;
   });
 
-const jobs: DownloadJob[] = FRESH ? [] : [
+const showJob = (id: string, title: string, status: string, received: number, speed: number): DownloadJob => {
+  const game = SHOW_GAMES[title];
+  return {
+    id, title, system: game.system, source: "switchroms", filename: `${title}.nsp`, url: "https://example.invalid",
+    destination: `/home/deck/EmuDecky/roms/${game.system}`, status, received, total: game.size ?? received, speed,
+    error: null, path: status === "done" ? `/home/deck/EmuDecky/roms/${game.system}/${title}.zip` : null,
+    extracted_to: null, created: Date.now() / 1000 - 600, finished: status === "done" ? Date.now() / 1000 - 120 : null,
+    cover: game.cover,
+  } as DownloadJob;
+};
+
+const jobs: DownloadJob[] = SHOWCASE ? [
+  showJob("dl-1", "The Legend of Zelda: Breath of the Wild", "downloading", 9_100_000_000, 23_400_000),
+  showJob("dl-2", "Metroid Dread", "queued", 0, 0),
+  showJob("dl-3", "Super Metroid", "done", 1_050_000, 0),
+  showJob("dl-4", "Castlevania: Symphony of the Night", "done", 690_000_000, 0),
+  showJob("dl-5", "Chrono Trigger", "done", 1_050_000, 0),
+] : FRESH ? [] : [
   {
     id: "dl-1",
     title: "Super Mario 64",
@@ -212,7 +270,9 @@ const jobs: DownloadJob[] = FRESH ? [] : [
 ];
 
 // Home screen shelves: a few favourites and recently viewed games.
-const shelves = FRESH ? { favorites: [], recent: [] } : {
+const shelves = SHOWCASE
+  ? { favorites: showcase.favorites.map(shelfItem), recent: showcase.recent.map(shelfItem) }
+  : FRESH ? { favorites: [], recent: [] } : {
   favorites: [
     { key: "n64|supermario64", title: "Super Mario 64", system: "n64", cover: "./covers/sm64.webp", at: 0 },
     { key: "3ds|mariokart7", title: "Mario Kart 7", system: "3ds", cover: "./covers/mk7.webp", at: 0 },
@@ -232,7 +292,25 @@ let srmStarted = false;
 const steamTracked: Record<string, { appid: number; name: string }> = {};
 
 // Installed games panel: a few games, one with several files.
-let installedGames = FRESH ? [] : [
+const installedShowcase = () => {
+  const art = (title: string) => SHOW_GAMES[title]?.cover ?? undefined;
+  const games: any[] = [
+    { id: "g1", system: "n64", title: "Super Mario 64 (USA)", name: "Super Mario 64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 9 },
+    { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", name: "Final Fantasy VII", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 3).chd", size: 470_000_000, folder: false }], size: 1_480_000_120, modified: 8 },
+    { id: "g4", system: "switch", title: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0]", name: "The Legend of Zelda: Tears of the Kingdom", files: [{ name: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0].nsp", size: 16_400_000_000, folder: false }], size: 16_400_000_000, modified: 10 },
+    { id: "g11", system: "switch", title: "Super Mario Odyssey [0100000000010000][v0]", name: "Super Mario Odyssey", files: [{ name: "Super Mario Odyssey [0100000000010000][v0].nsp", size: 5_700_000_000, folder: false }], size: 5_700_000_000, modified: 7 },
+    { id: "g5", system: "gc", title: "Metroid Prime (USA)", name: "Metroid Prime", files: [{ name: "Metroid Prime (USA).rvz", size: 980_000_000, folder: false }], size: 980_000_000, modified: 6 },
+    { id: "g6", system: "psp", title: "God of War - Chains of Olympus (USA)", name: "God of War: Chains of Olympus", files: [{ name: "God of War - Chains of Olympus (USA).iso", size: 1_100_000_000, folder: false }], size: 1_100_000_000, modified: 5 },
+    { id: "g7", system: "switch", title: "Kirby and the Forgotten Land [01004D300C5AE000][v0]", name: "Kirby and the Forgotten Land", files: [{ name: "Kirby and the Forgotten Land [01004D300C5AE000][v0].nsp", size: 6_200_000_000, folder: false }], size: 6_200_000_000, modified: 4 },
+    { id: "g8", system: "genesis", title: "Sonic The Hedgehog 2 (World)", name: "Sonic the Hedgehog 2", files: [{ name: "Sonic The Hedgehog 2 (World).md", size: 1_048_576, folder: false }], size: 1_048_576, modified: 3 },
+    { id: "g9", system: "snes", title: "Super Metroid (Japan, USA) (En,Ja)", name: "Super Metroid", files: [{ name: "Super Metroid (Japan, USA) (En,Ja).sfc", size: 3_145_728, folder: false }], size: 3_145_728, modified: 2 },
+    { id: "g3", system: "gb", title: "Tetris (World) (Rev 1)", name: "Tetris", files: [{ name: "Tetris (World) (Rev 1).gb", size: 32_768, folder: false }], size: 32_768, modified: 1 },
+    { id: "g10", system: "gba", title: "Pokemon - Emerald Version (USA, Europe)", name: "Pokemon Emerald Version", files: [{ name: "Pokemon - Emerald Version (USA, Europe).gba", size: 16_777_216, folder: false }], size: 16_777_216, modified: 0 },
+  ];
+  return games.map((game) => ({ ...game, cover: art(game.name), folder: `/home/deck/EmuDecky/roms/${game.system}`, in_steam: true }));
+};
+
+let installedGames = SHOWCASE ? installedShowcase() : FRESH ? [] : [
   { id: "g1", system: "n64", title: "Super Mario 64 (USA)", name: "Super Mario 64", cover: "./covers/sm64.webp", folder: "/home/deck/EmuDecky/roms/n64", files: [{ name: "Super Mario 64 (USA).z64", size: 8_388_608, folder: false }], size: 8_388_608, modified: 3 },
   { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", name: "Final Fantasy VII", folder: "/home/deck/EmuDecky/roms/psx", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }], size: 1_010_000_120, modified: 2 },
   { id: "g4", system: "switch", title: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0]", name: "The Legend of Zelda: Tears of the Kingdom", folder: "/home/deck/EmuDecky/roms/switch", files: [{ name: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0].nsp", size: 16_400_000_000, folder: false }], size: 16_400_000_000, modified: 4 },
@@ -283,7 +361,7 @@ const settings: Settings = {
 const handlers: Record<string, (...args: any[]) => any> = {
   search: async () => {
     return {
-    query: "mario",
+    query: SHOWCASE ? showcase.query : "mario",
     count: roms.length,
     results: roms,
     sources: [
@@ -325,6 +403,11 @@ const handlers: Record<string, (...args: any[]) => any> = {
   get_details: async (id: string) => {
     const rom = known.get(id);
     if (!rom) return null;
+    const shown = SHOWCASE ? SHOW_GAMES[rom.title] : null;
+    if (shown) {
+      const media = shown.media ?? {};
+      return { ...rom, extra: { media: { caption: rom.title, ...media, shots: media.shots ?? [], trailer: media.trailer ?? null } } };
+    }
     return {
       ...rom,
       extra: {
@@ -507,6 +590,16 @@ const SPEED_TEST: Record<string, { speed?: number; delay?: number; error?: strin
 const measured: Record<string, { speed?: number; delay?: number; samples?: number; tested?: number; test_error?: string }> = {
   romspedia: { speed: 5_690_000, delay: 0.6, samples: 3 },
   retrostic: { speed: 110_000, delay: 1.1, samples: 2 },
+  ...(SHOWCASE
+    ? {
+        switchroms: { speed: 24_100_000, delay: 0.4, samples: 6 },
+        romspedia: { speed: 11_800_000, delay: 0.6, samples: 5 },
+        romsdl: { speed: 7_300_000, delay: 0.9, samples: 3 },
+        retrostic: { speed: 4_200_000, delay: 1.1, samples: 4 },
+        myabandonware: { speed: 2_600_000, delay: 1.4, samples: 2 },
+        romsfun: { speed: 1_900_000, delay: 7.8, samples: 2 },
+      }
+    : {}),
 };
 let speedTest: {
   running: boolean;
