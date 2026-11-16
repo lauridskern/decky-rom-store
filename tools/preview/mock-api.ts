@@ -237,6 +237,7 @@ let installedGames = FRESH ? [] : [
   { id: "g2", system: "psx", title: "Final Fantasy VII (USA)", name: "Final Fantasy VII", folder: "/home/deck/EmuDecky/roms/psx", files: [{ name: "Final Fantasy VII (USA).m3u", size: 120, folder: false }, { name: "Final Fantasy VII (USA) (Disc 1).chd", size: 512_000_000, folder: false }, { name: "Final Fantasy VII (USA) (Disc 2).chd", size: 498_000_000, folder: false }], size: 1_010_000_120, modified: 2 },
   { id: "g4", system: "switch", title: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0]", name: "The Legend of Zelda: Tears of the Kingdom", folder: "/home/deck/EmuDecky/roms/switch", files: [{ name: "The Legend of Zelda Tears of the Kingdom [0100F2C0115B6000][v0].nsp", size: 16_400_000_000, folder: false }], size: 16_400_000_000, modified: 4 },
   { id: "g5", system: "gc", title: "Legend of Zelda, The - The Wind Waker (USA)", name: "The Legend of Zelda: The Wind Waker", folder: "/home/deck/EmuDecky/roms/gc", files: [{ name: "Legend of Zelda, The - The Wind Waker (USA).rvz", size: 980_000_000, folder: false }], size: 980_000_000, modified: 5 },
+  { id: "g6", system: "psp", title: "God of War - Chains of Olympus (USA)", name: "God of War: Chains of Olympus", needs_unpack: true, folder: "/home/deck/EmuDecky/roms/psp", files: [{ name: "God of War - Chains of Olympus (USA).zip", size: 1_100_000_000, folder: false }], size: 1_100_000_000, modified: 6 },
   { id: "g3", system: "gb", title: "Tetris (World) (Rev 1)", name: "Tetris", folder: "/home/deck/EmuDecky/roms/gb", files: [{ name: "Tetris (World) (Rev 1).gb", size: 32_768, folder: false }], size: 32_768, modified: 1 },
 ];
 
@@ -568,6 +569,14 @@ handlers.install_mod = async (gameId: string, modId: number, variant: string | n
   return { ok: true, ...modJob };
 };
 handlers.get_mod_job = async () => ({ ...modJob });
+handlers.unpack_game = async (id: string) => {
+  await new Promise((r) => setTimeout(r, 1200));
+  installedGames = installedGames.map((g: any) =>
+    g.id === id ? { ...g, needs_unpack: false, files: [{ name: g.files[0].name.replace(/\.zip$/, ".iso"), size: g.size, folder: false }] } : g,
+  );
+  const game: any = installedGames.find((g) => g.id === id);
+  return { ok: true, files: [`${game.folder}/${game.files[0].name}`], main: `${game.folder}/${game.files[0].name}`, error: null };
+};
 handlers.cancel_mod = async () => { modJob = { ...modJob, state: "error", error: "Cancelled" }; return { ok: true }; };
 handlers.remove_mod = async (gameId: string, modId: number) => {
   const mod = MODS[gameId]?.find((m) => m.id === modId);

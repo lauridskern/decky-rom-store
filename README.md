@@ -219,6 +219,16 @@ game's store page. Saves, EmuDeck's notes, artwork folders and emulator storage 
 `InstalledGames`, Cemu's `mlc01`, ...) are not listed and never
 touched, and nothing outside the ROM folders can be deleted.
 
+## Unpacking
+
+Many games come as .zip or .7z. Cartridge emulators open those directly; disc
+emulators do not (PPSSPP takes .7z but not .zip, DuckStation and Dolphin take
+neither), and Steam ROM Manager skips what the emulator cannot open. So the
+store unpacks a download whenever the console's emulator needs it, whatever
+the *Extract archives* setting says, and removes the archive. A game already
+on the Deck in such an archive shows *Needs unpacking* in the Library; its
+page has an **Unpack** button that unpacks it and adds it to Steam.
+
 ## Mods
 
 In the **Library** tab, **A** on a Switch, GameCube or Wii game opens its page
@@ -349,7 +359,10 @@ Switch, which libretro does not cover, and for the Wii U, PS3, Wii, DS and
 [SteamGridDB](https://www.steamgriddb.com)'s community covers (600×900) for
 games nothing else has art for, ROM hacks included; then IGDB's (cropped to
 3:4, so only as a last resort). The store has a SteamGridDB key built in; you
-can enter your own under *Settings → Steam*.
+can enter your own under *Settings → Steam*. libretro and GameTDB art is
+fetched through the image proxy wsrv.nl (*Settings → Artwork*, on by default);
+a cover that cannot be loaded shows the game's title instead. BIOS and
+firmware entries some sites list among the games are left out of results.
 
 **Artwork is never cropped.** Console box art differs in shape: an NES box, a
 DS box and an arcade flyer are three different rectangles. Every card uses one

@@ -111,10 +111,33 @@ SYSTEMS: Dict[str, str] = {
 }
 
 _HREF_RE = re.compile(r'href="([^"?/][^"]*\.png)"', re.I)
+# A listing row: the file, then its date and size cells.
+_ROW_RE = re.compile(r'href="([^"?/][^"]*\.png)".*?<td[^>]*>[^<]*</td>\s*<td[^>]*>\s*([0-9.]+[KMG]?)\s*</td>', re.I | re.S)
+# Bumped when the cached index needs building again (2: link files left out).
+INDEX_VERSION = 2
 _TAGS_RE = re.compile(r"\(([^)]*)\)")
 # Builds nobody wants as the picture for a game.
 _UNWANTED = ("beta", "proto", "demo", "sample", "kiosk", "pirate", "unl", "hack", "virtual console")
 _REGION_ORDER = ("usa", "world", "europe", "japan")
+
+
+def scan_names(html: str) -> set:
+    """The scans in a Named_Boxarts listing, without link files.
+
+    libretro-thumbnails keeps a duplicate name as a git symlink, and the
+    server hands that out as a 19-byte text file holding the real name
+    ("Rampage (USA, Europe).png" -> "Rampage (World).png"). It is not an
+    image (the resizing proxy answers 404), so names under 1 kB are left
+    out; the real scan they point to is in the listing under its own name.
+    """
+    names = set()
+    sized = _ROW_RE.findall(html)
+    if sized:
+        for href, size in sized:
+            if size[-1:].upper() in ("K", "M", "G") or float(size or 0) >= 1024:
+                names.add(unescape(unquote(href)))
+        return names
+    return {unescape(unquote(href)) for href in _HREF_RE.findall(html)}
 
 
 def full_url(system_name: str, filename: str) -> str:
@@ -164,6 +187,8 @@ class BoxArt:
         try:
             with open(path, "r", encoding="utf-8") as fh:
                 data = json.load(fh)
+            if data.get("v") != INDEX_VERSION:
+                return False  # built by an older version: fetched again
             self._index[system] = self._group(data.get("names") or [])
             self._loaded_at[system] = float(data.get("at") or 0)
             return True
@@ -186,7 +211,7 @@ class BoxArt:
             f"{BASE}/{quote(playlist)}/Named_Boxarts/", polite=False, max_bytes=24 * 1024 * 1024
         )
         html = resp.text
-        names = sorted({unescape(unquote(href)) for href in _HREF_RE.findall(html)})
+        names = sorted(scan_names(html))
         if not names:
             return
         self._index[system] = self._group(names)
@@ -196,7 +221,7 @@ class BoxArt:
             try:
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w", encoding="utf-8") as fh:
-                    json.dump({"at": time.time(), "names": names}, fh)
+                    json.dump({"at": time.time(), "v": INDEX_VERSION, "names": names}, fh)
             except OSError:
                 pass
 

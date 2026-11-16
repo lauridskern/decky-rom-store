@@ -138,17 +138,38 @@ class SwitchRomsSource(Source):
                 return src
         return None
 
-    @staticmethod
-    def _clean_title(title: str) -> str:
-        title = re.sub(r"^Download\s*[-–|]\s*", "", title, flags=re.I)
-        title = re.sub(r"\s*[-–|]\s*Download\s*$", "", title, flags=re.I)
-        # "Fire Emblem Warriors Switch NSP XCI Plus ROMs Free Download"
-        title = re.sub(r"\s+Plus\s+ROMs?\s+Free\s+Download\s*$", "", title, flags=re.I)
-        title = re.sub(r"\s+Free\s+Download\s*$", "", title, flags=re.I)
-        title = re.sub(r"\s+Switch\s+(?:ROMs?\s+)?(?:NSP\s*/?\s*XCI|NSP|XCI)\b", " ", title, flags=re.I)
-        title = re.sub(r"\s+ROMs?\s*$", "", title, flags=re.I)
-        title = re.sub(r"\s{2,}", " ", title)
-        return title.strip()
+    # What the site adds around a game's name: "Download Pokémon Violet",
+    # "Super Smash Bros Ultimate Switch (NSP/XCI) Download", "Minecraft Switch
+    # (NSP/ROM) & Update", "Pikmin 2 Latest", "Disgaea Mayhem NSP/XCI Full Game".
+    _NOISE = [
+        r"^Download\s*[-–|:]?\s+",
+        r"\s+Plus\s+ROMs?\s+Free\s+Download\s*$",
+        r"\s+Free\s+Download\s*$",
+        r"\s*[-–|]?\s*\bDownload\s*$",
+        r"\s*\((?:NSP|XCI|ROM)(?:\s*/\s*(?:NSP|XCI|ROM))*\)",
+        r"\s+(?:NSP|XCI)(?:\s*[/ ]\s*(?:NSP|XCI))*\b",
+        r"\s*[\(\[]\s*Updated?\s*[\)\]]",
+        r"\s*(?:[-–&+]|\bPlus)\s*Updated?\s*$",
+        r"\s+Updated\s*$",
+        r"\s*[-–]?\s*\bLatest\s*$",
+        r"\s*[-–]?\s*\bFull\s+Game\b",
+        r"\s+(?:For\s+)?Nintendo(?:\s+Switch)?(?:\s+ROMs?)?\s*$",
+        r"\s+Switch(?:\s+ROMs?)?\s*$",
+        r"\s+ROMs?\s*$",
+    ]
+
+    @classmethod
+    def _clean_title(cls, title: str) -> str:
+        original = collapse_ws(title or "")
+        title = original
+        for _ in range(4):
+            before = title
+            for pattern in cls._NOISE:
+                title = re.sub(pattern, " ", title, flags=re.I).strip(" -–|:")
+            title = re.sub(r"\s{2,}", " ", title).strip()
+            if title == before:
+                break
+        return title or original
 
     # ------------------------------------------------------------------ parsing
     def _parse_results(self, html: str) -> List[RomEntry]:

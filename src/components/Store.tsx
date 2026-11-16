@@ -975,6 +975,7 @@ const Store: FC = () => {
               storage={library?.storage ?? []}
               focusId={libraryFocus}
               onUninstall={removeGame}
+              onChanged={refreshInstalled}
               onStorePage={openShelfItem}
               onBrowse={() => selectTab("store")}
             />

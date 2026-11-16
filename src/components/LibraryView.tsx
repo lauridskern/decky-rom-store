@@ -18,6 +18,8 @@ interface Props {
   /** Open with this game focused (from the home screen). */
   focusId?: string | null;
   onUninstall: (game: InstalledGame) => Promise<boolean>;
+  /** The game's files changed (unpacked): read the library again. */
+  onChanged: () => void;
   /** Y: the game's page in the store. */
   onStorePage: (item: { title: string; system: string; cover?: string | null }) => void;
   onBrowse: () => void;
@@ -38,7 +40,7 @@ const SORTS = [
  * "Delete 3 files, 1.2 GB?" with Keep focused, so pressing A twice by accident
  * does nothing. Gamepad: a grid of games; A uninstalls, Y opens the store page.
  */
-const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, onStorePage, onBrowse }) => {
+const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, onChanged, onStorePage, onBrowse }) => {
   const viewRef = useRef<HTMLDivElement | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -207,7 +209,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
               const files = game.files.length;
               const thumb = (
                 <div className="rs-lib-thumb" style={{ aspectRatio: String(Math.min(1.45, Math.max(0.6, boxRatio(game.system)))) }}>
-                  {game.cover ? <CoverImage url={game.cover} alt="" /> : <NoArt title="" system={game.system} />}
+                  {game.cover ? <CoverImage url={game.cover} alt="" fallback={<NoArt title="" system={game.system} />} /> : <NoArt title="" system={game.system} />}
                 </div>
               );
               if (confirming === game.id) {
@@ -258,6 +260,7 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
                     <div className="rs-lib-meta">
                       {system ? null : <span>{systemLabel(game.system)}</span>}
                       {files > 1 ? <span>{files} files</span> : null}
+                      {game.needs_unpack ? <span className="rs-warn">Needs unpacking</span> : null}
                       {game.in_steam ? (
                         <span className="rs-lib-steam" title="In your Steam library">
                           <FaSteam /> In Steam
@@ -283,6 +286,10 @@ const LibraryView: FC<Props> = ({ games, root, storage, focusId, onUninstall, on
           window.setTimeout(() => ask(game), 0);
         }}
         onStorePage={() => onStorePage({ title: open.name ?? open.title, system: open.system, cover: open.cover })}
+        onChanged={() => {
+          setOpen(null);
+          onChanged();
+        }}
       />
     ) : null}
     </>

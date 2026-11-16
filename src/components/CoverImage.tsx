@@ -1,4 +1,4 @@
-import { FC, SyntheticEvent, useEffect, useRef, useState } from "react";
+import { FC, ReactNode, SyntheticEvent, useEffect, useRef, useState } from "react";
 import { FaGamepad } from "react-icons/fa";
 import { getCover } from "../types";
 
@@ -55,6 +55,13 @@ interface Props {
    * which gives it back its real proportions.
    */
   stretch?: boolean;
+  /**
+   * Shown instead of the art when it cannot be loaded (a dead link, a file
+   * that is not an image): the title tile, rather than an empty frame.
+   */
+  fallback?: ReactNode;
+  /** Called once when the art cannot be loaded. */
+  onFail?: () => void;
 }
 
 /**
@@ -66,7 +73,7 @@ interface Props {
  * fitted inside and the frame is filled with its own colours instead of
  * cutting the picture off at the edges.
  */
-const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRatio, stretch }) => {
+const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRatio, stretch, fallback, onFail }) => {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [fit, setFit] = useState<"cover" | "contain">("cover");
@@ -124,6 +131,13 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRati
     setFit(offset > 1.04 || offset < 0.96 ? "contain" : "cover");
   };
 
+  const fail = () => {
+    setFailed(true);
+    onFail?.();
+  };
+
+  if (failed && fallback) return <>{fallback}</>;
+
   return (
     <div ref={frame} className={`rs-cover-img rs-cover-img--${stretch ? "fill" : fit} ${className ?? ""}`}>
       {src && !failed ? (
@@ -131,7 +145,7 @@ const CoverImage: FC<Props> = ({ url, kind = "card", alt = "", className, onRati
           {fit === "contain" && !stretch ? (
             <div className="rs-cover-ambient" style={{ backgroundImage: `url("${src}")` }} />
           ) : null}
-          <img src={src} alt={alt} decoding="async" loading="lazy" onLoad={measure} onError={() => setFailed(true)} />
+          <img src={src} alt={alt} decoding="async" loading="lazy" onLoad={measure} onError={fail} />
         </>
       ) : (
         <div className="rs-cover-placeholder">

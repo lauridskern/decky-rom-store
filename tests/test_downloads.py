@@ -144,7 +144,13 @@ class Pages(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):  # noqa: N802
-        if self.path.startswith("/page"):
+        if self.path.startswith("/zip"):
+            import io, zipfile
+            buf = io.BytesIO()
+            with zipfile.ZipFile(buf, "w") as zf:
+                zf.writestr("Game/Game (USA).iso", b"x" * 4096)
+            body, kind, code, server = buf.getvalue(), "application/zip", 200, "nginx"
+        elif self.path.startswith("/page"):
             body, kind, code, server = b"<!DOCTYPE html><html><body>Download</body></html>", "text/html; charset=UTF-8", 200, "nginx"
         elif self.path.startswith("/cf"):
             body, kind, code, server = b"<!DOCTYPE html><html><title>Just a moment...</title></html>", "text/html", 403, "cloudflare"
@@ -195,6 +201,21 @@ class WebPagesAreNotGames(unittest.TestCase):
         job, _files = self.download("/cf")
         self.assertEqual(job["status"], "error")
         self.assertIn("browser check", job["error"])
+
+    def test_an_archive_is_unpacked_when_asked(self):
+        async def run():
+            folder = tempfile.mkdtemp()
+            manager = DownloadManager(HttpClient())
+            manager.enqueue(title="G", system="psp", source="x", filename="Game (USA).zip", url=self.base + "/zip",
+                            destination=folder, extract=True, keep_archive=False)
+            while manager.snapshot()[0]["status"] not in ("done", "error"):
+                await asyncio.sleep(0.05)
+            return manager.snapshot()[0], os.listdir(folder)
+
+        job, files = asyncio.run(run())
+        self.assertEqual(job["status"], "done", job)
+        self.assertEqual(files, ["Game (USA).iso"], "unpacked, archive gone")
+        self.assertTrue(job["path"].endswith("Game (USA).iso"))
 
     def test_a_file_still_downloads(self):
         job, files = self.download("/file")

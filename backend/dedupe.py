@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+import re
 from typing import Dict, Iterable, List, Optional, Sequence
 
 from .models import MergedRom, RomEntry, match_title, title_sort_key
+
+
+# Console firmware the catalogues list among the games: "[BIOS] Atari Jaguar
+# (World)", "[BIOS] Sega CD Model 2 (USA)", the Atari ST's "TOS v1.04 (1989)".
+# The store never offers BIOS files (bios.py only checks one is in place).
+_FIRMWARE_RE = re.compile(r"^\s*[\[(]BIOS[\])]|\(BIOS\)|^\s*TOS v\d", re.I)
+
+
+def is_firmware(title: str) -> bool:
+    return bool(_FIRMWARE_RE.search(title or ""))
 
 
 def _group_key(entry: RomEntry) -> str:
@@ -21,7 +32,7 @@ def merge_entries(entries: Iterable[RomEntry], source_priority: Optional[Sequenc
     group the entries keep the order the source returned them.
     """
     priority = list(source_priority or [])
-    entries = list(entries)
+    entries = [entry for entry in entries if not is_firmware(entry.title)]
 
     groups: Dict[str, List[RomEntry]] = {}
     per_source: Dict[str, List[RomEntry]] = {}

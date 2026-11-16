@@ -26,15 +26,34 @@ import os
 import re
 import time
 from typing import Dict, Iterable, List, Optional, Tuple
+from urllib.parse import quote, unquote
 
 from .httpclient import HttpClient, HttpError
 from .models import RomEntry, extract_region, match_title
 
 ART = "https://art.gametdb.com"
 TITLES = "https://www.gametdb.com/{platform}tdb.txt?LANG=EN"
+LIST_RETRY = 30 * 60
+LIST_WAIT = 10.0  # how long searches wait, all together, for a missing title list
 INDEX_TTL = 14 * 24 * 60 * 60
 # How long "this game has no cover" is believed before asking again.
 MISSING_TTL = 7 * 24 * 60 * 60
+
+# GameTDB's Switch "cover" of an eShop-only game is a stand-in (an orange
+# "Nintendo eShop" card), so Switch covers are only taken for retail games
+# (list made by tools/update_switch_titles.py).
+RETAIL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "gametdb_switch_retail.json.gz")
+
+
+def _retail_ids() -> set:
+    try:
+        import gzip
+
+        with gzip.open(RETAIL, "rt", encoding="utf-8") as fh:
+            return set(json.load(fh))
+    except (OSError, ValueError):
+        return set()
+
 
 # Store console key -> GameTDB platform.
 PLATFORMS: Dict[str, str] = {
@@ -67,9 +86,25 @@ _NOISE_RE = re.compile(
 _EXTRA_RE = re.compile(r"[\[(]|bundle|starter pack|demo", re.I)
 
 
-def cover_url(platform: str, game_id: str, region: str, kind: str = "cover") -> str:
+PROXY = "https://wsrv.nl/"
+
+
+def direct_url(platform: str, game_id: str, region: str, kind: str = "cover") -> str:
     ext = KINDS.get(platform, DEFAULT_KINDS)[2]
     return f"{ART}/{platform}/{kind}/{region}/{game_id}.{ext}"
+
+
+def cover_url(platform: str, game_id: str, region: str, kind: str = "cover", proxy: bool = True) -> str:
+    """A cover's URL, through the resizing proxy (wsrv.nl) by default.
+
+    GameTDB's art server slows down and stops answering when many clients
+    fetch from it at once; the proxy fetches each picture once and serves it
+    from its cache, so the store keeps working when GameTDB does not.
+    """
+    url = direct_url(platform, game_id, region, kind)
+    if not proxy:
+        return url
+    return f"{PROXY}?url={quote(url.split('://', 1)[-1], safe='')}&output=webp&q=85"
 
 
 def kinds(platform: str) -> Tuple[str, str]:
@@ -92,6 +127,17 @@ class GameTDB:
         self._found: Dict[str, List] = {}
         self._found_loaded = False
         self._probing: set = set()
+        self._retail: Optional[set] = None
+        self._timeouts = 0
+        self._paused_until = 0.0
+        # When a title list could not be fetched: nothing waits on it again
+        # (and it is not asked for again) for LIST_RETRY seconds.
+        self._list_failed: Dict[str, float] = {}
+        # When each running title-list fetch started: the wait for one fetch
+        # is shared by every search, not served again to each of them.
+        self._list_started: Dict[str, float] = {}
+        # Through the resizing proxy (the "boxart_resize" setting).
+        self.proxy = True
 
     # ------------------------------------------------------------------ files
     def _path(self, name: str) -> Optional[str]:
@@ -154,10 +200,15 @@ class GameTDB:
         return True
 
     async def _fetch(self, platform: str) -> None:
-        resp = await self._http.request(TITLES.format(platform=platform), polite=False, max_bytes=16 * 1024 * 1024)
-        titles = self.parse(resp.text)
-        if len(titles) < 100:  # an error page, not the list
+        try:
+            resp = await self._http.request(TITLES.format(platform=platform), polite=False, max_bytes=16 * 1024 * 1024)
+            titles = self.parse(resp.text)
+        except Exception:
+            titles = {}
+        if len(titles) < 100:  # unreachable, or an error page rather than the list
+            self._list_failed[platform] = time.time()
             return
+        self._list_failed.pop(platform, None)
         self._index[platform] = self.group(titles)
         self._titles[platform] = titles
         self._sorted.pop(platform, None)
@@ -169,6 +220,8 @@ class GameTDB:
         loaded = self._load(platform)
         if loaded and time.time() - self._loaded_at.get(platform, 0) < INDEX_TTL:
             return None
+        if time.time() - self._list_failed.get(platform, 0) < LIST_RETRY:
+            return None
         task = self._building.get(platform)
         if task is None or task.done():
             try:
@@ -177,6 +230,7 @@ class GameTDB:
                 return None
             task = loop.create_task(self._fetch(platform))
             self._building[platform] = task
+            self._list_started[platform] = time.time()
         return task
 
     def ids(self, title: str, system: str) -> List[str]:
@@ -248,19 +302,28 @@ class GameTDB:
         "" when GameTDB has none (every region a 404); None when the answer is
         unknown (no network), so nothing is remembered.
         """
+        if time.time() < self._paused_until:
+            return None
         for region in order:
+            # A tiny copy through the proxy: cheap, and GameTDB is asked once.
+            url = cover_url(platform, game_id, region, kinds(platform)[0], self.proxy)
+            if self.proxy:
+                url += "&w=8&h=8"
             try:
-                resp = await self._http.request(
-                    cover_url(platform, game_id, region, kinds(platform)[0]),
-                    method="HEAD", polite=False, retries=0, max_bytes=0,
-                )
+                resp = await self._http.request(url, method="GET" if self.proxy else "HEAD", polite=False, retries=0, max_bytes=65536)
             except HttpError as exc:
-                if exc.status == 404:
+                if exc.status in (404, 400):
+                    self._timeouts = 0
                     continue
+                self._timeouts += 1
+                if self._timeouts >= 3:
+                    # GameTDB (or the proxy) is not answering: stop asking for a while.
+                    self._paused_until = time.time() + 30 * 60
                 return None
             except Exception:
                 return None
             if resp.status == 200:
+                self._timeouts = 0
                 return region
         return ""
 
@@ -288,8 +351,11 @@ class GameTDB:
         pending = [task for task in (self._ensure(platform) for platform in platforms) if task]
         if pending and wait > 0:
             # Without any list there is nothing to match against (and the
-            # search result is cached for days): wait for it a little longer.
-            wait_list = max(wait, 10.0) if missing else wait
+            # search result is cached for days): wait for it a little longer,
+            # counted from when the fetch started.
+            started = min(self._list_started.get(platform, 0) or time.time() for platform in platforms)
+            wait_list = (max(wait, LIST_WAIT) if missing else wait) - (time.time() - started)
+        if pending and wait > 0 and wait_list > 0:
             try:
                 await asyncio.wait_for(asyncio.gather(*(asyncio.shield(t) for t in pending), return_exceptions=True), wait_list)
             except (asyncio.TimeoutError, Exception):
@@ -298,7 +364,12 @@ class GameTDB:
         to_probe: Dict[Tuple[str, str], List[str]] = {}
         for entry in wanted:
             platform = PLATFORMS[entry.system]
-            game_ids = self.ids(entry.title, entry.system)[:3]
+            game_ids = self.ids(entry.title, entry.system)
+            if platform == "switch":
+                if self._retail is None:
+                    self._retail = _retail_ids()
+                game_ids = [game_id for game_id in game_ids if game_id in self._retail]
+            game_ids = game_ids[:3]
             if not game_ids:
                 continue
             order = self._order(entry.region or extract_region(entry.title))
@@ -316,8 +387,8 @@ class GameTDB:
                         # Not looked up yet: the likeliest region for now.
                         chosen = (game_id, order[0])
             if chosen:
-                entry.cover = cover_url(platform, chosen[0], chosen[1], grid)
-                entry.cover_full = cover_url(platform, chosen[0], chosen[1], full)
+                entry.cover = cover_url(platform, chosen[0], chosen[1], grid, self.proxy)
+                entry.cover_full = cover_url(platform, chosen[0], chosen[1], full, self.proxy)
                 entry.extra["gametdb"] = chosen[0]
 
         if to_probe:
@@ -350,11 +421,24 @@ class GameTDB:
 
     @staticmethod
     def alternatives(url: str) -> List[str]:
-        """The same cover in the other regions, for when this one is missing."""
-        match = re.match(r"^(https://art\.gametdb\.com/[^/]+/[^/]+/)([A-Za-z]+)(/[^/]+)$", url or "")
+        """The same cover in the other regions, for when this one is missing
+        (direct or through the proxy, the way it was asked for)."""
+        url = url or ""
+        proxied = url.startswith(PROXY)
+        direct = url
+        tail = ""
+        if proxied:
+            found = re.search(r"[?&]url=([^&]+)(.*)$", url)
+            if not found:
+                return []
+            direct, tail = "https://" + unquote(found.group(1)), found.group(2)
+        match = re.match(r"^(https://art\.gametdb\.com/[^/]+/[^/]+/)([A-Za-z]+)(/[^/]+)$", direct)
         if not match:
             return []
-        return [f"{match.group(1)}{region}{match.group(3)}" for region in (*_ORDER, "other") if region != match.group(2)]
+        others = [f"{match.group(1)}{region}{match.group(3)}" for region in (*_ORDER, "other") if region != match.group(2)]
+        if not proxied:
+            return others
+        return [f"{PROXY}?url={quote(o.split('://', 1)[-1], safe='')}{tail}" for o in others]
 
     async def covers(self, games: List[Dict[str, object]], wait: float = 2.0) -> None:
         """The same for installed games (dicts with ``title`` and ``system``)."""

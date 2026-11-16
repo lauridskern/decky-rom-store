@@ -78,6 +78,19 @@ def best_variant(url: Optional[str], kind: str = "card") -> Optional[str]:
     return url
 
 
+def _looks_like_image(body: bytes) -> bool:
+    """JPEG, PNG, WebP, GIF, BMP or AVIF by their first bytes."""
+    head = body[:16]
+    return (
+        head.startswith(b"\xff\xd8\xff")
+        or head.startswith(b"\x89PNG")
+        or (head[:4] == b"RIFF" and head[8:12] == b"WEBP")
+        or head[:4] in (b"GIF8",)
+        or head[:2] == b"BM"
+        or head[4:12] in (b"ftypavif", b"ftypheic")
+    )
+
+
 class ImageCache:
     """Downloads artwork once and serves it from the plugin's data folder."""
 
@@ -197,6 +210,10 @@ class ImageCache:
         body = response.body
         if not body:
             raise HttpError(f"Empty image response for {url}")
+        if not _looks_like_image(body):
+            # An error page, a JSON error from a proxy, or one of libretro's
+            # link files: not a picture, so not cached as one.
+            raise HttpError(f"Not an image: {url}")
         ext = _extension(url, response.header("content-type"))
         if ext != os.path.splitext(path)[1].lstrip("."):
             path = os.path.splitext(path)[0] + "." + ext

@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -148,6 +149,106 @@ class ImageLinks(unittest.TestCase):
         self.assertTrue(IGDB_SCREENSHOT_BASE.endswith("/upload/t_screenshot_huge/"))
 
 
+class CoverAudit(unittest.TestCase):
+    """What a look through one page of every console turned up (Nov 2026)."""
+
+    def test_libretro_link_files_are_not_scans(self):
+        from backend.boxart import scan_names
+        listing = (
+            '<tr><td><a href="Rampage%20%28USA%2C%20Europe%29.png">x</a></td><td>16-Nov-2026 10:00</td><td>19</td></tr>'
+            '<tr><td><a href="Rampage%20%28World%29.png">x</a></td><td>16-Nov-2026 10:00</td><td>212K</td></tr>'
+            '<tr><td><a href="Tiny%20%28USA%29.png">x</a></td><td>16-Nov-2026 10:00</td><td>4096</td></tr>'
+        )
+        self.assertEqual(scan_names(listing), {"Rampage (World).png", "Tiny (USA).png"})
+
+    def test_only_images_are_cached(self):
+        from backend.images import _looks_like_image
+        self.assertTrue(_looks_like_image(b"\xff\xd8\xff\xe0" + b"\0" * 20))
+        self.assertTrue(_looks_like_image(b"\x89PNG\r\n\x1a\n" + b"\0" * 20))
+        self.assertTrue(_looks_like_image(b"RIFF\0\0\0\0WEBPVP8 "))
+        self.assertFalse(_looks_like_image(b"<!DOCTYPE html><html>"))
+        self.assertFalse(_looks_like_image(b"Rampage (World).png"), "a libretro link file")
+        self.assertFalse(_looks_like_image(b'{"error": "404"}'))
+
+    def test_gametdb_other_regions_through_the_proxy(self):
+        from backend.gametdb import GameTDB, cover_url
+        proxied = GameTDB.alternatives(cover_url("switch", "AAACA", "US"))
+        self.assertIn(cover_url("switch", "AAACA", "EN"), proxied)
+        self.assertTrue(all(url.startswith("https://wsrv.nl/") for url in proxied))
+        direct = GameTDB.alternatives(cover_url("switch", "AAACA", "US", proxy=False))
+        self.assertIn("https://art.gametdb.com/switch/cover/EN/AAACA.jpg", direct)
+        self.assertEqual(GameTDB.alternatives("https://example.invalid/a.jpg"), [])
+
+    def test_gametdb_down_is_not_waited_for_twice(self):
+        from backend.gametdb import GameTDB
+
+        class Down:
+            calls = 0
+
+            async def request(self, url, **kwargs):
+                Down.calls += 1
+                raise OSError("timed out")
+
+        tdb = GameTDB(Down(), cache_dir=tempfile.mkdtemp())
+        games = [RomEntry(source="a", source_id="1", title="Metroid Dread", system="switch")]
+
+        async def run():
+            await tdb.apply(games, wait=0.5)
+            started = time.time()
+            await tdb.apply(games, wait=0.5)
+            return time.time() - started
+
+        self.assertLess(asyncio.run(run()), 0.2, "the failed list is remembered, not fetched and waited for again")
+        self.assertEqual(Down.calls, 1)
+
+        class Hangs:
+            async def request(self, url, **kwargs):
+                await asyncio.sleep(5)
+                raise OSError("timed out")
+
+        slow = GameTDB(Hangs(), cache_dir=tempfile.mkdtemp())
+
+        async def hanging():
+            await slow.apply(games, wait=0.3)  # the first search waits (LIST_WAIT at most)
+            started = time.time()
+            await slow.apply(games, wait=0.3)
+            return time.time() - started
+
+        import backend.gametdb as gametdb_module
+        with unittest.mock.patch.object(gametdb_module, "LIST_WAIT", 0.3):
+            self.assertLess(asyncio.run(hanging()), 0.1, "a fetch still running is not waited for by every search")
+
+    def test_no_firmware_among_the_games(self):
+        from backend.dedupe import is_firmware, merge_entries
+        for title in ("[BIOS] Atari Jaguar CD (World)", "[BIOS] Sega CD Model 2 (USA) (v2.00)",
+                      "TOS v1.04 (1989)(Atari Corp)(Mega ST)(US)[Rainbow TOS]", "Neo Geo (BIOS)"):
+            self.assertTrue(is_firmware(title), title)
+        for title in ("Bios Fear", "Street Fighter II Champion Edition (1993)(SPS)(Disk 1 of 4)(System)",
+                      "Biosphere", "Tostal Carnage"):
+            self.assertFalse(is_firmware(title), title)
+        entries = [RomEntry(source="a", source_id="1", title="[BIOS] Atari Lynx (USA, Europe)", system="atarilynx"),
+                   RomEntry(source="a", source_id="2", title="California Games", system="atarilynx")]
+        self.assertEqual([m.title for m in merge_entries(entries)], ["California Games"])
+
+    def test_switch_roms_titles(self):
+        from backend.sources.switchroms import SwitchRomsSource
+        clean = SwitchRomsSource._clean_title
+        for raw, title in (
+            ("Download Persona 5 Royal (Update)", "Persona 5 Royal"),
+            ("Super Smash Bros Ultimate Switch (NSP/XCI) Download", "Super Smash Bros Ultimate"),
+            ("Minecraft Switch (NSP/ROM) & Update", "Minecraft"),
+            ("Download Super Mario Odyssey NSP Full Game [Updated]", "Super Mario Odyssey"),
+            ("Pikmin 4 NSP/XCI Nintendo Switch ROMs Download", "Pikmin 4"),
+            ("Download Blue Reflection Quartet XCI Full Game-Update", "Blue Reflection Quartet"),
+            ("Download EXSTETRA – Latest", "EXSTETRA"),
+            ("Minecraft Dungeons Nintendo", "Minecraft Dungeons"),
+            ("Fire Emblem Warriors Switch NSP XCI Plus ROMs Free Download", "Fire Emblem Warriors"),
+            ("Super Mario 3D World + Bowser’s Fury", "Super Mario 3D World + Bowser’s Fury"),
+            ("DRAGON BALL Z KAKAROT Plus A NEW POWER AWAKENS SET", "DRAGON BALL Z KAKAROT Plus A NEW POWER AWAKENS SET"),
+        ):
+            self.assertEqual(clean(raw), title)
+
+
 class SwitchCovers(unittest.TestCase):
     def test_gametdb_box_art_never_a_banner(self):
         from backend.service import StoreService
@@ -174,13 +275,33 @@ class SwitchCovers(unittest.TestCase):
         ]
         asyncio.run(svc._switch_covers(entries))
         kart, crossing, sonic, japan, n64 = entries
-        self.assertEqual(kart.cover, "https://art.gametdb.com/switch/cover/US/AABPA.jpg", "the plain game, not the bundle")
-        self.assertEqual(kart.cover_full, "https://art.gametdb.com/switch/coverM/US/AABPA.jpg")
+        from backend.gametdb import cover_url
+        self.assertEqual(kart.cover, cover_url("switch", "AABPA", "US"), "the plain game, not the bundle")
+        self.assertEqual(kart.cover_full, cover_url("switch", "AABPA", "US", "coverM"))
         self.assertIsNone(crossing.cover, "no GameTDB cover and a wide banner: no cover")
         self.assertEqual(crossing.extra.get("banner"), "https://nintendo-switch-roms.com/ac-banner.jpg")
         self.assertTrue(sonic.cover.startswith("https://static.romspedia.com/"))
-        self.assertEqual(japan.cover, "https://art.gametdb.com/switch/cover/JA/AXN7A.jpg")
+        self.assertEqual(japan.cover, cover_url("switch", "AXN7A", "JA"))
         self.assertEqual(n64.cover, "https://nintendo-switch-roms.com/not-switch.jpg", "only Switch games")
+
+    def test_no_eshop_stand_ins_for_switch(self):
+        from backend.gametdb import GameTDB
+        tdb = GameTDB(http=None, cache_dir=tempfile.mkdtemp())  # type: ignore[arg-type]
+        tdb._index["switch"] = GameTDB.group({"AQMXA": "Super Mario Bros. Wonder", "ZZZZA": "Some eShop Game"})
+        tdb._loaded_at["switch"] = time.time()
+        tdb._found_loaded = True
+        tdb._found = {"switch/AQMXA": ["US", time.time()], "switch/ZZZZA": ["US", time.time()]}
+        tdb._retail = {"AQMXA"}
+        retail = RomEntry(source="x", source_id="1", title="Super Mario Bros. Wonder", system="switch")
+        eshop = RomEntry(source="x", source_id="2", title="Some eShop Game", system="switch")
+        asyncio.run(tdb.apply([retail, eshop], wait=0))
+        from backend.gametdb import cover_url
+        self.assertEqual(retail.cover, cover_url("switch", "AQMXA", "US"))
+        self.assertIsNone(eshop.cover, "an eShop-only game's GameTDB cover is a stand-in")
+        from backend.gametdb import _retail_ids
+        shipped = _retail_ids()
+        self.assertIn("AQMXA", shipped)
+        self.assertGreater(len(shipped), 4000)
 
     def test_cut_off_titles_and_other_consoles(self):
         from backend.gametdb import GameTDB, cover_url
@@ -191,8 +312,11 @@ class SwitchCovers(unittest.TestCase):
         self.assertEqual(tdb.ids("Mario + Rabbids Kingdom Switch", "switch"), ["AC2GA"], "cut off: the shortest full title")
         self.assertEqual(tdb.ids("Mario Kart", "switch"), [], "too short to guess from")
         self.assertEqual(tdb.ids("Mario Kart 8 Deluxe", "n64"), [], "a console GameTDB does not have")
-        self.assertEqual(cover_url("wii", "RMCE01", "US"), "https://art.gametdb.com/wii/cover/US/RMCE01.png")
-        self.assertEqual(cover_url("ds", "AMCE", "US", "coverM"), "https://art.gametdb.com/ds/coverM/US/AMCE.jpg")
+        self.assertEqual(cover_url("wii", "RMCE01", "US", proxy=False), "https://art.gametdb.com/wii/cover/US/RMCE01.png")
+        self.assertEqual(cover_url("ds", "AMCE", "US", "coverM", proxy=False), "https://art.gametdb.com/ds/coverM/US/AMCE.jpg")
+        self.assertEqual(cover_url("ds", "AMCE", "US"),
+                         "https://wsrv.nl/?url=art.gametdb.com%2Fds%2Fcover%2FUS%2FAMCE.jpg&output=webp&q=85",
+                         "through the proxy by default")
 
     def test_gametdb_only_fills_in_after_libretro(self):
         from backend.service import StoreService
@@ -209,8 +333,9 @@ class SwitchCovers(unittest.TestCase):
         world = RomEntry(source="x", source_id="2", title="Super Mario 3D World", system="wiiu")
         asyncio.run(svc._apply_boxart([kart, world]))
         self.assertIn("thumbnails.libretro.com", kart.cover_full, "libretro's scan first")
-        self.assertEqual(world.cover, "https://art.gametdb.com/wiiu/cover/US/ARDE01.jpg")
-        self.assertEqual(world.cover_full, "https://art.gametdb.com/wiiu/coverM/US/ARDE01.jpg")
+        from backend.gametdb import cover_url
+        self.assertEqual(world.cover, cover_url("wiiu", "ARDE01", "US"))
+        self.assertEqual(world.cover_full, cover_url("wiiu", "ARDE01", "US", "coverM"))
 
     def test_title_list_and_probing(self):
         from backend.gametdb import GameTDB
@@ -234,6 +359,8 @@ class SwitchCovers(unittest.TestCase):
                 raise HttpError("Network error", None, url)
 
         tdb = GameTDB(Http(), cache_dir=tempfile.mkdtemp())
+        tdb.proxy = False  # direct requests (the proxy setting off): the fake server answers those
+        tdb._retail = {"AAACA", "AAAC3"}
         tdb._index["switch"] = GameTDB.group(titles)
         tdb._loaded_at["switch"] = time.time()
         entry = RomEntry(source="x", source_id="1", title="Super Mario Odyssey", system="switch")

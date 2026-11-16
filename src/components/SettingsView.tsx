@@ -534,7 +534,7 @@ const SettingsView: FC<Props> = ({ onSaved }) => {
         />
         <ToggleRow
           label="Small copies for the grid"
-          hint="The scans are large; the grid loads 25 kB copies made by the open-source image proxy wsrv.nl. Off: the grid keeps the sites' covers and only the game page shows the full scan."
+          hint="The scans are large; the grid loads 25 kB copies made by the open-source image proxy wsrv.nl, which also fetches GameTDB's covers (GameTDB stops answering after many direct requests). Off: the grid keeps the sites' covers and only the game page shows the full scan."
           on={settings.boxart_resize !== false}
           onChange={(value) => update({ boxart_resize: value })}
         />

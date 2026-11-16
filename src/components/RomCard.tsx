@@ -1,4 +1,4 @@
-import { CSSProperties, FC, memo, useReducer } from "react";
+import { CSSProperties, FC, memo, useReducer, useState } from "react";
 import { Focusable } from "@decky/ui";
 import { FaCheck, FaStar } from "react-icons/fa";
 import { MergedRom } from "../types";
@@ -41,6 +41,9 @@ export const NoArt: FC<{ title: string; system: string }> = ({ title, system }) 
  */
 const RomCard: FC<Props> = memo(({ rom, favorite, onOpen, onFocus, onFavorite }) => {
   const [, refresh] = useReducer((n: number) => n + 1, 0);
+  // The cover url that failed to load: the card shows the title tile instead.
+  const [broken, setBroken] = useState<string | null>(null);
+  const art = rom.cover && rom.cover !== broken ? rom.cover : null;
   const resized = isResizedArt(rom.cover);
   const known = rom.cover && !resized ? artRatios.get(rom.cover) : undefined;
   const shape = known ? String(clampArtRatio(known)) : systemAspect(rom.system);
@@ -71,12 +74,13 @@ const RomCard: FC<Props> = memo(({ rom, favorite, onOpen, onFocus, onFavorite })
       onClick={() => onOpen(rom)}
     >
       <div className="rs-card-art" title={rom.title}>
-        {rom.cover ? (
-          <CoverImage url={rom.cover} alt={rom.title} stretch={resized} onRatio={resized ? undefined : onRatio} />
+        {art ? (
+          <CoverImage url={art} alt={rom.title} stretch={resized} onRatio={resized ? undefined : onRatio}
+            onFail={() => setBroken(art)} />
         ) : (
           <NoArt title={rom.title} system={rom.system} />
         )}
-        {rom.cover ? <span className="rs-chip">{systemLabel(rom.system)}</span> : null}
+        {art ? <span className="rs-chip">{systemLabel(rom.system)}</span> : null}
         {rom.installed || favorite ? (
           <span className="rs-marks">
             {favorite ? (

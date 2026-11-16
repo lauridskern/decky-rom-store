@@ -243,6 +243,8 @@ export interface InstalledGame {
   cover?: string | null;
   /** Its real name (title list, libretro, GameTDB), else the file name cleaned up. */
   name?: string;
+  /** Kept in an archive its emulator cannot open (backend/unpack.py). */
+  needs_unpack?: boolean;
 }
 
 /** A GameBanana mod for an installed game (backend/mods.py). */
@@ -454,6 +456,9 @@ export const installMod = callable<[string, number, string | null], ModJob>("ins
 export const getModJob = callable<[], ModJob>("get_mod_job");
 export const cancelMod = callable<[], { ok: boolean }>("cancel_mod");
 export const removeMod = callable<[string, number], { ok: boolean; error?: string | null }>("remove_mod");
+export const unpackGame = callable<[string], { ok: boolean; files?: string[]; main?: string | null; error?: string | null }>(
+  "unpack_game",
+);
 export const getStatus = callable<[], StatusPayload>("get_status");
 export const getImageDiagnostics = callable<[string | null], ImageDiagnostics>("image_diagnostics");
 export const getCacheStats = callable<[], CacheStats>("cache_stats");

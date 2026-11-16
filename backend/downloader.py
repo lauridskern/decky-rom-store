@@ -9,6 +9,8 @@ import shutil
 import threading
 import time
 import zipfile
+
+from .unpack import archive_ext, main_file, unpack
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -356,9 +358,16 @@ class DownloadManager:
                 if not job.total:
                     job.total = job.received
 
-                if extract and final_path.lower().endswith(".zip"):
+                if extract and archive_ext(final_path):
                     job.status = STATUS_EXTRACTING
-                    extracted = self._extract_zip(final_path, job.destination)
+                    self._save(force=True)
+                    # Off the event loop: a disc image takes a while.
+                    try:
+                        produced = await asyncio.to_thread(unpack, final_path, job.destination)
+                    except RuntimeError as exc:
+                        produced = []
+                        job.error = f"Downloaded, but not unpacked: {exc}"
+                    extracted = main_file(produced)
                     job.extracted_to = extracted
                     if extracted and not keep_archive:
                         self._remove(final_path)

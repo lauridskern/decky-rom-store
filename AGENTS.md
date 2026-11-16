@@ -90,7 +90,9 @@ backend/
   speedtest.py              speed test: one real link per source, timed sample
   mods.py                   mods for installed games: GameBanana, emulators, install
   titles.py                 real names for files; Switch title IDs by name
+  unpack.py                 unpacking archives the console's emulator cannot open
   data/switch_titles.json.gz  Switch title ID -> name (tools/update_switch_titles.py)
+  data/gametdb_switch_retail.json.gz  GameTDB IDs of retail Switch games (same tool)
   httpclient.py             urllib + cookies + per-host throttle (polite=)
   systems.py                console normalisation -> EmuDecky folder names
   emudeck.py                library detection (roms root, systems, folders)
@@ -344,7 +346,15 @@ Shapes (grid covers and the detail poster):
 - First choice is a libretro-thumbnails front scan (`boxart.py`), matched by
   `match_title()`: real proportions, right platform. Grid gets a ~25 kB WebP
   via wsrv.nl, the poster the full PNG. Never put full-size scans in the grid:
-  30 of them decoded is well over 100 MB.
+  30 of them decoded is well over 100 MB. libretro keeps a duplicate name as
+  a git symlink that the server hands out as a 19-byte text file, not an
+  image; `scan_names()` leaves entries under 1 KB out of the index (Atari
+  Lynx had a third of its covers broken by them; `INDEX_VERSION` rebuilds
+  old indexes once).
+- `ImageCache` only keeps what starts like an image (`_looks_like_image`):
+  an error page or a link file is a failed cover, never a cached one. A
+  cover that fails to load shows the title tile (`CoverImage` `fallback`,
+  `NoArt`), not an empty frame.
 
 - `BOX_RATIOS` in `common.ts` is each console's real front-box shape, measured
   from libretro-thumbnails scans (USA/Europe medians). Game Boy family, PS1,
@@ -374,6 +384,15 @@ A job carries the game's `cover` for that tab.
   worker threads through their cancel events (cancelling the asyncio task alone
   does not stop the thread, which then kept writing the `.part` file) and the
   next start continues each `.part` with a Range request. Retries resume too.
+- Unpacking (`unpack.py`): a download is unpacked when the user asks
+  (`extract_archives`, `keep_archive`) and always when the console's emulator
+  cannot open that archive type: the EmuDeck parsers for the folder list the
+  types (PPSSPP takes .7z but not .zip; DuckStation and Dolphin take none),
+  else `DISC_SYSTEMS`. A forced unpack deletes the archive. ZIP in Python,
+  7z/RAR with `bsdtar`, flattened into the console folder, never overwriting,
+  off the event loop. Games already on the Deck in such an archive are
+  flagged `needs_unpack` in the Library and their page has an Unpack button
+  (`unpack_game`), which also adds the game to Steam.
 - Free space is checked before a download (size known, doubled when extracting)
   and again from Content-Length; `library().storage` lists the internal and SD
   card libraries a download can go to (`root` argument of `start_download`).
@@ -471,7 +490,11 @@ Steam only reads at start), so the plugin does its job live:
   of GameTDB's consoles (`gametdb.PLATFORMS`: Wii U, PS3, Wii, DS, 3DS) that
   libretro has no scan for, GameTDB (`_apply_boxart`); then the site's cover;
   then SteamGridDB (`sgdb.py`) for games still without a cover; then IGDB.
-  Switch (`_switch_covers`): GameTDB first, libretro has none.
+  Switch (`_switch_covers`): GameTDB first (retail games only: for an
+  eShop-only game GameTDB's cover is an orange "Nintendo eShop" stand-in;
+  `data/gametdb_switch_retail.json.gz`), libretro has none. Cached search
+  and detail results are dropped once when `StoreService.CACHE_REVISION`
+  changes, so a change to the cover rules shows at once.
 - SteamGridDB covers (`sgdb.py`): autocomplete search on the cleaned title,
   accepted only when SteamGridDB's name is the same title (`match_title`) or
   the start of it (10+ characters); the top static 600x900 grid (`thumb` for
@@ -490,12 +513,25 @@ Steam only reads at start), so the plugin does its job live:
   full title it starts, keys of 12+ characters). Nothing waits on the art
   server: a game whose cover region is known gets it, one not looked up yet
   gets its likeliest region at once and `ImageCache.alternatives` tries the
-  other regions if that file is missing, while a background HEAD lookup
+  other regions if that file is missing, while a background lookup
   (48 per search, 6 at a time) records the real region in
   `gametdb/covers.json` (none: asked again after a week; network errors are
-  never recorded). Grid: `cover`, poster: `coverM` (Wii: `cover` only, PNG).
+  never recorded). Art and lookups go through wsrv.nl when `boxart_resize`
+  is on (the default): art.gametdb.com throttles and then stops answering a
+  client that asks for many covers, which left a third of the Switch grid
+  blank; the lookup is an 8x8 request. Three timeouts in a row pause the
+  lookups for 30 minutes. A missing title list is waited for 10 s in all
+  (`LIST_WAIT`, shared by every search while it is fetched); one that could
+  not be fetched is not asked for again for 30 minutes (`LIST_RETRY`). Grid: `cover`, poster: `coverM` (Wii: `cover`
+  only, PNG).
   Switch ROMs' wide banners are never used as covers (`extra.banner`).
   Installed games get the same art.
+- Firmware is never a result: `dedupe.is_firmware()` drops "[BIOS] …"
+  entries (Retrostic lists them per console) and the Atari ST's "TOS v…"
+  in `merge_entries`, so search, browse and the console pages all skip them.
+- Switch ROMs titles carry the site's noise ("Download … Switch (NSP/XCI)",
+  "& Update", "Latest", "Full Game"); `SwitchRomsSource._clean_title` strips
+  it, so the titles match GameTDB, SteamGridDB and the other sources.
 - Region filter (header): `regionsOf()` reads region fields and title tags;
   games known to be only from other regions are hidden, unknown ones stay
   (most sources do not tag titles). It also picks the file offered first.
@@ -669,8 +705,9 @@ the cover that had it. Hints come from `on…ActionDescription` /
   WoWroms (download link needs a token from obfuscated page script), Myrient
   (shut down March 2026), CDRomance (now a news site), CoolROM (results are
   rendered by script), Nswpedia (datanodes.to download pages).
-- Box art grid thumbnails come from the third-party proxy wsrv.nl (setting
-  `boxart_resize`); without it the grid keeps the sites' covers.
+- Box art grid thumbnails and GameTDB art come from the third-party proxy
+  wsrv.nl (setting `boxart_resize`); without it the grid keeps the sites'
+  covers and GameTDB is asked directly.
 - Steam library sync is written against SRM's documented config format and
   EmuDeck's parsers, tested with synthetic configs and a mocked SteamClient in
   the preview; check it on a Deck after SRM/EmuDeck updates. The SteamGridDB

@@ -20,6 +20,7 @@ from .gametdb import PLATFORMS as GAMETDB_PLATFORMS, GameTDB
 from .sgdb import SteamGridCovers
 from .mods import ModManager, switch_title_id, _main_file
 from .titles import SwitchTitles, clean_name
+from .unpack import archive_ext, needs_unpack, unpack, main_file as unpacked_main
 from .steam import _home as _user_home
 from .speedtest import SpeedTest
 from .covers import IgdbCovers
@@ -271,10 +272,33 @@ class StoreService:
                 continue
         return {"files": files, "bytes": size}
 
+    # Bumped when cached search and detail results would show outdated covers
+    # (2: GameTDB's eShop stand-ins for Switch); the caches are cleared once.
+    CACHE_REVISION = 2
+
     def _drop_legacy_caches(self) -> None:
-        """Remove the old single-file caches from earlier versions."""
+        """Remove the old single-file caches from earlier versions, and the
+        per-query caches once when CACHE_REVISION changes."""
         if not self._runtime_dir:
             return
+        marker = os.path.join(self._runtime_dir, "cache", "revision")
+        try:
+            with open(marker, "r", encoding="utf-8") as fh:
+                current = int(fh.read().strip() or 0)
+        except (OSError, ValueError):
+            current = 0
+        if current != self.CACHE_REVISION:
+            for kind in ("search", "details"):
+                folder = self._cache_dir(kind)
+                if folder and os.path.isdir(folder):
+                    shutil.rmtree(folder, ignore_errors=True)
+            self._browse_cache.clear()
+            try:
+                os.makedirs(os.path.dirname(marker), exist_ok=True)
+                with open(marker, "w", encoding="utf-8") as fh:
+                    fh.write(str(self.CACHE_REVISION))
+            except OSError:
+                pass
         # system_counts.json: console counts scraped from Romspedia, dropped in v1.17.5.
         for name in ("search_cache.json", "details_cache.json", "system_counts.json"):
             path = os.path.join(self._runtime_dir, name)
@@ -867,6 +891,16 @@ class StoreService:
                 }
 
         filename = rom_file.filename or url.rsplit("/", 1)[-1] or f"{entry.title}.zip"
+        # Unpack when the user asked for it, and always when the console's
+        # emulator cannot open this kind of archive (backend/unpack.py):
+        # otherwise the game is neither playable nor added to Steam.
+        wanted = bool(self.settings.get("extract_archives"))
+        try:
+            needed = needs_unpack(target_system, folder, filename, SrmConfig.load())
+        except Exception:  # pragma: no cover - a wrong guess must not stop a download
+            needed = False
+        extract = wanted or needed
+        keep = bool(self.settings.get("keep_archive", True)) if wanted else False
         job = self.downloads.enqueue(
             title=entry.title,
             system=target_system,
@@ -875,8 +909,8 @@ class StoreService:
             url=url,
             destination=folder,
             headers=headers,
-            extract=bool(self.settings.get("extract_archives")),
-            keep_archive=bool(self.settings.get("keep_archive", True)),
+            extract=extract,
+            keep_archive=keep,
             prepare_seconds=time.time() - preparing,
             cover=rom.cover or entry.cover,
         )
@@ -955,9 +989,42 @@ class StoreService:
             await self._library_fallback_covers(games)
         except Exception as exc:  # pragma: no cover - art must never break the list
             print(f"ROM Store: library cover fallback failed: {exc!r}")
+        try:
+            srm = SrmConfig.load()
+        except Exception:  # pragma: no cover - Steam ROM Manager is optional
+            srm = None
         for game in games:
             game["name"] = self._display_name(game)
+            # Kept in an archive its emulator cannot open: offer to unpack it.
+            files = [f for f in game.get("files") or [] if not f.get("folder")]
+            game["needs_unpack"] = bool(files) and all(
+                needs_unpack(str(game.get("system")), str(game.get("folder")), f["name"], srm) for f in files
+            )
         return result
+
+    async def unpack_game(self, game_id: str) -> Dict[str, Any]:
+        """Unpack an installed game's archives for its emulator, then delete them."""
+        game = await asyncio.to_thread(self._installed_game, game_id)
+        if not game:
+            return {"ok": False, "error": "That game is no longer in the library."}
+        folder = str(game.get("folder"))
+        produced: List[str] = []
+        errors: List[str] = []
+        for item in game.get("files") or []:
+            if item.get("folder") or not archive_ext(item["name"]):
+                continue
+            archive = os.path.join(folder, item["name"])
+            try:
+                produced += await asyncio.to_thread(unpack, archive, folder)
+            except RuntimeError as exc:
+                errors.append(f"{item['name']}: {exc}")
+                continue
+            try:
+                os.remove(archive)
+            except OSError:
+                pass
+        main = unpacked_main(produced)
+        return {"ok": bool(produced) and not errors, "files": produced, "main": main, "error": "; ".join(errors) or None}
 
     def _display_name(self, game: Dict[str, Any]) -> str:
         """The game's real name: from the title list, libretro or GameTDB,
@@ -1191,6 +1258,7 @@ class StoreService:
             await self.boxart.apply(entries, resize=bool(self.settings.get("boxart_resize", True)))
         except Exception as exc:  # pragma: no cover - art must never break a search
             print(f"ROM Store: box art lookup failed: {exc!r}")
+        self.gametdb.proxy = bool(self.settings.get("boxart_resize", True))
         # What libretro has no scan for, GameTDB may (Wii U, PS3, Wii, DS,
         # 3DS). Switch is handled in _switch_covers, GameTDB first there.
         rest = [
@@ -1302,6 +1370,7 @@ class StoreService:
         if not switch:
             return
         before = {id(entry): entry.cover for entry in switch}
+        self.gametdb.proxy = bool(self.settings.get("boxart_resize", True))
         try:
             await self.gametdb.apply(switch)
         except Exception as exc:  # pragma: no cover - art must never break a search

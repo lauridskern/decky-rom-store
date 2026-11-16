@@ -463,6 +463,7 @@ const GamePage: FC<Props> = ({
                 setPosterRatio(ratio);
                 return clampArtRatio(ratio) === ratio;
               }}
+              fallback={<NoArt title={rom.title} system={rom.system} />}
             />
           ) : (
             <NoArt title={rom.title} system={rom.system} />

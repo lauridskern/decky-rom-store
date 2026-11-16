@@ -1,8 +1,20 @@
 import { FC, useCallback, useEffect, useRef, useState } from "react";
 import { toaster } from "@decky/api";
 import { Button, Focusable } from "@decky/ui";
-import { FaCheck, FaDownload, FaHeart, FaPuzzlePiece, FaStore, FaTimes, FaTrash } from "react-icons/fa";
-import { cancelMod, getGameMods, getModJob, GameMods, InstalledGame, installMod, ModInfo, ModJob, removeMod } from "../types";
+import { FaBoxOpen, FaCheck, FaDownload, FaHeart, FaPuzzlePiece, FaStore, FaTimes, FaTrash } from "react-icons/fa";
+import {
+  cancelMod,
+  getGameMods,
+  getModJob,
+  GameMods,
+  InstalledGame,
+  installMod,
+  ModInfo,
+  ModJob,
+  removeMod,
+  unpackGame,
+} from "../types";
+import { syncWithSteam } from "../steam";
 import { boxRatio, formatBytes, systemLabel } from "./common";
 import CoverImage from "./CoverImage";
 import { NoArt } from "./RomCard";
@@ -16,6 +28,8 @@ interface Props {
   /** X / the button at the bottom: the uninstall question, back in the list. */
   onUninstall: () => void;
   onStorePage: () => void;
+  /** The game was unpacked: its files changed. */
+  onChanged: () => void;
 }
 
 const busy = (job: ModJob | null) => job?.state === "downloading" || job?.state === "installing";
@@ -27,7 +41,7 @@ const busy = (job: ModJob | null) => job?.state === "downloading" || job?.state 
  * Gamepad: A installs (a mod with several builds asks which first) or, on an
  * installed mod, removes it; B closes (the build question first).
  */
-const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
+const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage, onChanged }) => {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const name = game.name ?? game.title;
   const [info, setInfo] = useState<GameMods | null>(null);
@@ -35,6 +49,34 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
   const [job, setJob] = useState<ModJob | null>(null);
   const [choosing, setChoosing] = useState<number | null>(null);
   const [removing, setRemoving] = useState<number | null>(null);
+  const [unpacking, setUnpacking] = useState(false);
+
+  // A game kept in an archive its emulator cannot open: unpack it, then it
+  // can be played and goes into the Steam library.
+  const unpackNow = () => {
+    if (unpacking) return;
+    setUnpacking(true);
+    unpackGame(game.id)
+      .then(async (result) => {
+        if (!result.ok && !result.files?.length) {
+          toaster.toast({ title: "Could not unpack the game", body: result.error ?? name, icon: "Error" });
+          return;
+        }
+        let steam = "";
+        if (result.main) {
+          try {
+            const sync = await syncWithSteam([result.main]);
+            if (sync.added?.length) steam = " and added to your Steam library";
+          } catch {
+            /* Steam sync is best effort */
+          }
+        }
+        toaster.toast({ title: "Game unpacked", body: `${name}${steam}`, icon: "Check" });
+        onChanged();
+      })
+      .catch((error) => toaster.toast({ title: "Could not unpack the game", body: String(error), icon: "Error" }))
+      .finally(() => setUnpacking(false));
+  };
 
   useBackGuard(true, onClose);
   // B on the build question closes only that.
@@ -65,7 +107,11 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
   useEffect(() => {
     if (!loaded) return;
     window.requestAnimationFrame(() =>
-      focusElement(panelRef.current?.querySelector(".rs-mod.rs-f") ?? panelRef.current?.querySelector(".rs-close")),
+      focusElement(
+        panelRef.current?.querySelector(".rs-unpack") ??
+          panelRef.current?.querySelector(".rs-mod.rs-f") ??
+          panelRef.current?.querySelector(".rs-close"),
+      ),
     );
   }, [loaded]);
 
@@ -223,7 +269,7 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
     <Focusable noFocusRing ref={panelRef} className="rs-modpage" flow-children="column">
       <header className="rs-modpage-head">
         <div className="rs-modpage-art" style={{ aspectRatio: String(Math.min(1.45, Math.max(0.6, boxRatio(game.system)))) }}>
-          {game.cover ? <CoverImage url={game.cover} alt="" /> : <NoArt title={name} system={game.system} />}
+          {game.cover ? <CoverImage url={game.cover} alt="" fallback={<NoArt title={name} system={game.system} />} /> : <NoArt title={name} system={game.system} />}
         </div>
         <div className="rs-modpage-title">
           <span className="rs-eyebrow">{systemLabel(game.system)}</span>
@@ -237,6 +283,19 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
           </div>
         </div>
         <Focusable noFocusRing className="rs-modpage-actions" flow-children="row">
+          {game.needs_unpack ? (
+            <Button noFocusRing className="rs-btn rs-unpack" disabled={unpacking} onClick={unpackNow}>
+              {unpacking ? (
+                <>
+                  <Spinner /> Unpacking…
+                </>
+              ) : (
+                <>
+                  <FaBoxOpen /> Unpack
+                </>
+              )}
+            </Button>
+          ) : null}
           <Button noFocusRing className="rs-btn ghost" onClick={onStorePage}>
             <FaStore /> Store page
           </Button>
@@ -257,6 +316,13 @@ const ModsPanel: FC<Props> = ({ game, onClose, onUninstall, onStorePage }) => {
       </header>
 
       <div className="rs-modpage-body">
+        {game.needs_unpack ? (
+          <div className="rs-note warn">
+            This game is kept in a {(game.files[0]?.name.match(/\.(zip|7z|rar)$/i)?.[0] ?? "archive").toLowerCase()}{" "}
+            its emulator cannot open, so it cannot be played and Steam ROM Manager leaves it out of your Steam
+            library. Unpack it to fix both; the archive is deleted afterwards.
+          </div>
+        ) : null}
         <div className="rs-section-head">
           <h2 className="rs-h2">Popular mods</h2>
           {info?.gamebanana ? <span className="rs-count">GameBanana · {info.gamebanana.name}</span> : null}

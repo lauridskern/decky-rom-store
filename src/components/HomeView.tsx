@@ -46,7 +46,8 @@ const Art: FC<{ item: Item; height: number; className: string }> = ({ item, heig
   return (
     <div className={className} style={{ height, width: Math.round(height * ratio) }}>
       {item.cover ? (
-        <CoverImage url={item.cover} alt={item.title} stretch={resized} onRatio={onRatio} />
+        <CoverImage url={item.cover} alt={item.title} stretch={resized} onRatio={onRatio}
+          fallback={<NoArt title={item.title} system={item.system} />} />
       ) : (
         <NoArt title={item.title} system={item.system} />
       )}

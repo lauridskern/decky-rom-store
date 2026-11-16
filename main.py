@@ -171,6 +171,10 @@ class Plugin:
         self._self().service.mods.cancel()
         return {"ok": True}
 
+    async def unpack_game(self, game_id: str) -> Dict[str, Any]:
+        """Unpack a game kept in an archive its emulator cannot open."""
+        return await self._self().service.unpack_game(game_id)
+
     async def remove_mod(self, game_id: str, mod_id: int) -> Dict[str, Any]:
         return await self._self().service.remove_mod(game_id, mod_id)
 

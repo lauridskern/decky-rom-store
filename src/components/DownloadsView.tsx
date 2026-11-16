@@ -21,7 +21,7 @@ const isActive = (job: DownloadJob) =>
 
 const Thumb: FC<{ job: DownloadJob }> = ({ job }) => (
   <div className="rs-dl-thumb" style={{ aspectRatio: String(Math.min(1.45, Math.max(0.6, boxRatio(job.system)))) }}>
-    {job.cover ? <CoverImage url={job.cover} alt="" /> : <NoArt title="" system={job.system} />}
+    {job.cover ? <CoverImage url={job.cover} alt="" fallback={<NoArt title="" system={job.system} />} /> : <NoArt title="" system={job.system} />}
   </div>
 );
 
