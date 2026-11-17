@@ -63,25 +63,14 @@ jobs:
             ./ package/rom-store-decky/
           cd package && zip -qr ../ROM-Store.zip rom-store-decky
 
-      - name: Build a compatibility package for the older asset name
-        run: |
-          # Decky derives the plugin name from the URL and requires
-          # plugin.json to match it exactly, so ship a second asset that also
-          # works with the older rom-store-decky.zip URL.
-          cp -r package/rom-store-decky package/rom-store-decky-legacy
-          python3 - <<'PYEOF'
-          import json, pathlib
-          path = pathlib.Path("package/rom-store-decky-legacy/plugin.json")
-          data = json.loads(path.read_text())
-          data["name"] = "rom-store-decky"
-          path.write_text(json.dumps(data, indent=2) + "\n")
-          PYEOF
-          cd package && zip -qr ../rom-store-decky.zip rom-store-decky-legacy
+      - name: Check the package the way Decky installs it
+        # Also checks that the page was built for plugin.json's name: a copy
+        # renamed after the build (the old rom-store-decky.zip) loads a page
+        # that calls a plugin that is not there.
+        run: python3 tools/verify_package.py ROM-Store.zip
 
       - name: Attach the packages to a release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ROM-Store.zip
-            rom-store-decky.zip
+          files: ROM-Store.zip
           generate_release_notes: true

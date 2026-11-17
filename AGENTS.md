@@ -248,9 +248,16 @@ version bump. `.github/workflows/release.yml`:
 1. `npm ci` and `npm run build`
 2. stamps `package.json` / `package-lock.json` with the tag without the `v`
 3. copies the tree into `package/rom-store-decky/` and zips it as `ROM-Store.zip`
-4. also builds `rom-store-decky.zip` with `plugin.json.name` rewritten to
-   `rom-store-decky`, for the older URL shape
-5. attaches both to the release
+4. checks it with `tools/verify_package.py` and attaches it to the release
+
+There is **one** asset. Until v1.18.3 a second `rom-store-decky.zip` was
+built for an older URL by rewriting `plugin.json.name` after the build. That
+never worked: `@decky/rollup` writes plugin.json's name into
+`dist/index.js` (`const manifest = {"name":"ROM-Store"}`) and the page asks
+Decky for that plugin's backend, so the renamed copy loaded a page whose
+every call hung (Settings and the tabs loading forever). Never rename a
+built package; `verify_package.py` now fails when the two names differ, and
+Plugin-Hub refuses such a zip.
 
 ```bash
 git add -A

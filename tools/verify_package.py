@@ -87,6 +87,19 @@ def main() -> int:
             if not os.path.isfile(path):
                 return 1
 
+        # @decky/rollup writes plugin.json's name into the bundle, and the page
+        # calls the backend of that name. A package renamed after the build
+        # loads a page that cannot reach its own backend.
+        import re
+
+        with open(os.path.join(plugins_path, folder, "dist", "index.js"), "rb") as fh:
+            match = re.search(rb"const manifest\s*=\s*(\{[^}]*\})", fh.read(200_000))
+        built_for = json.loads(match.group(1)).get("name") if match else None
+        print(f"page built for    : {built_for!r}")
+        if built_for != name:
+            print(f"FAIL  dist/index.js was built for {built_for!r}, plugin.json says {name!r}")
+            return 1
+
         # The backend has to import cleanly from the extracted folder.
         import subprocess
 
