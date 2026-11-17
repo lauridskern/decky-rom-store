@@ -3,7 +3,7 @@
 Everything an agent needs to work on this repository: what it is, how to run
 it, how it is tested, and how it is published.
 
-GitHub: `lauridskern/decky-rom-store` · local folder: `rom-store-decky` ·
+GitHub: `uposum/decky-rom-store` · local folder: `rom-store-decky` ·
 plugin name: `ROM-Store` · current line: **v1.16.x**
 
 ---
@@ -264,7 +264,7 @@ Then verify the actual asset, never the local build:
 
 ```bash
 curl -sSL -o /tmp/ROM-Store.zip \
-  https://github.com/lauridskern/decky-rom-store/releases/download/v1.14.1/ROM-Store.zip
+  https://github.com/uposum/decky-rom-store/releases/download/v1.14.1/ROM-Store.zip
 python3 tools/verify_package.py /tmp/ROM-Store.zip     # must print PASS
 ```
 
@@ -275,10 +275,10 @@ the tag, `dist/index.js` contains a string from the change you just made, and
 Finally give the user the install URL:
 
 ```
-https://github.com/lauridskern/decky-rom-store/releases/download/vX.Y.Z/ROM-Store.zip
+https://github.com/uposum/decky-rom-store/releases/download/vX.Y.Z/ROM-Store.zip
 ```
 
-`https://github.com/lauridskern/decky-rom-store/releases/latest/download/ROM-Store.zip`
+`https://github.com/uposum/decky-rom-store/releases/latest/download/ROM-Store.zip`
 also works and always points at the newest release.
 
 ### Decky packaging rules (these have bitten us twice)

@@ -27,7 +27,7 @@ import zipfile
 from urllib.parse import urlparse
 
 DEFAULT_ASSET = "ROM-Store.zip"
-URL = f"https://github.com/lauridskern/decky-rom-store/releases/download/v1.0.0/{DEFAULT_ASSET}"
+URL = f"https://github.com/uposum/decky-rom-store/releases/download/v1.0.0/{DEFAULT_ASSET}"
 
 
 def find_plugin_folder(plugin_path: str, name: str):

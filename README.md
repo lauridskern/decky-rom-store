@@ -8,8 +8,8 @@
 Search the sites you set up, pick a game by its box art, and it lands in the
 right EmuDeck folder and in your Steam library.
 
-[![Latest release](https://img.shields.io/github/v/release/lauridskern/decky-rom-store?style=flat-square&label=release&color=3b82f6)](https://github.com/lauridskern/decky-rom-store/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/lauridskern/decky-rom-store/total?style=flat-square&color=3b82f6)](https://github.com/lauridskern/decky-rom-store/releases)
+[![Latest release](https://img.shields.io/github/v/release/uposum/decky-rom-store?style=flat-square&label=release&color=3b82f6)](https://github.com/uposum/decky-rom-store/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/uposum/decky-rom-store/total?style=flat-square&color=3b82f6)](https://github.com/uposum/decky-rom-store/releases)
 [![Decky Loader](https://img.shields.io/badge/Decky_Loader-v3.1+-1a9fff?style=flat-square)](https://github.com/SteamDeckHomebrew/decky-loader)
 [![License: MIT](https://img.shields.io/badge/license-MIT-64748b?style=flat-square)](LICENSE)
 
@@ -23,7 +23,7 @@ In Game Mode open Decky Loader, then **Settings → Plugins → Install from URL
 and paste:
 
 ```
-https://github.com/lauridskern/decky-rom-store/releases/latest/download/ROM-Store.zip
+https://github.com/uposum/decky-rom-store/releases/latest/download/ROM-Store.zip
 ```
 
 ROM Store then appears in the Quick Access menu (`…` button). Before the first
