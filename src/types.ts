@@ -335,6 +335,8 @@ export interface SteamPlan {
   artwork: boolean;
   /** The ROM library folder, as configured and with symlinks resolved. */
   roots?: string[];
+  /** Every collection SRM's parsers name: the ones a game may be moved out of. */
+  managed_collections?: string[];
   items: SteamPlanItem[];
   remove: { key: string; appid: number; name: string }[];
   /** Consoles with games but no enabled Steam ROM Manager parser. */

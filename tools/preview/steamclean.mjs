@@ -14,6 +14,7 @@ const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
 const fail = (msg) => { errors.push(msg); console.log("FAIL", msg); };
+const inCollections = (appid) => page.evaluate((id) => window.steamMockCollections.filter((c) => c.apps.has(id)).map((c) => c.displayName).sort(), appid);
 const shortcuts = () => page.evaluate(() => [...window.steamMockShortcuts.values()].map((s) => ({ appid: s.appid, name: s.display_name, exe: s.exe, options: s.options })));
 
 await page.goto(`file://${path.join(here, "index.html")}?full&plugin`);
@@ -26,6 +27,13 @@ let list = await shortcuts();
 console.log("after sync:", list.length, "shortcuts");
 const ff7 = list.find((s) => s.name.startsWith("Final Fantasy VII"));
 if (!ff7) fail("no shortcut for Final Fantasy VII");
+console.log("FF7 collections after sync:", await inCollections(ff7.appid));
+if (JSON.stringify(await inCollections(ff7.appid)) !== '["PS1"]') fail("new game not in its parser's collection");
+// A collection the user made: never touched.
+await page.evaluate(async (id) => {
+  const c = window.collectionStore.NewUnsavedCollection("My picks", undefined, [window.appStore.GetAppOverviewByAppID(id)]);
+  await c.Save();
+}, ff7.appid);
 
 // An SRM-made duplicate (played a lot) and a shortcut of a game that was deleted.
 await page.evaluate(async (ff7) => {
@@ -38,7 +46,7 @@ await page.evaluate(async (ff7) => {
 
 // Emu Hub switches PS1 to RetroArch and says so.
 await page.evaluate(() => {
-  window.__mockLaunch = { psx: ['"/home/deck/Emulation/tools/launchers/retroarch.sh"', "-L .../swanstation_libretro.so", "PS1"] };
+  window.__mockLaunch = { psx: ['"/home/deck/Emulation/tools/launchers/retroarch.sh"', "-L .../swanstation_libretro.so", "PS1 - RetroArch"] };
   window.dispatchEvent(new CustomEvent("emuhub:emulator-choice", { detail: { console: "psx", emulator: "RetroArch" } }));
 });
 await page.waitForTimeout(800);
@@ -46,6 +54,8 @@ list = await shortcuts();
 const moved = list.filter((s) => s.exe.includes("retroarch.sh") && s.options.includes("swanstation"));
 console.log("re-pointed to RetroArch:", moved.map((s) => s.name));
 if (moved.length !== 1) fail(`expected 1 re-pointed PS1 shortcut, got ${moved.length}`);
+console.log("FF7 collections after the emulator change:", await inCollections(ff7.appid));
+if (JSON.stringify(await inCollections(ff7.appid)) !== '["My picks","PS1 - RetroArch"]') fail("moved game not moved to the new emulator's collection (or the user's collection was touched)");
 
 // Remove duplicates: first press asks, second runs.
 await page.locator("button", { hasText: "Remove duplicates" }).click();
@@ -70,6 +80,8 @@ if (list.some((s) => s.name === "Gone Game")) fail("dead shortcut still there");
 if (!list.some((s) => s.name === "Some Steam game")) fail("a shortcut outside the ROM library was removed");
 const kept = list.find((s) => s.name === "Final Fantasy VII (SRM)");
 if (!kept || !kept.exe.includes("retroarch.sh")) fail("kept shortcut was not pointed at the chosen emulator");
+console.log("kept SRM copy collections:", kept && (await inCollections(kept.appid)));
+if (kept && !(await inCollections(kept.appid)).includes("PS1 - RetroArch")) fail("kept SRM copy not put in its collection");
 await page.screenshot({ path: path.join(here, "steamclean.png") });
 
 console.log(`console errors: ${errors.length}`);

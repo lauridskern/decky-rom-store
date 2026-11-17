@@ -67,10 +67,16 @@ def _real(path: str) -> str:
 class SrmConfig:
     """The enabled glob parsers of a Steam ROM Manager setup."""
 
-    def __init__(self, folder: Optional[str], parsers: List[Dict[str, Any]], variables: Dict[str, str]):
+    def __init__(self, folder: Optional[str], parsers: List[Dict[str, Any]], variables: Dict[str, str],
+                 categories: Optional[List[str]] = None):
         self.folder = folder
         self.parsers = parsers
         self.variables = variables
+        # Every fixed Steam collection any parser names, switched off ones
+        # included: the collections a game may be moved out of (an emulator
+        # change moves a Switch game from "… - Eden" to "… - Ryujinx"). A
+        # collection the user made is never one of them.
+        self.categories = categories or []
 
     @classmethod
     def load(cls, home: Optional[str] = None) -> "SrmConfig":
@@ -86,12 +92,17 @@ class SrmConfig:
             except (OSError, ValueError):
                 continue
             variables = cls._globals(folder)
+            configs = configs if isinstance(configs, list) else []
             parsers = [
                 p for p in configs if isinstance(p, dict)
                 and not p.get("disabled")
                 and str(p.get("parserType", "")).lower().startswith("glob")
-            ] if isinstance(configs, list) else []
-            return cls(folder, parsers, variables)
+            ]
+            categories = sorted({
+                c for p in configs if isinstance(p, dict)
+                for c in (p.get("steamCategories") or []) if isinstance(c, str) and c and "${" not in c
+            })
+            return cls(folder, parsers, variables, categories)
         return cls(None, [], {})
 
     @staticmethod
@@ -322,6 +333,7 @@ def plan(roms_root: str, tracked: Dict[str, Dict[str, Any]], only: Optional[List
         "srm": config.folder,
         "parsers": len(config.parsers),
         "roots": list(dict.fromkeys(roots)),
+        "managed_collections": config.categories,
         "items": items,
         "remove": remove,
         "missing": missing,

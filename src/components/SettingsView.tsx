@@ -31,7 +31,7 @@ import { reloadStore } from "../state";
 import { Spinner, Switch } from "./ui";
 
 const failed = (error: unknown): SyncResult => ({
-  ok: false, added: [], adopted: [], removed: [], repointed: [], duplicates: 0, stale: [], artwork: [], missing: {},
+  ok: false, added: [], adopted: [], removed: [], repointed: [], duplicates: 0, stale: [], collections: [], artwork: [], missing: {},
   error: String(error),
 });
 
@@ -42,6 +42,7 @@ const SteamOutcome = ({ result }: { result: SyncResult }) => {
     result.duplicates ? `${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} deleted` : "",
     result.stale.length ? `${result.stale.length} shortcut${result.stale.length === 1 ? "" : "s"} of deleted games removed` : "",
     result.repointed.length ? `${result.repointed.length} game${result.repointed.length === 1 ? "" : "s"} moved to the right emulator` : "",
+    result.collections.length ? `${result.collections.length} put in the right collection` : "",
     result.added.length ? `${result.added.length} added` : "",
     result.adopted.length ? `${result.adopted.length} existing adopted` : "",
     result.removed.length ? `${result.removed.length} removed` : "",
@@ -675,7 +676,7 @@ const SettingsView: FC<Props> = ({ onSaved, initialSection }) => {
               <span className={synced.ok ? undefined : "rs-bad"}>
                 {synced.error
                   ? synced.error
-                  : `Added ${synced.added.length}, adopted ${synced.adopted.length} existing, removed ${synced.removed.length}${synced.repointed.length ? `, moved ${synced.repointed.length} to another emulator` : ""}, artwork for ${synced.artwork.length}.`}
+                  : `Added ${synced.added.length}, adopted ${synced.adopted.length} existing, removed ${synced.removed.length}${synced.repointed.length ? `, moved ${synced.repointed.length} to another emulator` : ""}${synced.collections.length ? `, ${synced.collections.length} put in the right collection` : ""}, artwork for ${synced.artwork.length}.`}
                 {synced.warning ? ` ${synced.warning} (check the key; IGDB art was used).` : ""}
                 {Object.keys(synced.missing).length
                   ? ` No parser for: ${Object.entries(synced.missing)

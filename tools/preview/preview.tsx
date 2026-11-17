@@ -142,6 +142,28 @@ if (!(window as any).SteamClient) {
     },
   };
   (window as any).steamMockShortcuts = shortcuts;
+  // Steam's collection store: user collections with AddApps / RemoveApps / Save.
+  const collections: any[] = [];
+  const makeCollection = (name: string, apps: any[] = []) => {
+    const c: any = {
+      displayName: name,
+      apps: new Set(apps.map((a) => a.appid)),
+      AsDragDropCollection: () => c,
+      AddApps: (list: any[]) => list.forEach((o) => c.apps.add(o.appid)),
+      RemoveApps: (list: any[]) => list.forEach((o) => c.apps.delete(o.appid)),
+      Save: async () => {
+        if (!collections.includes(c)) collections.push(c);
+      },
+    };
+    return c;
+  };
+  (window as any).collectionStore = {
+    get userCollections() {
+      return collections;
+    },
+    NewUnsavedCollection: (name: string, _filter: unknown, apps: any[]) => makeCollection(name, apps ?? []),
+  };
+  (window as any).steamMockCollections = collections;
 }
 
 // ?plugin: also run the plugin entry (src/index.tsx), so its listeners are

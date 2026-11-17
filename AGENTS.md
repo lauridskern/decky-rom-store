@@ -481,6 +481,14 @@ Steam only reads at start), so the plugin does its job live:
   (`{ console, emulator }`) on `window`; `index.tsx` listens and syncs. Both
   plugins live in Steam's page, so neither needs the other installed. Keep
   the event name in step with Emu Hub's `src/choice.ts`.
+- Collections: every sync puts each game it manages (new, adopted from SRM,
+  kept by "Remove duplicates", moved to another emulator) into its parser's
+  collection and takes it out of the other parsers' collections
+  (`managed_collections` in the plan: every fixed `steamCategories` name in
+  SRM's config, switched-off parsers included). A collection the user made
+  is never touched. EmuDeck names Switch collections per emulator
+  ("Nintendo Switch - Eden" / "- Ryujinx"), so an emulator change moves the
+  game.
 - Settings → Steam has two clean-ups, each asking first:
   "Remove duplicates" keeps one shortcut per game (most played, else the
   plugin's own, else the oldest) and deletes the others, SRM's included;

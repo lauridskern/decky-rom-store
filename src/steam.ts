@@ -36,6 +36,8 @@ export interface SyncResult {
   duplicates: number;
   /** Shortcuts of games no longer on disk that were deleted ("Re-add all"). */
   stale: string[];
+  /** Existing shortcuts moved into their parser's Steam collection. */
+  collections: string[];
   /** Games that got library artwork in this run. */
   artwork: string[];
   /** E.g. a SteamGridDB key that was turned down (IGDB art was used). */
@@ -157,23 +159,55 @@ function romPaths(s: ShortcutInfo, roots: string[]): string[] {
   return found;
 }
 
-/** Best effort: Steam's collection store is internal and changes between builds. */
-async function addToCollection(name: string, appid: number): Promise<void> {
+function collectionHas(collection: any, appid: number): boolean {
+  try {
+    if (typeof collection?.apps?.has === "function") return Boolean(collection.apps.has(appid));
+    const list = collection?.allApps ?? collection?.apps;
+    if (Array.isArray(list)) return list.some((app: any) => (app?.appid ?? app) === appid);
+  } catch {
+    /* unknown shape: treat as not in it */
+  }
+  return false;
+}
+
+/**
+ * Put a game in its parser's Steam collection and take it out of the other
+ * parsers' collections (`managed`: every collection SRM's parsers name), so a
+ * game moved to another emulator, or a shortcut adopted from SRM, ends up in
+ * the right one. Collections the user made are never touched. Best effort:
+ * Steam's collection store is internal and changes between builds.
+ * Returns true when something changed.
+ */
+async function placeInCollection(appid: number, target: string | null, managed: string[]): Promise<boolean> {
   try {
     const collections = store("collectionStore");
     const overview = store("appStore")?.GetAppOverviewByAppID(appid);
-    if (!collections || !overview) return;
-    const existing = (collections.userCollections ?? []).find((c: any) => c?.displayName === name);
-    if (existing) {
-      const editable = existing.AsDragDropCollection?.() ?? existing;
-      editable.AddApps?.([overview]);
+    if (!collections || !overview) return false;
+    let changed = false;
+    for (const collection of [...(collections.userCollections ?? [])]) {
+      const name = collection?.displayName;
+      if (!name || name === target || !managed.includes(name) || !collectionHas(collection, appid)) continue;
+      const editable = collection.AsDragDropCollection?.() ?? collection;
+      editable.RemoveApps?.([overview]);
       await editable.Save?.();
-    } else {
-      const created = collections.NewUnsavedCollection?.(name, undefined, [overview]);
-      await created?.Save?.();
+      changed = true;
     }
+    if (target) {
+      const existing = (collections.userCollections ?? []).find((c: any) => c?.displayName === target);
+      if (!existing) {
+        const created = collections.NewUnsavedCollection?.(target, undefined, [overview]);
+        await created?.Save?.();
+        changed = true;
+      } else if (!collectionHas(existing, appid)) {
+        const editable = existing.AsDragDropCollection?.() ?? existing;
+        editable.AddApps?.([overview]);
+        await editable.Save?.();
+        changed = true;
+      }
+    }
+    return changed;
   } catch {
-    /* the shortcut is there; the collection is a nicety */
+    return false; /* the shortcut is there; the collection is a nicety */
   }
 }
 
@@ -230,7 +264,7 @@ type Mode = "sync" | "dedupe" | "repair";
 
 async function run(paths: string[] | null, add: boolean, mode: Mode = "sync"): Promise<SyncResult> {
   const result: SyncResult = {
-    ok: true, added: [], adopted: [], removed: [], repointed: [], duplicates: 0, stale: [], artwork: [], missing: {},
+    ok: true, added: [], adopted: [], removed: [], repointed: [], duplicates: 0, stale: [], collections: [], artwork: [], missing: {},
   };
   if (!steam()?.Apps) return { ...result, ok: false, error: "Not running inside Steam" };
   const plan = await steamPlan(paths, add);
@@ -327,7 +361,6 @@ async function run(paths: string[] | null, add: boolean, mode: Mode = "sync"): P
       if (!appid) continue;
       reported[item.key] = { appid, name: item.name };
       (adopted ? result.adopted : result.added).push(item.name);
-      if (!adopted && plan.collections && item.collection) await addToCollection(item.collection, appid);
       if (plan.artwork && (await addArtwork(appid, item.name).catch(() => false))) result.artwork.push(item.name);
     } catch (error) {
       result.ok = false;
@@ -337,6 +370,18 @@ async function run(paths: string[] | null, add: boolean, mode: Mode = "sync"): P
 
   for (const item of bare) {
     if (await addArtwork(item.appid!, item.name).catch(() => false)) result.artwork.push(item.name);
+  }
+
+  // Every game the store manages sits in its parser's collection: new ones,
+  // adopted SRM shortcuts, kept duplicates and games moved to another emulator.
+  if (plan.collections) {
+    const managed = plan.managed_collections ?? [];
+    for (const item of plan.items) {
+      const appid = reported[item.key]?.appid ?? item.appid;
+      if (!appid || !exists(appid)) continue;
+      const fresh = result.added.includes(item.name);
+      if ((await placeInCollection(appid, item.collection, managed)) && !fresh) result.collections.push(item.name);
+    }
   }
 
   const removed: string[] = removedKeys;

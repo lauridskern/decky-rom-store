@@ -513,7 +513,7 @@ const handlers: Record<string, (...args: any[]) => any> = {
       .map(([key, info]) => ({ key, appid: info.appid, name: info.name }));
     return {
       srm: "/home/deck/.config/steam-rom-manager/userData", parsers: 2, enabled: true, collections: true, artwork: true,
-      roots: ["/home/deck/EmuDecky/roms"], items, remove, missing,
+      roots: ["/home/deck/EmuDecky/roms"], managed_collections: ["N64", "PS1", "PS1 - RetroArch"], items, remove, missing,
     };
   },
   // A 1x1 PNG per slot stands in for real art.
