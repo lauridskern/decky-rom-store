@@ -501,3 +501,13 @@ export const FocusRing = ({ className, children }: { className?: string; childre
 export const staticClasses = { Title: "DeckyTitle" } as Record<string, string>;
 // Steam's focus ring classes; the preview has no ring of its own.
 export const focusRingClasses = {} as Record<string, string>;
+
+// Quick Access panel parts used by src/index.tsx (loaded with ?plugin).
+export const PanelSection = ({ title, children }: { title?: string; children?: any }) => (
+  <div className="qam-section">{title ? <div>{title}</div> : null}{children}</div>
+);
+export const PanelSectionRow = ({ children }: { children?: any }) => <div className="qam-row">{children}</div>;
+export const ButtonItem = ({ children, onClick, disabled }: { children?: any; onClick?: () => void; disabled?: boolean }) => (
+  <button disabled={disabled} onClick={onClick}>{children}</button>
+);
+export const Navigation = { Navigate: (route: string) => console.info("[nav]", route), CloseSideMenus: () => undefined };

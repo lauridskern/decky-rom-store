@@ -31,7 +31,7 @@ from .httpclient import HttpClient
 from .images import ImageCache
 from .library import LibraryIndex, installed_games, uninstall
 from .srm_runner import SrmRunner
-from .steam import SrmConfig, SteamShortcuts, plan as steam_plan
+from .steam import SrmConfig, SteamShortcuts, gone as steam_gone, plan as steam_plan
 from .shelves import Shelves
 from .speeds import SpeedStats
 from .media import SteamMedia
@@ -1135,6 +1135,10 @@ class StoreService:
             return {"source": None, "assets": {}}
         art = SteamArtwork(self.http, self.covers, self.steamgriddb_key())
         return await art.assets(title)
+
+    def steam_gone(self, paths: List[str]) -> List[str]:
+        """ROM paths named by Steam shortcuts that are gone (backend/steam.py gone())."""
+        return steam_gone(self.roms_root(), paths)
 
     def steam_report(self, added: Dict[str, Any], removed: List[str]) -> Dict[str, Any]:
         self.steam_shortcuts.report(added or {}, removed or [])

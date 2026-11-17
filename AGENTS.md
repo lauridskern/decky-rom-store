@@ -465,7 +465,24 @@ Steam only reads at start), so the plugin does its job live:
 - Triggers: the backend emits `rom_store_download_done` (index.tsx listens, so
   it works with the store closed); an uninstall runs a remove-only sync;
   Settings → Steam library → "Sync with Steam now" does both directions.
-- Only shortcuts the plugin made or adopted are ever removed.
+- Only shortcuts the plugin made or adopted are ever removed by a sync.
+- Every sync re-points the shortcuts the plugin manages whose launch command
+  no longer matches SRM's parsers (exe, start dir, launch options, in place
+  with `SetShortcutExe` & co.), so a change of emulator reaches them.
+  Emu Hub (`../decky-emu-hub`) switches the parsers from its "Which emulator
+  opens games" setting and dispatches the DOM event `emuhub:emulator-choice`
+  (`{ console, emulator }`) on `window`; `index.tsx` listens and syncs. Both
+  plugins live in Steam's page, so neither needs the other installed. Keep
+  the event name in step with Emu Hub's `src/choice.ts`.
+- Settings → Steam has two clean-ups, each asking first:
+  "Remove duplicates" keeps one shortcut per game (most played, else the
+  plugin's own, else the oldest) and deletes the others, SRM's included;
+  "Re-add all games" also deletes shortcuts whose ROM file is gone (only
+  files inside a console folder of the library, `steam.gone()`, so other
+  non-Steam games are never judged), re-points every game and adds the
+  missing ones. Nothing is deleted and made again: play time, artwork and
+  collections stay. `npm run steamclean` (preview, `?plugin`) walks both
+  and the emulator-choice event against the SteamClient mock.
 - Play (a Library game's page, `playGame` in `src/steam.ts`) starts the game
   through its Steam shortcut with `SteamClient.Apps.RunGame` (the shortcut's
   64-bit game id: `m_gameid`, else app id << 32 | 0x02000000). A game without

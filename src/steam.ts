@@ -13,14 +13,29 @@
  * - "Sync with Steam" in Settings: everything, both ways
  *
  * A shortcut that SRM made earlier for the same file is adopted, not doubled.
+ *
+ * Every sync also re-points the shortcuts it manages whose emulator changed
+ * (Emu Hub's "Which emulator opens games" switches SRM's parsers and sends
+ * "emuhub:emulator-choice", index.tsx then syncs). Settings has two more:
+ * - "Remove duplicates": one shortcut per game, the others are deleted
+ * - "Re-add all games": duplicates and shortcuts of deleted games go, every
+ *   game is pointed at the emulator SRM's parsers name now, missing ones are
+ *   added. Shortcuts are corrected in place rather than deleted and made
+ *   again, so play time, artwork and collections stay.
  */
-import { srmAck, srmStart, srmStatus, steamArtwork, SteamPlanItem, steamPlan, steamReport, steamTracked } from "./types";
+import { srmAck, srmStart, srmStatus, steamArtwork, steamGone, SteamPlanItem, steamPlan, steamReport, steamTracked } from "./types";
 
 export interface SyncResult {
   ok: boolean;
   added: string[];
   adopted: string[];
   removed: string[];
+  /** Shortcuts now starting a different emulator (or arguments). */
+  repointed: string[];
+  /** Extra shortcuts for the same game that were deleted. */
+  duplicates: number;
+  /** Shortcuts of games no longer on disk that were deleted ("Re-add all"). */
+  stale: string[];
   /** Games that got library artwork in this run. */
   artwork: string[];
   /** E.g. a SteamGridDB key that was turned down (IGDB art was used). */
@@ -63,6 +78,80 @@ async function shortcutsByFile(keys: string[]): Promise<Map<string, number>> {
     const command = `${details?.strShortcutExe ?? ""} ${details?.strShortcutLaunchOptions ?? ""}`;
     for (const key of keys) {
       if (!found.has(key) && command.includes(key)) found.set(key, app.appid);
+    }
+  }
+  return found;
+}
+
+interface ShortcutInfo {
+  appid: number;
+  name: string;
+  exe: string;
+  launchOptions: string;
+  startDir: string;
+  playtime: number;
+}
+
+async function details(appid: number): Promise<any> {
+  let found = store("appDetailsStore")?.GetAppDetails?.(appid);
+  if (!found) {
+    try {
+      found = await store("appDetailsStore")?.RequestAppDetails?.(appid);
+    } catch {
+      found = null;
+    }
+  }
+  return found;
+}
+
+/** Every non-Steam shortcut with what it starts. */
+async function allShortcuts(): Promise<ShortcutInfo[]> {
+  const apps: any[] = (store("appStore")?.allApps ?? []).filter((app: any) => app?.app_type === SHORTCUT_TYPE);
+  const out: ShortcutInfo[] = [];
+  for (const app of apps) {
+    const info = await details(app.appid);
+    out.push({
+      appid: app.appid,
+      name: app.display_name ?? "",
+      exe: info?.strShortcutExe ?? "",
+      launchOptions: info?.strShortcutLaunchOptions ?? "",
+      startDir: info?.strShortcutStartDir ?? "",
+      playtime: Number(app.minutes_playtime_forever ?? 0) || 0,
+    });
+  }
+  return out;
+}
+
+const unquote = (text: string) => (text ?? "").trim().replace(/^"(.*)"$/, "$1");
+const command = (s: ShortcutInfo) => `${s.exe} ${s.launchOptions}`;
+const launches = (s: ShortcutInfo, item: SteamPlanItem) =>
+  command(s).includes(item.key) || (!!item.real && command(s).includes(item.real));
+
+function sameLaunch(s: ShortcutInfo, item: SteamPlanItem): boolean {
+  return (
+    unquote(s.exe) === unquote(item.exe) &&
+    (s.launchOptions ?? "").trim() === (item.launchOptions ?? "").trim() &&
+    unquote(s.startDir) === unquote(item.startDir)
+  );
+}
+
+function repoint(appid: number, item: SteamPlanItem): void {
+  const apps = steam()?.Apps;
+  apps?.SetShortcutExe?.(appid, item.exe);
+  apps?.SetShortcutStartDir?.(appid, item.startDir);
+  apps?.SetShortcutLaunchOptions?.(appid, item.launchOptions);
+}
+
+/** ROM paths named in a shortcut's command, inside the library folder. */
+function romPaths(s: ShortcutInfo, roots: string[]): string[] {
+  const text = command(s);
+  const found: string[] = [];
+  for (const root of roots) {
+    let at = text.indexOf(root.replace(/\/$/, "") + "/");
+    while (at >= 0) {
+      const end = text.slice(at).search(/["']/);
+      found.push((end < 0 ? text.slice(at) : text.slice(at, at + end)).trim());
+      at = text.indexOf(root.replace(/\/$/, "") + "/", at + 1);
     }
   }
   return found;
@@ -137,14 +226,96 @@ async function addArtwork(appid: number, name: string): Promise<boolean> {
   return set;
 }
 
-async function run(paths: string[] | null, add: boolean): Promise<SyncResult> {
-  const result: SyncResult = { ok: true, added: [], adopted: [], removed: [], artwork: [], missing: {} };
+type Mode = "sync" | "dedupe" | "repair";
+
+async function run(paths: string[] | null, add: boolean, mode: Mode = "sync"): Promise<SyncResult> {
+  const result: SyncResult = {
+    ok: true, added: [], adopted: [], removed: [], repointed: [], duplicates: 0, stale: [], artwork: [], missing: {},
+  };
   if (!steam()?.Apps) return { ...result, ok: false, error: "Not running inside Steam" };
   const plan = await steamPlan(paths, add);
   result.missing = plan.missing ?? {};
   if (!plan.enabled && add) return { ...result, ok: false, error: "Adding games to Steam is switched off in Settings" };
 
   const reported: Record<string, { appid: number; name: string }> = {};
+  const removedKeys: string[] = [];
+
+  if (mode !== "sync") {
+    const shortcuts = await allShortcuts();
+    const gone = new Set<number>();
+    // One shortcut per game: the most played (its play time stays visible),
+    // else the one the store tracks, else the oldest. The others go.
+    for (const item of plan.items) {
+      const matches = shortcuts.filter((s) => !gone.has(s.appid) && launches(s, item));
+      if (!matches.length) continue;
+      const keep = [...matches].sort(
+        (a, b) =>
+          b.playtime - a.playtime || Number(b.appid === item.appid) - Number(a.appid === item.appid) || a.appid - b.appid,
+      )[0];
+      for (const extra of matches) {
+        if (extra.appid === keep.appid) continue;
+        try {
+          steam().Apps.RemoveShortcut(extra.appid);
+          gone.add(extra.appid);
+          result.duplicates += 1;
+        } catch (error) {
+          result.ok = false;
+          result.error = String(error);
+        }
+      }
+      if (item.appid !== keep.appid) {
+        item.appid = keep.appid;
+        reported[item.key] = { appid: keep.appid, name: item.name };
+      }
+    }
+    if (mode === "repair" && plan.roots?.length) {
+      // Shortcuts of games that were deleted (by hand, or by another tool).
+      const candidates = shortcuts.filter((s) => !gone.has(s.appid) && !plan.items.some((item) => launches(s, item)));
+      const named = new Map<number, string[]>();
+      for (const s of candidates) {
+        const found = romPaths(s, plan.roots);
+        if (found.length) named.set(s.appid, found);
+      }
+      const missing = new Set(named.size ? await steamGone([...new Set([...named.values()].flat())]) : []);
+      for (const s of candidates) {
+        const files = named.get(s.appid);
+        if (!files || !files.every((file) => missing.has(file))) continue;
+        try {
+          steam().Apps.RemoveShortcut(s.appid);
+          gone.add(s.appid);
+          result.stale.push(s.name);
+        } catch (error) {
+          result.ok = false;
+          result.error = String(error);
+        }
+      }
+    }
+    if (mode === "dedupe") {
+      if (Object.keys(reported).length) await steamReport(reported, []);
+      return result;
+    }
+  }
+
+  // Shortcuts the store manages that start the wrong emulator now (SRM's
+  // parsers changed): correct them in place.
+  for (const item of plan.items) {
+    if (!exists(item.appid)) continue;
+    const info = await details(item.appid!);
+    if (!info) continue;
+    const current: ShortcutInfo = {
+      appid: item.appid!, name: item.name, playtime: 0,
+      exe: info.strShortcutExe ?? "", launchOptions: info.strShortcutLaunchOptions ?? "", startDir: info.strShortcutStartDir ?? "",
+    };
+    if (sameLaunch(current, item)) continue;
+    try {
+      repoint(item.appid!, item);
+      result.repointed.push(item.name);
+    } catch (error) {
+      result.ok = false;
+      result.error = String(error);
+    }
+  }
+
   const todo = plan.items.filter((item) => !exists(item.appid));
   // Shortcuts made earlier that still have no art (art was off, or offline).
   const bare = plan.artwork ? plan.items.filter((item) => exists(item.appid) && !hasCustomArt(item.appid!)) : [];
@@ -168,7 +339,7 @@ async function run(paths: string[] | null, add: boolean): Promise<SyncResult> {
     if (await addArtwork(item.appid!, item.name).catch(() => false)) result.artwork.push(item.name);
   }
 
-  const removed: string[] = [];
+  const removed: string[] = removedKeys;
   for (const gone of plan.remove) {
     try {
       if (exists(gone.appid)) steam().Apps.RemoveShortcut(gone.appid);
@@ -191,6 +362,20 @@ async function run(paths: string[] | null, add: boolean): Promise<SyncResult> {
  */
 export function syncWithSteam(paths: string[] | null = null, add = true): Promise<SyncResult> {
   const next = queue.then(() => run(paths, add));
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+/** "Remove duplicates": keep one Steam shortcut per game. */
+export function removeDuplicateShortcuts(): Promise<SyncResult> {
+  const next = queue.then(() => run(null, true, "dedupe"));
+  queue = next.catch(() => undefined);
+  return next;
+}
+
+/** "Re-add all games": duplicates and dead shortcuts out, every game on the right emulator. */
+export function repairSteamLibrary(): Promise<SyncResult> {
+  const next = queue.then(() => run(null, true, "repair"));
   queue = next.catch(() => undefined);
   return next;
 }

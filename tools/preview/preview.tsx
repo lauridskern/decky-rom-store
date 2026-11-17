@@ -2,6 +2,7 @@ import { FC, ReactNode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import StoreHost from "../../src/components/StoreHost";
 import { injectStyles } from "../../src/styles";
+import plugin from "../../src/index";
 
 injectStyles();
 
@@ -81,7 +82,7 @@ const DeckFrame: FC<{ children: ReactNode }> = ({ children }) => {
  * and are logged to the console.
  */
 if (!(window as any).SteamClient) {
-  type Shortcut = { appid: number; app_type: number; display_name: string; exe: string; options: string; art: Set<number>; BHasCustomImages: () => boolean };
+  type Shortcut = { appid: number; app_type: number; display_name: string; exe: string; options: string; dir: string; minutes_playtime_forever: number; art: Set<number>; BHasCustomImages: () => boolean };
   const shortcuts = new Map<number, Shortcut>();
   let next = 3_000_000_000;
   (window as any).SteamClient = {
@@ -92,10 +93,10 @@ if (!(window as any).SteamClient) {
       },
     },
     Apps: {
-      AddShortcut: async (name: string, exe: string, _dir: string, options: string) => {
+      AddShortcut: async (name: string, exe: string, dir: string, options: string) => {
         const appid = next++;
         const art = new Set<number>();
-        shortcuts.set(appid, { appid, app_type: 1073741824, display_name: name, exe, options, art, BHasCustomImages: () => art.size > 0 });
+        shortcuts.set(appid, { appid, app_type: 1073741824, display_name: name, exe, options, dir, minutes_playtime_forever: 0, art, BHasCustomImages: () => art.size > 0 });
         console.info("[steam mock] AddShortcut", appid, name);
         return appid;
       },
@@ -107,16 +108,25 @@ if (!(window as any).SteamClient) {
         const item = shortcuts.get(appid);
         if (item) item.display_name = name;
       },
-      SetShortcutExe: () => undefined,
+      SetShortcutExe: (appid: number, exe: string) => {
+        const item = shortcuts.get(appid);
+        if (item) item.exe = exe;
+      },
       SetCustomArtworkForApp: async (appid: number, _data: string, _ext: string, slot: number) => {
         shortcuts.get(appid)?.art.add(slot);
       },
-      SetShortcutStartDir: () => undefined,
+      SetShortcutStartDir: (appid: number, dir: string) => {
+        const item = shortcuts.get(appid);
+        if (item) item.dir = dir;
+      },
       RunGame: (gameId: string) => {
         (window as any).steamMockRunning = gameId;
         console.info("[steam mock] RunGame", gameId);
       },
-      SetShortcutLaunchOptions: () => undefined,
+      SetShortcutLaunchOptions: (appid: number, options: string) => {
+        const item = shortcuts.get(appid);
+        if (item) item.options = options;
+      },
     },
   };
   (window as any).appStore = {
@@ -128,11 +138,15 @@ if (!(window as any).SteamClient) {
   (window as any).appDetailsStore = {
     GetAppDetails: (appid: number) => {
       const item = shortcuts.get(appid);
-      return item ? { strShortcutExe: item.exe, strShortcutLaunchOptions: item.options } : null;
+      return item ? { strShortcutExe: item.exe, strShortcutLaunchOptions: item.options, strShortcutStartDir: item.dir } : null;
     },
   };
   (window as any).steamMockShortcuts = shortcuts;
 }
+
+// ?plugin: also run the plugin entry (src/index.tsx), so its listeners are
+// live (the Emu Hub emulator-choice event, steamclean.mjs).
+if (new URLSearchParams(location.search).has("plugin")) (plugin as unknown as () => unknown)();
 
 const container = document.getElementById("root");
 if (container) {

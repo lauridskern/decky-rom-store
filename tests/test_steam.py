@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.artwork import SteamArtwork  # noqa: E402
 from backend.srm_runner import SrmRunner, find_srm  # noqa: E402
-from backend.steam import SrmConfig, SteamShortcuts, clean_title, plan  # noqa: E402
+from backend.steam import SrmConfig, SteamShortcuts, clean_title, gone, plan  # noqa: E402
 
 
 class SteamPlan(unittest.TestCase):
@@ -90,6 +90,19 @@ class SteamPlan(unittest.TestCase):
 
     def test_clean_title(self):
         self.assertEqual(clean_title("Pokemon - Red Version (USA, Europe) (SGB Enhanced)"), "Pokemon - Red Version")
+
+
+class GoneFiles(unittest.TestCase):
+    def test_only_missing_files_inside_console_folders(self):
+        root = os.path.join(tempfile.mkdtemp(), "roms")
+        os.makedirs(os.path.join(root, "switch"))
+        here = os.path.join(root, "switch", "Game.nsp")
+        open(here, "w").close()
+        missing = os.path.join(root, "switch", "Deleted.nsp")
+        outside = os.path.join(os.path.dirname(root), "elsewhere", "Gone.iso")
+        result = gone(root, [here, missing, outside, root + "/", os.path.join(root, "loose.zip"), "relative/x.nsp"])
+        self.assertEqual(result, [missing])
+        self.assertEqual(gone("", [missing]), [])
 
 
 class FakeCovers:

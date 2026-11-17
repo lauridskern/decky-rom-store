@@ -487,6 +487,8 @@ const handlers: Record<string, (...args: any[]) => any> = {
     const launch: Record<string, [string, string, string]> = {
       n64: ['"/home/deck/Emulation/tools/launchers/retroarch.sh"', "-L .../mupen64plus_next_libretro.so", "N64"],
       psx: ['"/home/deck/Emulation/tools/launchers/duckstation.sh"', "-batch", "PS1"],
+      // A test can switch a console's emulator, like Emu Hub does through SRM's parsers.
+      ...((globalThis as any).__mockLaunch ?? {}),
     };
     const items: any[] = [];
     const missing: Record<string, number> = {};
@@ -509,7 +511,10 @@ const handlers: Record<string, (...args: any[]) => any> = {
     const remove = Object.entries(steamTracked)
       .filter(([key]) => !onDisk.has(key))
       .map(([key, info]) => ({ key, appid: info.appid, name: info.name }));
-    return { srm: "/home/deck/.config/steam-rom-manager/userData", parsers: 2, enabled: true, collections: true, artwork: true, items, remove, missing };
+    return {
+      srm: "/home/deck/.config/steam-rom-manager/userData", parsers: 2, enabled: true, collections: true, artwork: true,
+      roots: ["/home/deck/EmuDecky/roms"], items, remove, missing,
+    };
   },
   // A 1x1 PNG per slot stands in for real art.
   steam_artwork: async () => {
@@ -530,6 +535,11 @@ const handlers: Record<string, (...args: any[]) => any> = {
   },
   srm_ack: async () => ({ ok: true }),
   steam_tracked: async () => ({ ...steamTracked }),
+  // Files a shortcut names that are not in the library (backend/steam.py gone()).
+  steam_gone: async (paths: string[]) => {
+    const onDisk = new Set(installedGames.map((g) => `${g.folder}/${g.files[0].name}`));
+    return paths.filter((p) => p.startsWith("/home/deck/EmuDecky/roms/") && p.split("/").length > 6 && !onDisk.has(p));
+  },
   steam_report: async (added: Record<string, { appid: number; name: string }>, removed: string[]) => {
     Object.assign(steamTracked, added);
     removed.forEach((key) => delete steamTracked[key]);

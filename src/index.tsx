@@ -130,8 +130,30 @@ const onDownloadDone = (job: DownloadJob) => {
     .catch(() => undefined);
 };
 
+/**
+ * Emu Hub changed which emulator opens a console's games (it switches Steam
+ * ROM Manager's parsers and sends this DOM event; both plugins share Steam's
+ * page). A sync re-points the shortcuts the store manages. Keep the event
+ * name in step with Emu Hub's src/choice.ts.
+ */
+const EMULATOR_CHOICE_EVENT = "emuhub:emulator-choice";
+const onEmulatorChoice = (event: Event) => {
+  const detail = (event as CustomEvent<{ console?: string; emulator?: string }>).detail ?? {};
+  syncWithSteam()
+    .then((result) => {
+      if (!result.repointed.length) return;
+      toaster.toast({
+        title: `${result.repointed.length} game${result.repointed.length === 1 ? "" : "s"} now open in ${detail.emulator ?? "the new emulator"}`,
+        body: "Steam shortcuts updated by ROM Store.",
+        icon: "Steam",
+      });
+    })
+    .catch(() => undefined);
+};
+
 export default definePlugin(() => {
   injectStyles();
+  window.addEventListener(EMULATOR_CHOICE_EVENT, onEmulatorChoice);
   addEventListener<[DownloadJob]>("rom_store_download_done", onDownloadDone);
   // Steam ROM Manager may have run while Steam was closed: report and adopt.
   reportSteamRomManager((title, body) => toaster.toast({ title, body, icon: "Steam" })).catch(() => undefined);
@@ -145,6 +167,7 @@ export default definePlugin(() => {
     icon: <FaStore />,
     onDismount() {
       removeEventListener("rom_store_download_done", onDownloadDone);
+      window.removeEventListener(EMULATOR_CHOICE_EVENT, onEmulatorChoice);
       routerHook.removeRoute("/rom-store");
     },
   };

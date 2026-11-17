@@ -315,6 +315,8 @@ export interface UninstallResult {
 /** One shortcut the Steam library should have (backend/steam.py). */
 export interface SteamPlanItem {
   key: string;
+  /** The same file with symlinks resolved (a library on the SD card). */
+  real?: string;
   name: string;
   system: string;
   exe: string;
@@ -331,6 +333,8 @@ export interface SteamPlan {
   enabled: boolean;
   collections: boolean;
   artwork: boolean;
+  /** The ROM library folder, as configured and with symlinks resolved. */
+  roots?: string[];
   items: SteamPlanItem[];
   remove: { key: string; appid: number; name: string }[];
   /** Consoles with games but no enabled Steam ROM Manager parser. */
@@ -420,6 +424,7 @@ export interface SpeedTestStatus {
 export const startSpeedTest = callable<[], SpeedTestStatus>("start_speed_test");
 export const getSpeedTest = callable<[], SpeedTestStatus>("get_speed_test");
 export const steamPlan = callable<[string[] | null, boolean], SteamPlan>("steam_plan");
+export const steamGone = callable<[string[]], string[]>("steam_gone");
 export const steamReport = callable<[Record<string, { appid: number; name: string }>, string[]], { ok: boolean }>("steam_report");
 export const steamStatus = callable<[], SteamStatus>("steam_status");
 

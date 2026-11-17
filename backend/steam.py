@@ -240,6 +240,30 @@ class SteamShortcuts:
             self._save()
 
 
+def gone(roms_root: str, paths: List[str]) -> List[str]:
+    """Paths a shortcut launches that are no longer on disk.
+
+    Only files inside a console folder of the library count (a shortcut that
+    names something outside the library is never judged), so "Re-add all
+    games" can drop shortcuts of deleted games and nothing else.
+    """
+    if not roms_root:
+        return []
+    roots = {os.path.realpath(roms_root), os.path.abspath(roms_root)}
+    out = []
+    for path in paths or []:
+        if not isinstance(path, str) or not path.startswith("/"):
+            continue
+        absolute = os.path.abspath(path)
+        inside = any(
+            absolute.startswith(root.rstrip("/") + "/") and os.sep in absolute[len(root.rstrip("/")) + 1:]
+            for root in roots
+        )
+        if inside and not os.path.exists(absolute):
+            out.append(path)
+    return out
+
+
 def plan(roms_root: str, tracked: Dict[str, Dict[str, Any]], only: Optional[List[str]] = None,
          config: Optional[SrmConfig] = None, add: bool = True) -> Dict[str, Any]:
     """What the Steam library should get, given the games on disk.
@@ -276,6 +300,9 @@ def plan(roms_root: str, tracked: Dict[str, Dict[str, Any]], only: Optional[List
                 continue
             items.append({
                 "key": path,
+                # A shortcut may name the file through a symlinked folder (an
+                # SD card library linked into ~/Emulation); both count.
+                "real": os.path.realpath(path),
                 "name": title,
                 "system": game["system"],
                 **shortcut,
@@ -290,9 +317,11 @@ def plan(roms_root: str, tracked: Dict[str, Dict[str, Any]], only: Optional[List
         for key, info in tracked.items()
         if key not in on_disk and not os.path.exists(key)
     ]
+    roots = [roms_root, os.path.realpath(roms_root)] if roms_root else []
     return {
         "srm": config.folder,
         "parsers": len(config.parsers),
+        "roots": list(dict.fromkeys(roots)),
         "items": items,
         "remove": remove,
         "missing": missing,

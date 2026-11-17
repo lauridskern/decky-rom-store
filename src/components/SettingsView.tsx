@@ -24,11 +24,30 @@ import {
   SteamStatus,
   updateSettings,
 } from "../types";
-import { runSteamRomManager, syncWithSteam, SyncResult } from "../steam";
+import { removeDuplicateShortcuts, repairSteamLibrary, runSteamRomManager, syncWithSteam, SyncResult } from "../steam";
 import { configuredSources, formatBytes, SOURCE_IDS, SOURCE_LABELS, systemLabel, timeAgo } from "./common";
 import { measurePerformance, PerfSample } from "./perf";
 import { reloadStore } from "../state";
 import { Spinner, Switch } from "./ui";
+
+const failed = (error: unknown): SyncResult => ({
+  ok: false, added: [], adopted: [], removed: [], repointed: [], duplicates: 0, stale: [], artwork: [], missing: {},
+  error: String(error),
+});
+
+/** One line for a clean-up run: what changed, or that nothing had to. */
+const SteamOutcome = ({ result }: { result: SyncResult }) => {
+  if (result.error) return <span className="rs-bad">{result.error}</span>;
+  const parts = [
+    result.duplicates ? `${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"} deleted` : "",
+    result.stale.length ? `${result.stale.length} shortcut${result.stale.length === 1 ? "" : "s"} of deleted games removed` : "",
+    result.repointed.length ? `${result.repointed.length} game${result.repointed.length === 1 ? "" : "s"} moved to the right emulator` : "",
+    result.added.length ? `${result.added.length} added` : "",
+    result.adopted.length ? `${result.adopted.length} existing adopted` : "",
+    result.removed.length ? `${result.removed.length} removed` : "",
+  ].filter(Boolean);
+  return <span>{parts.length ? `${parts.join(", ")}.` : "Everything was already in order."}</span>;
+};
 
 interface Props {
   /** Called with the stored settings after every save. */
@@ -206,6 +225,11 @@ const SettingsView: FC<Props> = ({ onSaved, initialSection }) => {
   const [steam, setSteam] = useState<SteamStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [synced, setSynced] = useState<SyncResult | null>(null);
+  // "Remove duplicates" / "Re-add all games": both delete shortcuts, so the
+  // first press asks and the second runs.
+  const [steamJob, setSteamJob] = useState<"dedupe" | "repair" | null>(null);
+  const [steamArmed, setSteamArmed] = useState<"dedupe" | "repair" | null>(null);
+  const [steamDone, setSteamDone] = useState<{ kind: "dedupe" | "repair"; result: SyncResult } | null>(null);
   const [srm, setSrm] = useState<SrmStatus | null>(null);
   const [srmAsking, setSrmAsking] = useState(false);
   const [srmError, setSrmError] = useState<string | null>(null);
@@ -358,9 +382,27 @@ const SettingsView: FC<Props> = ({ onSaved, initialSection }) => {
         steamStatus().then(setSteam).catch(() => undefined);
       })
       .catch((error) =>
-        setSynced({ ok: false, added: [], adopted: [], removed: [], artwork: [], missing: {}, error: String(error) }),
+        setSynced(failed(error)),
       )
       .finally(() => setSyncing(false));
+  };
+
+  const cleanUp = (kind: "dedupe" | "repair") => {
+    if (steamArmed !== kind) {
+      setSteamArmed(kind);
+      setSteamDone(null);
+      return;
+    }
+    flush();
+    setSteamArmed(null);
+    setSteamJob(kind);
+    (kind === "dedupe" ? removeDuplicateShortcuts() : repairSteamLibrary())
+      .then((result) => {
+        setSteamDone({ kind, result });
+        steamStatus().then(setSteam).catch(() => undefined);
+      })
+      .catch((error) => setSteamDone({ kind, result: failed(error) }))
+      .finally(() => setSteamJob(null));
   };
 
   const candidates = library?.candidates ?? [];
@@ -633,7 +675,7 @@ const SettingsView: FC<Props> = ({ onSaved, initialSection }) => {
               <span className={synced.ok ? undefined : "rs-bad"}>
                 {synced.error
                   ? synced.error
-                  : `Added ${synced.added.length}, adopted ${synced.adopted.length} existing, removed ${synced.removed.length}, artwork for ${synced.artwork.length}.`}
+                  : `Added ${synced.added.length}, adopted ${synced.adopted.length} existing, removed ${synced.removed.length}${synced.repointed.length ? `, moved ${synced.repointed.length} to another emulator` : ""}, artwork for ${synced.artwork.length}.`}
                 {synced.warning ? ` ${synced.warning} (check the key; IGDB art was used).` : ""}
                 {Object.keys(synced.missing).length
                   ? ` No parser for: ${Object.entries(synced.missing)
@@ -648,6 +690,47 @@ const SettingsView: FC<Props> = ({ onSaved, initialSection }) => {
         >
           <Button noFocusRing className="rs-btn ghost" disabled={syncing} onClick={syncNow}>
             {syncing ? "Syncing…" : "Sync with Steam now"}
+          </Button>
+        </Row>
+        <Row
+          fit
+          label="Remove duplicates"
+          hint={
+            steamArmed === "dedupe" ? (
+              <span className="rs-warn">
+                Every game keeps one shortcut (the most played, else the one ROM Store made) and its other shortcuts are
+                deleted, Steam ROM Manager's included. Press again to go ahead.
+              </span>
+            ) : steamDone?.kind === "dedupe" ? (
+              <SteamOutcome result={steamDone.result} />
+            ) : (
+              "Deletes extra Steam shortcuts that start the same game, for example one from Steam ROM Manager and one from ROM Store."
+            )
+          }
+        >
+          <Button noFocusRing className="rs-btn ghost" disabled={!!steamJob || syncing} onClick={() => cleanUp("dedupe")}>
+            {steamJob === "dedupe" ? "Removing…" : steamArmed === "dedupe" ? "Remove them" : "Remove duplicates"}
+          </Button>
+        </Row>
+        <Row
+          fit
+          label="Re-add all games"
+          hint={
+            steamArmed === "repair" ? (
+              <span className="rs-warn">
+                Duplicates and shortcuts of games that are no longer on the Deck are deleted, every game is pointed at the
+                emulator chosen in Steam ROM Manager (or Emu Hub), and missing games are added. Shortcuts are corrected in
+                place, so play time, artwork and collections stay. Press again to go ahead.
+              </span>
+            ) : steamDone?.kind === "repair" ? (
+              <SteamOutcome result={steamDone.result} />
+            ) : (
+              "Puts every game in your library into Steam once, cleanly, with the right emulator."
+            )
+          }
+        >
+          <Button noFocusRing className="rs-btn ghost" disabled={!!steamJob || syncing} onClick={() => cleanUp("repair")}>
+            {steamJob === "repair" ? "Working…" : steamArmed === "repair" ? "Re-add them" : "Re-add all games"}
           </Button>
         </Row>
         <Row

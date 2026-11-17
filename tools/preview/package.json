@@ -11,7 +11,8 @@
     "back": "node build.mjs && node backtest.mjs",
     "perf": "node build.mjs && node perf.mjs",
     "dev": "node dev.mjs",
-    "readme": "node build.mjs && node readme.mjs"
+    "readme": "node build.mjs && node readme.mjs",
+    "steamclean": "node build.mjs && node steamclean.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",

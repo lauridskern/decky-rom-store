@@ -266,6 +266,10 @@ class Plugin:
         import asyncio
         return await asyncio.to_thread(self._self().service.steam_plan, paths, add)
 
+    async def steam_gone(self, paths: List[str]) -> List[str]:
+        import asyncio
+        return await asyncio.to_thread(self._self().service.steam_gone, paths or [])
+
     async def steam_report(self, added: Dict[str, Any], removed: List[str]) -> Dict[str, Any]:
         return self._self().service.steam_report(added, removed)
 
